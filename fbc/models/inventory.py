@@ -160,6 +160,8 @@ class StorageBox(Model):
 
 
 class Unit(Model):
+    from fbc.models.ebay import EbayListing
+    from fbc.models.sales import SalesReceipt
     id = Column(Integer, primary_key=True, autoincrement=True)
     old_id = Column(String(24))
     name = Column(String(200), nullable=False, index=True)

@@ -4,7 +4,6 @@ from markupsafe import Markup
 from flask import url_for
 from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text
 from sqlalchemy.orm import relationship
-from fbc import db
 import re
 import json
 
@@ -29,16 +28,6 @@ class Artist(Model):
             return self.name
 
 
-assoc_artist_discogs_release = db.Table(
-    "artist_discogs_release",
-    Model.metadata,
-    Column("id", Integer, primary_key=True),
-    Column("artist_id", Integer, ForeignKey("artist.artist_id")),
-    Column("release_id", Integer, ForeignKey("discogs_release.release_id")),
-    keep_existing=True,
-)
-
-
 class Genre(Model):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False, unique=True)
@@ -50,16 +39,6 @@ class Genre(Model):
         return self.name
 
 
-assoc_genre_discogs_release = db.Table(
-    "genre_discogs_release",
-    Model.metadata,
-    Column("id", Integer, primary_key=True),
-    Column("genre_id", Integer, ForeignKey("genre.id")),
-    Column("release_id", Integer, ForeignKey("discogs_release.release_id")),
-    keep_existing=True,
-)
-
-
 class Style(Model):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False, unique=True)
@@ -69,16 +48,6 @@ class Style(Model):
 
     def __repr__(self):
         return self.name
-
-
-assoc_style_discogs_release = db.Table(
-    "style_discogs_release",
-    Model.metadata,
-    Column("id", Integer, primary_key=True),
-    Column("style_id", Integer, ForeignKey("style.id")),
-    Column("release_id", Integer, ForeignKey("discogs_release.release_id")),
-    keep_existing=True,
-)
 
 
 class Folder(Model):
@@ -102,17 +71,41 @@ class DiscogsInstance(Model):
         return str(self.instance_id)
 
 
-assoc_discogs_instance_discogs_release = db.Table(
-    "discogs_instance_discogs_release",
-    Model.metadata,
-    Column("id", Integer, primary_key=True),
-    Column("instance_id", Integer, ForeignKey("discogs_instance.instance_id")),
-    Column("release_id", Integer, ForeignKey("discogs_release.release_id")),
-    keep_existing=True,
-)
-
-
 class DiscogsRelease(Model):
+    from fbc import db
+    assoc_artist_discogs_release = db.Table(
+        "artist_discogs_release",
+        Model.metadata,
+        Column("id", Integer, primary_key=True),
+        Column("artist_id", Integer, ForeignKey("artist.artist_id")),
+        Column("release_id", Integer, ForeignKey("discogs_release.release_id")),
+        keep_existing=True,
+    )
+    assoc_genre_discogs_release = db.Table(
+        "genre_discogs_release",
+        Model.metadata,
+        Column("id", Integer, primary_key=True),
+        Column("genre_id", Integer, ForeignKey("genre.id")),
+        Column("release_id", Integer, ForeignKey("discogs_release.release_id")),
+        keep_existing=True,
+    )
+    assoc_style_discogs_release = db.Table(
+        "style_discogs_release",
+        Model.metadata,
+        Column("id", Integer, primary_key=True),
+        Column("style_id", Integer, ForeignKey("style.id")),
+        Column("release_id", Integer, ForeignKey("discogs_release.release_id")),
+        keep_existing=True,
+    )
+    assoc_discogs_instance_discogs_release = db.Table(
+        "discogs_instance_discogs_release",
+        Model.metadata,
+        Column("id", Integer, primary_key=True),
+        Column("instance_id", Integer, ForeignKey("discogs_instance.instance_id")),
+        Column("release_id", Integer, ForeignKey("discogs_release.release_id")),
+        keep_existing=True,
+    )
+
     release_id = Column(Integer, primary_key=True, unique=True)
     title = Column(String(200), nullable=False, index=True)
     artists = relationship(

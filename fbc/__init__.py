@@ -3,31 +3,7 @@ from flask import render_template
 
 from flask import Flask
 from flask_appbuilder import AppBuilder, SQLA
-
 from fbc.index import MyIndexView
-from fbc.views.inventory import (
-    UnitModelView,
-    PurchaseLotModelView,
-    StorageBoxModelView,
-    UnitModelNoListingView,
-    UnitModelNoDiscogsView,
-)
-from fbc.views.discogs import (
-    DiscogsReleaseModelView,
-    ArtistModelView,
-    GenreModelView,
-    StyleModelView,
-    FolderModelView,
-)
-from fbc.views.sales import (
-    SalesReceiptModelView,
-    EbayListingModelView,
-    EbayOrderModelView,
-)
-from fbc.views.supplies import (
-    SupplyModelView,
-    PurchaseOrderModelView,
-)
 
 logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -50,6 +26,30 @@ def page_not_found(e):
 
 db.create_all()
 
+
+from fbc.views.discogs import (
+    DiscogsReleaseModelView,
+    ArtistModelView,
+    GenreModelView,
+    StyleModelView,
+    FolderModelView,
+)
+from fbc.views.sales import (
+    EbayOrderModelView,
+    EbayListingModelView,
+    SalesReceiptModelView,
+)
+from fbc.views.supplies import (
+    SupplyModelView,
+    PurchaseOrderModelView,
+)
+from fbc.views.inventory import (
+    UnitModelView,
+    PurchaseLotModelView,
+    StorageBoxModelView,
+    UnitModelNoListingView,
+    UnitModelNoDiscogsView,
+)
 
 appbuilder.add_view(UnitModelView, "Units", category="Inventory")
 appbuilder.add_view(
