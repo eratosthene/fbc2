@@ -1,0 +1,20 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+flask-appbuilder = ">=4.7.0"
+pillow = "*"
+python-dotenv = "*"
+pymysql = "*"
+python3-discogs-client = "*"
+certifi = "*"
+ebaysdk = "*"
+gunicorn = "*"
+
+[dev-packages]
+pymongo = "*"
+
+[requires]
+python_version = "3.10"
