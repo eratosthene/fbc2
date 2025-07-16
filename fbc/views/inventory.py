@@ -1,4 +1,4 @@
-from flask_appbuilder import ModelView
+from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.sqla.filters import FilterEqualFunction
 
@@ -6,7 +6,7 @@ from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.util import CustomForm
 
 
-class UnitModelView(ModelView):
+class UnitModelView(CustomModelView):
     datamodel = SQLAInterface(Unit)
     list_columns = [
         "name",
@@ -53,11 +53,11 @@ class UnitModelView(ModelView):
     ]
 
     def _init_forms(self):
-        super(ModelView, self)._init_forms()
+        super(CustomModelView, self)._init_forms()
         self.add_form = type("CustomForm", (CustomForm, self.add_form), {})
 
 
-class UnitModelNoListingView(ModelView):
+class UnitModelNoListingView(CustomModelView):
     datamodel = SQLAInterface(Unit)
     base_filters = [
         ["ebay_listing_id", FilterEqualFunction, lambda: None],
@@ -91,7 +91,7 @@ class UnitModelNoListingView(ModelView):
     ]
 
 
-class UnitModelNoDiscogsView(ModelView):
+class UnitModelNoDiscogsView(CustomModelView):
     datamodel = SQLAInterface(Unit)
     base_filters = [["discogs_release_id", FilterEqualFunction, lambda: None]]
     list_columns = [
@@ -123,7 +123,7 @@ class UnitModelNoDiscogsView(ModelView):
     ]
 
 
-class PurchaseLotModelView(ModelView):
+class PurchaseLotModelView(CustomModelView):
     datamodel = SQLAInterface(PurchaseLot)
     related_views = [UnitModelView]
     list_columns = [
@@ -146,7 +146,7 @@ class PurchaseLotModelView(ModelView):
     }
 
 
-class StorageBoxModelView(ModelView):
+class StorageBoxModelView(CustomModelView):
     datamodel = SQLAInterface(StorageBox)
     related_views = [UnitModelView]
     list_columns = ["name"]

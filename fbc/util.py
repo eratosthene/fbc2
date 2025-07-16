@@ -3,6 +3,7 @@ import json
 import datetime
 from flask import request
 from flask_wtf import FlaskForm
+from flask_appbuilder import ModelView
 
 logger = logging.getLogger()
 
@@ -211,3 +212,13 @@ class CustomForm(FlaskForm):
             logger.info(request.args)
         form = cls(**kw)
         return form
+
+class CustomModelView(ModelView):
+    """
+    A custom ModelView which overrides the various CRUD templates
+    """
+    
+    list_template = 'crud/list.html'
+    edit_template = 'crud/edit.html'
+    add_template = 'crud/add.html'
+    show_template = 'crud/show.html'

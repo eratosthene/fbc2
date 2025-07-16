@@ -1,7 +1,9 @@
 import logging
+import os
 from flask import render_template
 
 from flask import Flask
+from flask import send_from_directory
 from flask_appbuilder import AppBuilder, SQLA
 from fbc.index import MyIndexView
 
@@ -22,7 +24,10 @@ def page_not_found(e):
         ),
         404,
     )
-
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 db.create_all()
 

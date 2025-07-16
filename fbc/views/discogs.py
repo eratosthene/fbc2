@@ -1,4 +1,4 @@
-from flask_appbuilder import ModelView
+from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from fbc.models.discogs import (
@@ -14,8 +14,9 @@ from fbc.widgets import (
 from fbc.views.inventory import UnitModelView
 
 
-class DiscogsReleaseModelView(ModelView):
+class DiscogsReleaseModelView(CustomModelView):
     datamodel = SQLAInterface(DiscogsRelease)
+    base_order = ('date_added', 'desc')
     list_widget = DiscogsReleaseListWidget
     related_views = [UnitModelView]
     list_columns = [
@@ -44,7 +45,7 @@ class DiscogsReleaseModelView(ModelView):
     ]
 
 
-class ArtistModelView(ModelView):
+class ArtistModelView(CustomModelView):
     datamodel = SQLAInterface(Artist)
     related_views = [DiscogsReleaseModelView]
     list_columns = [
@@ -55,19 +56,19 @@ class ArtistModelView(ModelView):
     related_views = [DiscogsReleaseModelView]
 
 
-class GenreModelView(ModelView):
+class GenreModelView(CustomModelView):
     datamodel = SQLAInterface(Genre)
     base_order = ("name", "desc")
     related_views = [DiscogsReleaseModelView]
 
 
-class StyleModelView(ModelView):
+class StyleModelView(CustomModelView):
     datamodel = SQLAInterface(Style)
     base_order = ("name", "desc")
     related_views = [DiscogsReleaseModelView]
 
 
-class FolderModelView(ModelView):
+class FolderModelView(CustomModelView):
     datamodel = SQLAInterface(Folder)
     list_columns = ["name", "folder_id"]
     base_order = ("name", "desc")
