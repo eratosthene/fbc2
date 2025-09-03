@@ -1,6 +1,7 @@
 from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.sqla.filters import FilterEqualFunction
+from flask_appbuilder import ModelView, CompactCRUDMixin
 
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.util import CustomForm
@@ -120,6 +121,36 @@ class UnitModelNoDiscogsView(CustomModelView):
         "notes",
         "retail_price",
         "sold",
+    ]
+
+
+class UnitModelReboxView(CompactCRUDMixin,CustomModelView):
+    datamodel = SQLAInterface(Unit)
+    list_columns = [
+        "name",
+        "unit_type",
+        "storage_box",
+        "discogs_genre_column",
+        "link_column",
+    ]
+    label_columns = {"link_column": "Links", "discogs_genre_column": "Genres"}
+    search_columns = [
+        "name",
+        "unit_type",
+        "description",
+        "discogs_release",
+        "ebay_listing",
+        "purchase_lot",
+        "storage_box",
+        "grading",
+        "pressing",
+        "matrix",
+        "notes",
+        "retail_price",
+        "sold",
+    ]
+    edit_columns = [
+        "storage_box"
     ]
 
 

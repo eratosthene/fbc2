@@ -233,3 +233,18 @@ class Unit(Model):
             if self.sales_receipt.ebay_order:
                 ret = ret + self.sales_receipt.fmt_ebay_order(False)
         return Markup(ret)
+        
+    def discogs_genre_column(self):
+        ret = ""
+        if self.discogs_release:
+            genres = self.discogs_release.genres
+            styles = self.discogs_release.styles
+            g = []
+            s = []
+            for a in genres:
+                g.append(str(a))
+            for a in styles:
+                s.append(str(a))
+            l = list(set(g).union(s))
+            ret = ', '.join(l)
+        return Markup(ret)

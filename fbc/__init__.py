@@ -54,6 +54,7 @@ from fbc.views.inventory import (
     StorageBoxModelView,
     UnitModelNoListingView,
     UnitModelNoDiscogsView,
+    UnitModelReboxView
 )
 
 appbuilder.add_view(UnitModelView, "Units", category="Inventory")
@@ -61,6 +62,7 @@ appbuilder.add_view(
     UnitModelNoListingView, "Units w/out Listings", category="Inventory"
 )
 appbuilder.add_view(UnitModelNoDiscogsView, "Units w/out Discogs", category="Inventory")
+appbuilder.add_view(UnitModelReboxView, "Rebox Units", category="Inventory")
 appbuilder.add_view(PurchaseLotModelView, "Purchase Lots", category="Inventory")
 appbuilder.add_view(StorageBoxModelView, "Storage Boxes", category="Inventory")
 appbuilder.add_view(DiscogsReleaseModelView, "Releases", category="Discogs")
