@@ -171,6 +171,7 @@ class Unit(Model):
     discogs_release = relationship("DiscogsRelease")
     discogs_instance_id = Column(Integer, ForeignKey("discogs_instance.instance_id"))
     discogs_instance = relationship("DiscogsInstance")
+    discogs_master = Column(String(21))
     ebay_listing_id = Column(String(20), ForeignKey("ebay_listing.item_id"))
     ebay_listing = relationship("EbayListing")
     purchase_lot_id = Column(Integer, ForeignKey("purchase_lot.id"))
