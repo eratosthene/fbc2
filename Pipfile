@@ -4,7 +4,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-flask-appbuilder = ">=4.7.0"
+flask-appbuilder = "4.7.0"
 pillow = "*"
 python-dotenv = "*"
 pymysql = "*"
@@ -12,6 +12,7 @@ python3-discogs-client = "*"
 certifi = "*"
 ebaysdk = "*"
 gunicorn = "*"
+flask-migrate = "*"
 
 [dev-packages]
 pymongo = "*"

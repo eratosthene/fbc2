@@ -203,6 +203,29 @@ class Unit(Model):
         else:
             return None
 
+    def master_show(self, markup=True):
+        s = (
+            '<a href="'
+            + url_for("UnitModelView.list", _flt_3_discogs_master=str(self.discogs_master))
+            + '">Filter:Master</a><br>'
+        )
+        if self.discogs_master.startswith('r'):
+            s = s + (
+                '<a href="https://www.discogs.com/release/'
+                + str(self.discogs_master[1:])
+                + '">D:Release(NM)</a>'
+            )
+        else:
+            s = s + (
+                '<a href="https://www.discogs.com/master/'
+                + str(self.discogs_master)
+                + '">D:Master</a>'
+            )
+        if markup:
+            return Markup(s)
+        else:
+            return s
+
     def link_column(self):
         ret = ""
         if self.discogs_release:
@@ -210,7 +233,11 @@ class Unit(Model):
                 ret
                 + self.discogs_release.release_show(False)
                 + "<br/>"
-                + self.discogs_release.master_show(False)
+            )
+        if self.discogs_master:
+            ret = (
+                ret
+                + self.master_show(False)
                 + "<br/>"
             )
         if self.ebay_listing:

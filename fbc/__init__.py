@@ -5,6 +5,7 @@ from flask import render_template
 from flask import Flask
 from flask import send_from_directory
 from flask_appbuilder import AppBuilder, SQLA
+from flask_migrate import Migrate
 from fbc.index import MyIndexView
 
 logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s")
@@ -13,6 +14,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 app = Flask(__name__)
 app.config.from_object("config")
 db = SQLA(app)
+migrate = Migrate(app, db)
 appbuilder = AppBuilder(app, db.session, indexview=MyIndexView)
 
 
@@ -54,6 +56,7 @@ from fbc.views.inventory import (
     StorageBoxModelView,
     UnitModelNoListingView,
     UnitModelNoDiscogsView,
+    UnitModelNoMasterView,
     UnitModelReboxView
 )
 
@@ -61,8 +64,8 @@ appbuilder.add_view(UnitModelView, "Units", category="Inventory")
 appbuilder.add_view(
     UnitModelNoListingView, "Units w/out Listings", category="Inventory"
 )
-appbuilder.add_view(UnitModelNoDiscogsView, "Units w/out Discogs", category="Inventory")
 appbuilder.add_view(UnitModelReboxView, "Rebox Units", category="Inventory")
+appbuilder.add_view(UnitModelNoMasterView, "Units w/out Master", category="Inventory")
 appbuilder.add_view(PurchaseLotModelView, "Purchase Lots", category="Inventory")
 appbuilder.add_view(StorageBoxModelView, "Storage Boxes", category="Inventory")
 appbuilder.add_view(DiscogsReleaseModelView, "Releases", category="Discogs")

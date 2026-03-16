@@ -193,6 +193,10 @@ class DiscogsRelease(Model):
                 m = re.search(".*\((.*)\)", d["value"])
                 if m:
                     grading = grading + "/" + m.group(1)
+        if self.master_id > 0:
+            discogs_master = str(self.master_id)
+        else:
+            discogs_master = 'r' + str(self.release_id)
         s = (
             '<a href="'
             + url_for(
@@ -202,6 +206,7 @@ class DiscogsRelease(Model):
                 grading=grading,
                 discogs_release=self.release_id,
                 discogs_instance=instance_id,
+                discogs_master=discogs_master,
             )
             + '">Add Unit</a><br><span style="font-size:75%">('
             + str(instance_id)

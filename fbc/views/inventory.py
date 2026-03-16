@@ -25,6 +25,7 @@ class UnitModelView(CustomModelView):
         "unit_type",
         "description",
         "discogs_release",
+        "discogs_master",
         "ebay_listing",
         "purchase_lot",
         "storage_box",
@@ -40,6 +41,7 @@ class UnitModelView(CustomModelView):
         "unit_type",
         "description",
         "discogs_release",
+        "discogs_master",
         "ebay_listing",
         "purchase_lot",
         "storage_box",
@@ -79,6 +81,7 @@ class UnitModelNoListingView(CustomModelView):
         "unit_type",
         "description",
         "discogs_release",
+        "discogs_master",
         "ebay_listing",
         "purchase_lot",
         "storage_box",
@@ -120,6 +123,58 @@ class UnitModelNoDiscogsView(CustomModelView):
         "notes",
         "retail_price",
         "sold",
+    ]
+
+
+class UnitModelNoMasterView(CustomModelView):
+    datamodel = SQLAInterface(Unit)
+    base_filters = [
+        ["discogs_master", FilterEqualFunction, lambda: None],
+    ]
+    list_columns = [
+        "name",
+        "unit_type",
+        "grading",
+        "pressing",
+        "fmt_retail_price",
+        "sold",
+        "purchase_lot",
+        "storage_box",
+        "link_column",
+    ]
+    label_columns = {"fmt_retail_price": "Retail Price", "link_column": "Links"}
+    search_columns = [
+        "name",
+        "unit_type",
+        "description",
+        "discogs_release",
+        "discogs_master",
+        "ebay_listing",
+        "purchase_lot",
+        "storage_box",
+        "grading",
+        "pressing",
+        "matrix",
+        "notes",
+        "retail_price",
+        "sold",
+    ]
+    edit_columns = [
+        "name",
+        "unit_type",
+        "description",
+        "discogs_release",
+        "discogs_master",
+        "ebay_listing",
+        "purchase_lot",
+        "storage_box",
+        "grading",
+        "pressing",
+        "matrix",
+        "notes",
+        "retail_price",
+        "sold",
+        "sales_receipt",
     ]
 
 
