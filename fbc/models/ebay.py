@@ -113,7 +113,7 @@ class EbayOrder(Model):
                 ebay_order=self.order_id,
                 date=self.created_time.date(),
             )
-            + '">Add SR</a>'
+            + '">Add&nbsp;SR</a>'
         )
         if self.ebay_listing:
             from fbc.models.inventory import Unit
@@ -129,7 +129,9 @@ class EbayOrder(Model):
                     retval
                     + '<br><a href="'
                     + url_for("UnitModelView.edit", pk=o.id)
-                    + '">Unit</a>'
+                    + '">Edit&nbsp;Unit</a>'
                 )
+                if o.discogs_release:
+                    retval = retval + "<br>" + o.discogs_release.release_show(False)
 
         return Markup(retval)
