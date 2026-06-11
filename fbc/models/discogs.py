@@ -2,7 +2,7 @@ import logging
 from flask_appbuilder import Model
 from markupsafe import Markup
 from flask import url_for
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text, BigInteger
 from sqlalchemy.orm import relationship
 import re
 import json
@@ -62,7 +62,7 @@ class Folder(Model):
 
 
 class DiscogsInstance(Model):
-    instance_id = Column(Integer, primary_key=True, unique=True)
+    instance_id = Column(BigInteger, primary_key=True, unique=True)
 
     def __unicode__(self):
         return str(self.instance_id)
