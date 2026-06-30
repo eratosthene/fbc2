@@ -26,16 +26,23 @@ def page_not_found(e):
         ),
         404,
     )
-@app.route('/favicon.ico')
+
+
+@app.route("/favicon.ico")
 def favicon():
-    return send_from_directory(os.path.join(app.root_path, 'static'),
-                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
+    return send_from_directory(
+        os.path.join(app.root_path, "static"),
+        "favicon.ico",
+        mimetype="image/vnd.microsoft.icon",
+    )
+
 
 db.create_all()
 
 
 from fbc.views.discogs import (
     DiscogsReleaseModelView,
+    DiscogsReleaseModelNoUnitView,
     ArtistModelView,
     GenreModelView,
     StyleModelView,
@@ -57,7 +64,7 @@ from fbc.views.inventory import (
     UnitModelNoListingView,
     UnitModelNoDiscogsView,
     UnitModelNoMasterView,
-    UnitModelReboxView
+    UnitModelReboxView,
 )
 
 appbuilder.add_view(UnitModelView, "Units", category="Inventory")
@@ -69,6 +76,9 @@ appbuilder.add_view(UnitModelNoMasterView, "Units w/out Master", category="Inven
 appbuilder.add_view(PurchaseLotModelView, "Purchase Lots", category="Inventory")
 appbuilder.add_view(StorageBoxModelView, "Storage Boxes", category="Inventory")
 appbuilder.add_view(DiscogsReleaseModelView, "Releases", category="Discogs")
+appbuilder.add_view(
+    DiscogsReleaseModelNoUnitView, "Releases w/out Units", category="Discogs"
+)
 appbuilder.add_view(ArtistModelView, "Artists", category="Discogs")
 appbuilder.add_view(GenreModelView, "Genres", category="Discogs")
 appbuilder.add_view(StyleModelView, "Styles", category="Discogs")
