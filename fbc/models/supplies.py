@@ -2,7 +2,6 @@ from flask_appbuilder import Model
 from flask_appbuilder.models.decorators import renders
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Date
 from sqlalchemy.orm import relationship
-from fbc import db
 
 
 class PurchaseOrder(Model):
@@ -24,17 +23,17 @@ class PurchaseOrder(Model):
         return str(self.date) + ": " + self.notes + " $" + f"{self.price:.2f}"
 
 
-assoc_purchase_order_supply = db.Table(
-    "purchase_order_supply",
-    Model.metadata,
-    Column("id", Integer, primary_key=True),
-    Column("purchase_order_id", Integer, ForeignKey("purchase_order.id")),
-    Column("supply_id", Integer, ForeignKey("supply.id")),
-    keep_existing=True,
-)
-
-
 class Supply(Model):
+    from fbc import db
+    assoc_purchase_order_supply = db.Table(
+        "purchase_order_supply",
+        Model.metadata,
+        Column("id", Integer, primary_key=True),
+        Column("purchase_order_id", Integer, ForeignKey("purchase_order.id")),
+        Column("supply_id", Integer, ForeignKey("supply.id")),
+        keep_existing=True,
+    )
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     old_id = Column(String(24))
     name = Column(String(100), nullable=False)

@@ -1,4 +1,4 @@
-from flask_appbuilder import ModelView
+from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.sqla.filters import FilterEqualFunction
 
@@ -6,7 +6,7 @@ from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.util import CustomForm
 
 
-class UnitModelView(ModelView):
+class UnitModelView(CustomModelView):
     datamodel = SQLAInterface(Unit)
     list_columns = [
         "name",
@@ -25,6 +25,7 @@ class UnitModelView(ModelView):
         "unit_type",
         "description",
         "discogs_release",
+        "discogs_master",
         "ebay_listing",
         "purchase_lot",
         "storage_box",
@@ -40,6 +41,7 @@ class UnitModelView(ModelView):
         "unit_type",
         "description",
         "discogs_release",
+        "discogs_master",
         "ebay_listing",
         "purchase_lot",
         "storage_box",
@@ -53,11 +55,11 @@ class UnitModelView(ModelView):
     ]
 
     def _init_forms(self):
-        super(ModelView, self)._init_forms()
+        super(CustomModelView, self)._init_forms()
         self.add_form = type("CustomForm", (CustomForm, self.add_form), {})
 
 
-class UnitModelNoListingView(ModelView):
+class UnitModelNoListingView(CustomModelView):
     datamodel = SQLAInterface(Unit)
     base_filters = [
         ["ebay_listing_id", FilterEqualFunction, lambda: None],
@@ -79,6 +81,7 @@ class UnitModelNoListingView(ModelView):
         "unit_type",
         "description",
         "discogs_release",
+        "discogs_master",
         "ebay_listing",
         "purchase_lot",
         "storage_box",
@@ -91,7 +94,7 @@ class UnitModelNoListingView(ModelView):
     ]
 
 
-class UnitModelNoDiscogsView(ModelView):
+class UnitModelNoDiscogsView(CustomModelView):
     datamodel = SQLAInterface(Unit)
     base_filters = [["discogs_release_id", FilterEqualFunction, lambda: None]]
     list_columns = [
@@ -123,7 +126,105 @@ class UnitModelNoDiscogsView(ModelView):
     ]
 
 
-class PurchaseLotModelView(ModelView):
+class UnitModelNoMasterView(CustomModelView):
+    datamodel = SQLAInterface(Unit)
+    base_filters = [
+        ["discogs_master", FilterEqualFunction, lambda: None],
+    ]
+    list_columns = [
+        "name",
+        "unit_type",
+        "grading",
+        "pressing",
+        "fmt_retail_price",
+        "sold",
+        "purchase_lot",
+        "storage_box",
+        "link_column",
+    ]
+    label_columns = {"fmt_retail_price": "Retail Price", "link_column": "Links"}
+    search_columns = [
+        "name",
+        "unit_type",
+        "description",
+        "discogs_release",
+        "discogs_master",
+        "ebay_listing",
+        "purchase_lot",
+        "storage_box",
+        "grading",
+        "pressing",
+        "matrix",
+        "notes",
+        "retail_price",
+        "sold",
+    ]
+    edit_columns = [
+        "name",
+        "unit_type",
+        "description",
+        "discogs_release",
+        "discogs_master",
+        "ebay_listing",
+        "purchase_lot",
+        "storage_box",
+        "grading",
+        "pressing",
+        "matrix",
+        "notes",
+        "retail_price",
+        "sold",
+        "sales_receipt",
+    ]
+
+
+class UnitModelReboxView(CustomModelView):
+    datamodel = SQLAInterface(Unit)
+    list_columns = [
+        "name",
+        "unit_type",
+        "storage_box",
+        "discogs_genre_column",
+        "link_column",
+    ]
+    label_columns = {"link_column": "Links", "discogs_genre_column": "Genres"}
+    search_columns = [
+        "name",
+        "unit_type",
+        "description",
+        "discogs_release",
+        "ebay_listing",
+        "purchase_lot",
+        "storage_box",
+        "grading",
+        "pressing",
+        "matrix",
+        "notes",
+        "retail_price",
+        "sold",
+    ]
+    edit_columns = [
+        "name",
+        "unit_type",
+        "description",
+        "discogs_release",
+        "ebay_listing",
+        "purchase_lot",
+        "storage_box",
+        "grading",
+        "pressing",
+        "matrix",
+        "notes",
+        "retail_price",
+        "sold",
+    ]
+
+    def _init_forms(self):
+        super(CustomModelView, self)._init_forms()
+        self.add_form = type("CustomForm", (CustomForm, self.add_form), {})
+
+
+class PurchaseLotModelView(CustomModelView):
     datamodel = SQLAInterface(PurchaseLot)
     related_views = [UnitModelView]
     list_columns = [
@@ -146,7 +247,7 @@ class PurchaseLotModelView(ModelView):
     }
 
 
-class StorageBoxModelView(ModelView):
+class StorageBoxModelView(CustomModelView):
     datamodel = SQLAInterface(StorageBox)
     related_views = [UnitModelView]
     list_columns = ["name"]

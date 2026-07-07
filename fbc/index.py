@@ -73,16 +73,19 @@ class MyIndexView(IndexView):
             supply_total += po.price
         for u in db.session.query(Unit).all():
             if u.sales_receipt:
+                num_units = db.session.query(Unit).filter_by(sales_receipt=u.sales_receipt).count()
+                c_sold_price = u.sales_receipt.sold_price / num_units
+                c_net_sold = u.sales_receipt.net_sold / num_units
                 if u.storage_box:
-                    box_totals[u.storage_box.id]["gross"] += u.sales_receipt.sold_price
-                    box_totals[u.storage_box.id]["net"] += u.sales_receipt.net_sold
+                    box_totals[u.storage_box.id]["gross"] += c_sold_price
+                    box_totals[u.storage_box.id]["net"] += c_net_sold
                 else:
-                    box_totals[0]["gross"] += u.sales_receipt.sold_price
-                    box_totals[0]["net"] += u.sales_receipt.net_sold
-                lot_totals[u.purchase_lot.id]["gross"] += u.sales_receipt.sold_price
-                totals["gross"] += u.sales_receipt.sold_price
-                lot_totals[u.purchase_lot.id]["net"] += u.sales_receipt.net_sold
-                totals["net"] += u.sales_receipt.net_sold
+                    box_totals[0]["gross"] += c_sold_price
+                    box_totals[0]["net"] += c_net_sold
+                lot_totals[u.purchase_lot.id]["gross"] += c_sold_price
+                totals["gross"] += c_sold_price
+                lot_totals[u.purchase_lot.id]["net"] += c_net_sold
+                totals["net"] += c_net_sold
             if u.storage_box:
                 box_totals[u.storage_box.id]["capital"] += lot_totals[
                     u.purchase_lot.id

@@ -1,0 +1,2 @@
+{% extends "appbuilder/general/model/show.html" %}
+{% block page_title %}{{app_name}}{% if title is defined and title|length %}: {{title}} {{pk}}{% endif%}{% endblock %}
