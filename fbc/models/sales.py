@@ -9,7 +9,7 @@ class SalesReceipt(Model):
     old_id = Column(String(24))
     date = Column(Date, nullable=False)
     ebay_order_id = Column(String(20), ForeignKey("ebay_order.order_id"))
-    ebay_order = relationship("EbayOrder")
+    ebay_order = relationship("EbayOrder", lazy="joined")
     sold_price = Column(Float)
     net_sold = Column(Float)
 
