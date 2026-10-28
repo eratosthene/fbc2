@@ -109,7 +109,10 @@ class DiscogsRelease(Model):
     release_id = Column(Integer, primary_key=True, unique=True)
     title = Column(String(200), nullable=False, index=True)
     artists = relationship(
-        "Artist", secondary=assoc_artist_discogs_release, backref="discogs_release"
+        "Artist",
+        secondary=assoc_artist_discogs_release,
+        backref="discogs_release",
+        lazy="selectin",
     )
     year = Column(Integer)
     genres = relationship(

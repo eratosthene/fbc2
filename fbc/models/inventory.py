@@ -167,16 +167,22 @@ class Unit(Model):
     name = Column(String(200), nullable=False, index=True)
     unit_type = Column(String(30))
     description = Column(String(300))
-    discogs_release_id = Column(Integer, ForeignKey("discogs_release.release_id"))
+    discogs_release_id = Column(
+        Integer, ForeignKey("discogs_release.release_id"), index=True
+    )
     discogs_release = relationship("DiscogsRelease")
-    discogs_instance_id = Column(Integer, ForeignKey("discogs_instance.instance_id"))
+    discogs_instance_id = Column(
+        Integer, ForeignKey("discogs_instance.instance_id"), index=True
+    )
     discogs_instance = relationship("DiscogsInstance")
-    discogs_master = Column(String(21))
-    ebay_listing_id = Column(String(20), ForeignKey("ebay_listing.item_id"))
+    discogs_master = Column(String(21), index=True)
+    ebay_listing_id = Column(
+        String(20), ForeignKey("ebay_listing.item_id"), index=True
+    )
     ebay_listing = relationship("EbayListing")
-    purchase_lot_id = Column(Integer, ForeignKey("purchase_lot.id"))
+    purchase_lot_id = Column(Integer, ForeignKey("purchase_lot.id"), index=True)
     purchase_lot = relationship("PurchaseLot")
-    storage_box_id = Column(Integer, ForeignKey("storage_box.id"))
+    storage_box_id = Column(Integer, ForeignKey("storage_box.id"), index=True)
     storage_box = relationship("StorageBox")
     grading = Column(String(20))
     pressing = Column(String(100))
@@ -184,7 +190,7 @@ class Unit(Model):
     notes = Column(String(100))
     retail_price = Column(Float, index=True)
     sold = Column(Boolean, index=True)
-    sales_receipt_id = Column(Integer, ForeignKey("sales_receipt.id"))
+    sales_receipt_id = Column(Integer, ForeignKey("sales_receipt.id"), index=True)
     sales_receipt = relationship("SalesReceipt")
 
     def __unicode__(self):
