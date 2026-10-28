@@ -170,6 +170,21 @@ class DiscogsRelease(Model):
         else:
             return s
 
+    def filter_master(self, markup=True):
+        if self.master_id and self.master_id > 0:
+            discogs_master = str(self.master_id)
+        else:
+            discogs_master = "r" + str(self.release_id)
+        s = (
+            '<a href="'
+            + url_for("UnitModelView.list", _flt_3_discogs_master=discogs_master)
+            + '">Filter:Master</a>'
+        )
+        if markup:
+            return Markup(s)
+        else:
+            return s
+
     def unit_list(self, markup=True):
         s = (
             '<a href="'
@@ -220,6 +235,7 @@ class DiscogsRelease(Model):
     def link_column(self):
         ret = self.release_show(False) + "<br>"
         ret += self.master_show(False) + "<br>"
+        ret += self.filter_master(False) + "<br>"
         ret += self.unit_list(False) + "<br>"
         for discogs_instance in self.discogs_instances:
             ret += self.unit_add(discogs_instance.instance_id, False) + "<br>"
