@@ -10,6 +10,7 @@ so ``app.config.from_object("config")`` picks up the fake module instead of
 reading config.py.
 """
 
+import importlib
 import logging
 import sys
 import types
@@ -47,7 +48,10 @@ logging.getLogger().setLevel(logging.ERROR)
 
 _install_fake_config()
 
-import fbc  # must be imported only after the fake config is installed
+# A plain `import fbc` statement here must come after the fake config is
+# installed above, which a linter would flag as an out-of-order import
+# (E402); importlib.import_module is a regular call, so it doesn't.
+fbc = importlib.import_module("fbc")
 
 # fbc/__init__.py calls db.create_all() before the model modules (which live
 # under fbc.models and get imported further down in that same file) have
