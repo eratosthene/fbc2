@@ -1,9 +1,12 @@
+from wtforms.validators import Optional
+
 from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.sales import SalesReceipt
 from fbc.widgets import (
+    DateTimeLocalField,
     EbayListingListWidget,
     EbayOrderListWidget,
 )
@@ -36,6 +39,12 @@ class EbayListingModelView(CustomModelView):
     search_columns = ["item_id", "price", "title"]
     label_columns = {"fmt_price": "Price", "fmt_url": "URL"}
     related_views = [UnitModelView]
+    add_columns = ["item_id", "title", "price", "url", "start_time"]
+    edit_columns = ["title", "price", "url", "start_time"]
+    add_form_extra_fields = {
+        "start_time": DateTimeLocalField("Start Time", validators=[Optional()])
+    }
+    edit_form_extra_fields = add_form_extra_fields
 
 
 class EbayOrderModelView(CustomModelView):
@@ -46,3 +55,16 @@ class EbayOrderModelView(CustomModelView):
     search_columns = ["order_id", "price", "title", "buyer"]
     label_columns = {"fmt_price": "Price", "fmt_url": "Order Id", "links": "Links"}
     related_views = [SalesReceiptModelView]
+    add_columns = [
+        "order_id",
+        "created_time",
+        "buyer",
+        "price",
+        "title",
+        "ebay_listing",
+    ]
+    edit_columns = ["created_time", "buyer", "price", "title", "ebay_listing"]
+    add_form_extra_fields = {
+        "created_time": DateTimeLocalField("Created Time", validators=[Optional()])
+    }
+    edit_form_extra_fields = add_form_extra_fields

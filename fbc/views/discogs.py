@@ -61,6 +61,19 @@ class DiscogsReleaseModelView(CustomModelView):
         "link_column",
     ]
     label_columns = {"link_column": "Links"}
+    add_columns = [
+        "release_id",
+        "title",
+        "artists",
+        "year",
+        "master_id",
+        "master_year",
+        "genres",
+        "styles",
+        "discogs_instances",
+        "released",
+        "folder",
+    ]
     edit_columns = [
         "title",
         "artists",
@@ -93,6 +106,19 @@ class DiscogsReleaseModelNoUnitView(CustomModelView):
         "link_column",
     ]
     label_columns = {"link_column": "Links"}
+    add_columns = [
+        "release_id",
+        "title",
+        "artists",
+        "year",
+        "master_id",
+        "master_year",
+        "genres",
+        "styles",
+        "discogs_instances",
+        "released",
+        "folder",
+    ]
     edit_columns = [
         "title",
         "artists",
@@ -115,6 +141,7 @@ class ArtistModelView(CustomModelView):
         "sort_name",
         "artist_id",
     ]
+    add_columns = ["artist_id", "name", "sort_name"]
     related_views = [DiscogsReleaseModelView]
 
 
@@ -134,4 +161,5 @@ class FolderModelView(CustomModelView):
     datamodel = SQLAInterface(Folder)
     list_columns = ["name", "folder_id"]
     base_order = ("name", "desc")
+    add_columns = ["folder_id", "name"]
     related_views = [DiscogsReleaseModelView]
