@@ -65,6 +65,9 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# Local app config (contains real DB/eBay/Discogs credentials); copy from config.py.tpl
+config.py
+
 # Scrapy stuff:
 .scrapy
 
