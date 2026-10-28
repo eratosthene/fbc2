@@ -1,0 +1,7 @@
+version: '3'
+services:
+  fbc:
+    image: fbc2:latest
+    restart: unless-stopped
+    ports:
+      - "20000:20000"
