@@ -155,6 +155,21 @@ class MyIndexView(IndexView):
         if totals["capital"] > 0:
             totals["roi"] = round(totals["profit"] / totals["capital"] * 100, 2)
         total_net_profit = totals["profit"] - supply_total
+        if totals["net"] != 0:
+            profit_margin = total_net_profit / totals["net"] * 100
+        else:
+            profit_margin = 0.0
+        fee_factor = 1 - totals["feepc"] / 100
+        if unit_total > 0:
+            supply_per_unit = supply_total / unit_total
+        else:
+            supply_per_unit = 0.0
+        if unit_total > 0 and fee_factor != 0:
+            breakeven_per_unit = (
+                totals["capital"] / unit_total / fee_factor + supply_per_unit
+            )
+        else:
+            breakeven_per_unit = 0.0
         for lot in lots:
             lot_totals[lot.id]["instock"] = (
                 db.session.query(Unit).filter_by(purchase_lot=lot, sold=False).count()
@@ -168,6 +183,9 @@ class MyIndexView(IndexView):
             totals=totals,
             supply_total=supply_total,
             total_net_profit=total_net_profit,
+            profit_margin=profit_margin,
+            supply_per_unit=supply_per_unit,
+            breakeven_per_unit=breakeven_per_unit,
             unit_total=unit_total,
             box_totals=box_totals,
         )
