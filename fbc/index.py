@@ -11,6 +11,8 @@ from flask_appbuilder.views import expose
 from fbc.util import add_ebay_listing
 from fbc.util import add_ebay_order
 from fbc.util import add_discogs_release
+from fbc.util import find_relisted_listing
+from fbc.util import relist_ebay_listing
 
 logger = logging.getLogger()
 
@@ -268,6 +270,7 @@ class MyIndexView(IndexView):
         ebayconfig = app.config["EBAY_SETTINGS"]
         totalpages = 1
         currentpage = 1
+        all_items = []
         while currentpage <= totalpages:
             logger.info("Getting page " + str(currentpage) + "...")
             try:
@@ -300,23 +303,40 @@ class MyIndexView(IndexView):
                     resp["ActiveList"]["PaginationResult"]["TotalNumberOfPages"]
                 )
                 logging.info("Total pages: " + str(totalpages))
-                listings = resp["ActiveList"]["ItemArray"]["Item"]
-                local_listings = db.session.query(EbayListing).all()
-                logger.info("Total listings: " + str(len(listings)))
-                logger.info("Total local listings: " + str(len(local_listings)))
-                for item in listings:
-                    logger.debug("Checking ebay: " + str(item["ItemID"]))
-                    if (
-                        not db.session.query(EbayListing)
-                        .filter_by(item_id=item["ItemID"])
-                        .first()
-                    ):
-                        logger.info("Adding " + str(item["ItemID"]))
-                        add_ebay_listing(item)
+                all_items.extend(resp["ActiveList"]["ItemArray"]["Item"])
             except ConnectionError as e:
                 logging.error(e)
                 logging.error(e.response.dict())
             currentpage += 1
+
+        # Process every page's items together (rather than page by page) so
+        # that a relisted item's old EbayListing -- which by definition has
+        # fallen out of eBay's active list entirely -- is matched up with
+        # full knowledge of every ItemID eBay is reporting as active right
+        # now, not just whatever page happened to contain the new listing.
+        local_listings = db.session.query(EbayListing).all()
+        logger.info("Total listings: " + str(len(all_items)))
+        logger.info("Total local listings: " + str(len(local_listings)))
+        remote_item_ids = {item["ItemID"] for item in all_items}
+        for item in all_items:
+            logger.debug("Checking ebay: " + str(item["ItemID"]))
+            if (
+                not db.session.query(EbayListing)
+                .filter_by(item_id=item["ItemID"])
+                .first()
+            ):
+                old_listing = find_relisted_listing(item, remote_item_ids)
+                if old_listing:
+                    logger.info(
+                        "Relisted item detected: "
+                        + old_listing.item_id
+                        + " -> "
+                        + item["ItemID"]
+                    )
+                    relist_ebay_listing(old_listing, item)
+                else:
+                    logger.info("Adding " + str(item["ItemID"]))
+                    add_ebay_listing(item)
         ref = request.referrer
         if ref:
             return redirect(ref)
