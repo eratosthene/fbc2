@@ -1,0 +1,17 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h3>eBay Business Policies</h3>
+<p>Copy the IDs of the policies new listings should use into
+<code>EBAY_SETTINGS["LISTING"]</code> in config.py.</p>
+{% for kind, key in [("shipping", "SHIPPING_PROFILE_ID"), ("return", "RETURN_PROFILE_ID"), ("payment", "PAYMENT_PROFILE_ID")] %}
+<h4>{{ kind|capitalize }} <small><code>{{ key }}</code></small></h4>
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>ID</th><th>Name</th></tr>
+  {% for id, name in profiles[kind] %}
+  <tr><td><code>{{ id }}</code></td><td>{{ name }}</td></tr>
+  {% else %}
+  <tr><td colspan="2">None found</td></tr>
+  {% endfor %}
+</table>
+{% endfor %}
+{% endblock %}

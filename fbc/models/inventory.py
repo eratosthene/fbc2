@@ -299,6 +299,13 @@ class Unit(Model):
                 + f"{self.ebay_listing.price:.2f}"
                 "</a><br/>"
             )
+        elif self.id and not self.sold:
+            ret = (
+                ret
+                + '<a href="'
+                + url_for("EbayDraftModelView.from_unit", pk=self.id)
+                + '">List&nbsp;on&nbsp;eBay</a><br/>'
+            )
         if self.sales_receipt:
             ret = (
                 ret

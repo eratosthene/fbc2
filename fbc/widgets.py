@@ -1,6 +1,6 @@
 from flask_appbuilder.widgets import ListWidget
 from wtforms.fields import DateTimeLocalField as WTFDateTimeLocalField
-from wtforms.widgets import DateTimeLocalInput
+from wtforms.widgets import DateTimeLocalInput, TextArea
 
 
 class BS3DateTimeLocalFieldWidget(DateTimeLocalInput):
@@ -30,6 +30,21 @@ class DateTimeLocalField(WTFDateTimeLocalField):
         super().process_formdata(valuelist)
 
 
+class TallTextAreaWidget(TextArea):
+    """
+    A textarea with room for many lines. Flask-AppBuilder's own
+    BS3TextAreaFieldWidget always renders 3 rows.
+    """
+
+    def __init__(self, rows):
+        self.rows = rows
+
+    def __call__(self, field, **kwargs):
+        kwargs["class"] = "form-control"
+        kwargs["rows"] = self.rows
+        return super().__call__(field, **kwargs)
+
+
 class DiscogsReleaseListWidget(ListWidget):
     template = "widgets/d_r_list.html"
 
@@ -40,3 +55,7 @@ class EbayListingListWidget(ListWidget):
 
 class EbayOrderListWidget(ListWidget):
     template = "widgets/e_o_list.html"
+
+
+class EbayDraftListWidget(ListWidget):
+    template = "widgets/e_d_list.html"

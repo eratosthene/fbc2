@@ -122,7 +122,25 @@ EBAY_SETTINGS = {
     'APP_ID': '',
     'DEV_ID': '',
     'CERT_ID': '',
-    'USER_TOKEN': ''
+    'USER_TOKEN': '',
+    # Used when publishing a Unit as a listing (eBay Drafts). The business
+    # policy IDs are shown under Sales > eBay Drafts > Business Policies.
+    'LISTING': {
+        'CATEGORY_ID': '176985',  # Music > Vinyl Records
+        'SHIPPING_PROFILE_ID': '',
+        'RETURN_PROFILE_ID': '',
+        'PAYMENT_PROFILE_ID': '',
+        'POSTAL_CODE': '',
+        'LOCATION': '',
+        'BEST_OFFER': True,
+        # Item specifics added to every listing when fbc can't work them out.
+        'DEFAULT_SPECIFICS': {
+            'Format': ['Record'],
+            'Material': ['Vinyl'],
+            'Case Type': ['Cardboard Sleeve'],
+            'Color': ['Black'],
+        },
+    },
 }
 
 # discogs settings

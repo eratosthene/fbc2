@@ -12,6 +12,12 @@ class FakeArtist:
         self.name = name
 
 
+class FakeLabel:
+    def __init__(self, name, catno):
+        self.name = name
+        self.catno = catno
+
+
 class FakeMaster:
     def __init__(self, id, year):
         self.id = id
@@ -30,6 +36,8 @@ class FakeRelease:
         master=None,
         formats=None,
         released="2020-01-01",
+        labels=None,
+        country="US",
     ):
         self.id = id
         self.title = title
@@ -40,6 +48,8 @@ class FakeRelease:
         self.master = master
         self.formats = formats or [{"name": "Vinyl", "qty": "1"}]
         self._released = released
+        self.labels = labels or []
+        self.country = country
 
     def fetch(self, key):
         assert key == "released"
@@ -189,3 +199,18 @@ def test_add_discogs_release_serializes_formats_and_notes_as_json(app):
     dr = db.session.query(DiscogsRelease).filter_by(release_id=7).first()
     assert json.loads(dr.formats) == [{"name": "Vinyl", "qty": "2"}]
     assert json.loads(dr.notes) == [{"field_id": 1, "value": "Mint (M)"}]
+
+
+def test_add_discogs_release_stores_labels_and_country(app):
+    release = FakeRelease(
+        id=8,
+        title="Carnaval",
+        year=1980,
+        labels=[FakeLabel("MCA Records", "MCA-5149")],
+        country="US",
+    )
+    add_discogs_release(FakeCollectionItem(release))
+
+    dr = db.session.query(DiscogsRelease).filter_by(release_id=8).first()
+    assert json.loads(dr.labels) == [{"name": "MCA Records", "catno": "MCA-5149"}]
+    assert dr.country == "US"

@@ -124,6 +124,8 @@ class DiscogsRelease(Model):
     master_id = Column(Integer)
     master_year = Column(Integer)
     formats = Column(Text)
+    labels = Column(Text)
+    country = Column(String(50))
     discogs_instances = relationship(
         "DiscogsInstance",
         secondary=assoc_discogs_instance_discogs_release,
