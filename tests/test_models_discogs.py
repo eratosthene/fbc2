@@ -158,3 +158,54 @@ def test_purchase_lot_returns_empty_when_no_matching_unit(app, db):
     db.session.commit()
 
     assert str(release.purchase_lot()) == ""
+
+
+def _add_sold_unit(db, master, sold_price):
+    from fbc.models.inventory import Unit
+    from fbc.models.sales import SalesReceipt
+
+    receipt = SalesReceipt(
+        date=datetime.date(2024, 1, 1), sold_price=sold_price, net_sold=sold_price
+    )
+    db.session.add(
+        Unit(name="Sold", discogs_master=master, sold=True, sales_receipt=receipt)
+    )
+    db.session.commit()
+
+
+def test_unit_add_prefills_retail_price_from_sold_units_of_same_master(app, db):
+    _add_sold_unit(db, "200", 20.0)
+    _add_sold_unit(db, "200", 31.0)
+    release = _make_release(release_id=100, master_id=200)
+    html = release.unit_add(instance_id=1, markup=False)
+    assert "retail_price=25.50" in html
+
+
+def test_unit_add_prefills_retail_price_for_masterless_release(app, db):
+    _add_sold_unit(db, "r100", 15.0)
+    release = _make_release(release_id=100, master_id=0)
+    html = release.unit_add(instance_id=1, markup=False)
+    assert "retail_price=15.00" in html
+
+
+def test_unit_add_omits_retail_price_when_nothing_sold(app, db):
+    release = _make_release(release_id=100, master_id=200)
+    html = release.unit_add(instance_id=1, markup=False)
+    assert "retail_price" not in html
+
+
+def test_unit_add_handles_none_master_id(app, db):
+    release = _make_release(release_id=100, master_id=None)
+    html = release.unit_add(instance_id=1, markup=False)
+    assert "discogs_master=r100" in html
+
+
+def test_add_unit_form_prefills_retail_price_from_query_args(app):
+    from fbc import appbuilder
+
+    view = next(
+        v for v in appbuilder.baseviews if type(v).__name__ == "UnitModelView"
+    )
+    with app.test_request_context("/?retail_price=25.50"):
+        form = view.add_form.refresh()
+        assert form.retail_price.data == 25.5
