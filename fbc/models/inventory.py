@@ -209,6 +209,50 @@ class Unit(Model):
         else:
             return None
 
+    def sold_for(self):
+        """
+        What this unit actually sold for: the Sales Receipt's sold price,
+        falling back to the eBay Order price (either the receipt's order or
+        an order placed against this unit's listing). None if unknown.
+        """
+        from fbc import db
+        from fbc.models.ebay import EbayOrder
+
+        if self.sales_receipt:
+            if self.sales_receipt.sold_price is not None:
+                return self.sales_receipt.sold_price
+            if self.sales_receipt.ebay_order:
+                return self.sales_receipt.ebay_order.price
+        if self.sold and self.ebay_listing_id:
+            order = (
+                db.session.query(EbayOrder)
+                .filter_by(ebay_listing_id=self.ebay_listing_id)
+                .first()
+            )
+            if order:
+                return order.price
+        return None
+
+    @staticmethod
+    def average_sold_price(discogs_master):
+        """
+        Average sold price of every sold unit sharing `discogs_master` (the
+        same grouping the Filter:Master link uses), or None if none of them
+        have a known sold price.
+        """
+        from fbc import db
+
+        units = (
+            db.session.query(Unit)
+            .filter_by(discogs_master=discogs_master)
+            .filter((Unit.sold.is_(True)) | (Unit.sales_receipt_id.isnot(None)))
+            .all()
+        )
+        prices = [p for p in (u.sold_for() for u in units) if p is not None]
+        if not prices:
+            return None
+        return round(sum(prices) / len(prices), 2)
+
     def master_show(self, markup=True):
         s = (
             '<a href="'

@@ -173,14 +173,21 @@ class DiscogsRelease(Model):
         else:
             return s
 
-    def filter_master(self, markup=True):
+    def discogs_master_key(self):
+        """
+        The value stored in Unit.discogs_master for this release: the master
+        id, or the release id prefixed with "r" when there is no master.
+        """
         if self.master_id and self.master_id > 0:
-            discogs_master = str(self.master_id)
-        else:
-            discogs_master = "r" + str(self.release_id)
+            return str(self.master_id)
+        return "r" + str(self.release_id)
+
+    def filter_master(self, markup=True):
         s = (
             '<a href="'
-            + url_for("UnitModelView.list", _flt_3_discogs_master=discogs_master)
+            + url_for(
+                "UnitModelView.list", _flt_3_discogs_master=self.discogs_master_key()
+            )
             + '">Filter:Master</a>'
         )
         if markup:
@@ -211,21 +218,23 @@ class DiscogsRelease(Model):
                 m = re.search(".*\((.*)\)", d["value"])
                 if m:
                     grading = grading + "/" + m.group(1)
-        if self.master_id > 0:
-            discogs_master = str(self.master_id)
-        else:
-            discogs_master = 'r' + str(self.release_id)
+        from fbc.models.inventory import Unit
+
+        discogs_master = self.discogs_master_key()
+        params = {
+            "name": str(self),
+            "unit_type": '12" LP',
+            "grading": grading,
+            "discogs_release": self.release_id,
+            "discogs_instance": instance_id,
+            "discogs_master": discogs_master,
+        }
+        avg_price = Unit.average_sold_price(discogs_master)
+        if avg_price is not None:
+            params["retail_price"] = f"{avg_price:.2f}"
         s = (
             '<a href="'
-            + url_for(
-                "UnitModelView.add",
-                name=str(self),
-                unit_type='12" LP',
-                grading=grading,
-                discogs_release=self.release_id,
-                discogs_instance=instance_id,
-                discogs_master=discogs_master,
-            )
+            + url_for("UnitModelView.add", **params)
             + '">Add Unit</a><br><span style="font-size:75%">('
             + str(instance_id)
             + ")</span>"

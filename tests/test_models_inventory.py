@@ -235,3 +235,93 @@ def test_unit_discogs_genre_column_merges_genres_and_styles(app, db):
 def test_unit_discogs_genre_column_empty_without_release(app):
     unit = Unit(name="Unit")
     assert str(unit.discogs_genre_column()) == ""
+
+
+def _sold_unit(db, master, sold_price=None, ebay_order=None, listing_id=None):
+    receipt = None
+    if sold_price is not None or ebay_order is not None:
+        receipt = SalesReceipt(
+            date=datetime.date(2024, 1, 1),
+            sold_price=sold_price,
+            net_sold=sold_price,
+            ebay_order=ebay_order,
+        )
+    unit = Unit(
+        name="Unit",
+        unit_type='12" LP',
+        pressing="",
+        grading="",
+        discogs_master=master,
+        ebay_listing_id=listing_id,
+        sold=True,
+        sales_receipt=receipt,
+    )
+    db.session.add(unit)
+    db.session.commit()
+    return unit
+
+
+def _ebay_order(db, order_id, price, listing_id=None):
+    from fbc.models.ebay import EbayOrder
+
+    order = EbayOrder(
+        order_id=order_id,
+        created_time=datetime.datetime(2024, 1, 1),
+        buyer="buyer",
+        price=price,
+        ebay_listing_id=listing_id,
+    )
+    db.session.add(order)
+    db.session.commit()
+    return order
+
+
+def test_average_sold_price_averages_sales_receipts_for_master(db):
+    _sold_unit(db, "200", sold_price=20.0)
+    _sold_unit(db, "200", sold_price=25.0)
+    _sold_unit(db, "999", sold_price=100.0)
+
+    assert Unit.average_sold_price("200") == 22.5
+
+
+def test_average_sold_price_ignores_unsold_units(db):
+    _sold_unit(db, "200", sold_price=20.0)
+    db.session.add(
+        Unit(name="Unsold", discogs_master="200", sold=False, retail_price=99.0)
+    )
+    db.session.commit()
+
+    assert Unit.average_sold_price("200") == 20.0
+
+
+def test_average_sold_price_falls_back_to_receipt_ebay_order(db):
+    order = _ebay_order(db, "111", 30.0)
+    _sold_unit(db, "200", sold_price=None, ebay_order=order)
+    _sold_unit(db, "200", sold_price=10.0)
+
+    assert Unit.average_sold_price("200") == 20.0
+
+
+def test_average_sold_price_falls_back_to_listing_ebay_order(db):
+    db.session.add(
+        EbayListing(item_id="L1", title="T", price=40.0, url="https://x")
+    )
+    db.session.commit()
+    _ebay_order(db, "222", 40.0, listing_id="L1")
+    _sold_unit(db, "200", listing_id="L1")
+
+    assert Unit.average_sold_price("200") == 40.0
+
+
+def test_average_sold_price_is_none_when_nothing_sold(db):
+    db.session.add(Unit(name="Unsold", discogs_master="200", sold=False))
+    db.session.commit()
+
+    assert Unit.average_sold_price("200") is None
+
+
+def test_average_sold_price_rounds_to_cents(db):
+    for price in (10.0, 10.0, 10.01):
+        _sold_unit(db, "200", sold_price=price)
+
+    assert Unit.average_sold_price("200") == 10.0
