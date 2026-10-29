@@ -105,14 +105,62 @@ def test_publish_endpoint_lists_the_draft(client, monkeypatch):
     assert "List&nbsp;on&nbsp;eBay" not in str(draft.unit.link_column())
 
 
+def _no_account_profiles():
+    return (
+        {"shipping": [], "return": [], "payment": []},
+        {"errors": [], "warnings": [], "fees": []},
+        {"ack": "Success", "returned_preferences": False, "opted_in": None, "profile_count": 0},
+    )
+
+
 def test_policies_page_lists_profile_ids(client, monkeypatch):
     monkeypatch.setattr(
         "fbc.views.listing.seller_profiles",
         lambda: (
             {"shipping": [("111", "Media Mail")], "return": [], "payment": []},
             {"errors": [], "warnings": [], "fees": []},
+            {"ack": "Success", "returned_preferences": True, "opted_in": "true", "profile_count": 1},
         ),
     )
     html = client.get("/ebaydraftmodelview/policies").get_data(as_text=True)
     assert "Media Mail" in html
     assert "111" in html
+
+
+def test_policies_page_reads_ids_off_the_newest_listing(client, monkeypatch):
+    import datetime
+
+    from fbc.models.ebay import EbayListing
+
+    for item_id, day in (("OLD", 1), ("NEW", 2)):
+        db.session.add(
+            EbayListing(
+                item_id=item_id,
+                title="t",
+                price=1.0,
+                url="u",
+                start_time=datetime.datetime(2026, 10, day),
+            )
+        )
+    db.session.commit()
+    asked = []
+
+    def fake_listing_profiles(item_id):
+        asked.append(item_id)
+        return (
+            {"shipping": ("111", "Media Mail"), "return": ("222", "No returns"), "payment": None},
+            {"errors": [], "warnings": [], "fees": []},
+        )
+
+    monkeypatch.setattr("fbc.views.listing.seller_profiles", _no_account_profiles)
+    monkeypatch.setattr("fbc.views.listing.listing_profiles", fake_listing_profiles)
+
+    html = client.get("/ebaydraftmodelview/policies").get_data(as_text=True)
+    assert asked == ["NEW"]
+    assert "Used by listing" in html
+    assert "No returns" in html
+    assert "Not set on this listing" in html
+    assert "listed no policies" in html
+
+    client.get("/ebaydraftmodelview/policies?item_id=397798127145")
+    assert asked == ["NEW", "397798127145"]

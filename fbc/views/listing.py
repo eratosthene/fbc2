@@ -9,6 +9,7 @@ from wtforms import TextAreaField
 
 from fbc.listing import (
     check_ready,
+    listing_profiles,
     new_draft,
     publish_draft,
     seller_profiles,
@@ -209,9 +210,32 @@ class EbayDraftModelView(CustomModelView):
     @expose("/policies")
     @has_access
     def policies(self):
-        """Show the seller's business policy IDs for config.py."""
-        profiles, summary = seller_profiles()
+        """
+        Show business policy IDs for config.py: every policy on the account,
+        and the ones an existing listing uses (the newest one, or ?item_id=).
+        """
+        from fbc import db
+        from fbc.models.ebay import EbayListing
+
+        profiles, summary, details = seller_profiles()
         self._flash_summary(summary)
+        item_id = request.args.get("item_id")
+        if not item_id:
+            newest = (
+                db.session.query(EbayListing)
+                .order_by(EbayListing.start_time.desc())
+                .first()
+            )
+            item_id = newest.item_id if newest else None
+        used = None
+        if item_id:
+            used, summary = listing_profiles(item_id)
+            self._flash_summary(summary)
         return self.render_template(
-            "ebay_draft/policies.html", title="eBay Business Policies", profiles=profiles
+            "ebay_draft/policies.html",
+            title="eBay Business Policies",
+            profiles=profiles,
+            details=details,
+            item_id=item_id,
+            used=used,
         )

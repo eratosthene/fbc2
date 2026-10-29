@@ -389,3 +389,75 @@ def test_draft_picture_list_round_trips(app):
     draft.set_picture_list(["a", "b"])
     assert draft.picture_list() == ["a", "b"]
     assert draft.picture_count() == 2
+
+
+def test_listing_profiles_reads_seller_profiles_off_get_item(monkeypatch):
+    resp = {
+        "Item": {
+            "SellerProfiles": {
+                "SellerShippingProfile": {
+                    "ShippingProfileID": "111",
+                    "ShippingProfileName": "Media Mail",
+                },
+                "SellerReturnProfile": {
+                    "ReturnProfileID": "222",
+                    "ReturnProfileName": "No returns",
+                },
+                "SellerPaymentProfile": {
+                    "PaymentProfileID": "333",
+                    "PaymentProfileName": "eBay Payments",
+                },
+            }
+        }
+    }
+    monkeypatch.setattr(listing, "_call", lambda verb, data: (resp, summarize_response(resp)))
+
+    profiles, summary = listing.listing_profiles("397798127145")
+
+    assert profiles == {
+        "shipping": ("111", "Media Mail"),
+        "return": ("222", "No returns"),
+        "payment": ("333", "eBay Payments"),
+    }
+    assert summary["warnings"] == []
+
+
+def test_listing_profiles_warns_when_listing_has_no_policies(monkeypatch):
+    resp = {"Item": {}}
+    monkeypatch.setattr(listing, "_call", lambda verb, data: (resp, summarize_response(resp)))
+
+    profiles, summary = listing.listing_profiles("1")
+
+    assert profiles == {"shipping": None, "return": None, "payment": None}
+    assert summary["warnings"] == ["Listing 1 doesn't use business policies."]
+
+
+def test_seller_profiles_reports_what_ebay_returned(monkeypatch):
+    resp = {
+        "Ack": "Success",
+        "SellerProfilePreferences": {
+            "SellerProfileOptedIn": "true",
+            "SupportedSellerProfiles": {
+                "SupportedSellerProfile": {
+                    "ProfileID": "111",
+                    "ProfileName": "Media Mail",
+                    "ProfileType": "SHIPPING",
+                }
+            },
+        },
+    }
+    monkeypatch.setattr(listing, "_call", lambda verb, data: (resp, summarize_response(resp)))
+
+    profiles, _, details = listing.seller_profiles()
+
+    assert profiles["shipping"] == [("111", "Media Mail")]
+    assert details == {
+        "ack": "Success",
+        "returned_preferences": True,
+        "opted_in": "true",
+        "profile_count": 1,
+    }
+
+
+def test_trading_asks_for_a_current_api_version(app):
+    assert listing.trading().config.get("compatibility") == listing.TRADING_VERSION

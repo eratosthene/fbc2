@@ -352,10 +352,15 @@ def ensure_release_details(release):
         )
 
 
+# ebaysdk asks for Trading API version 837 (2013) unless told otherwise.
+TRADING_VERSION = "1451"
+
+
 def trading():
     """
     A Trading API connection for listing calls. Unlike the sync calls these
-    send user-entered text, so XML escaping is turned on.
+    send user-entered text, so XML escaping is turned on, and they ask for a
+    current API version rather than ebaysdk's default.
     """
     from fbc import app
     from ebaysdk.trading import Connection as Trading
@@ -370,6 +375,7 @@ def trading():
         devid=ebayconfig["DEV_ID"],
         token=ebayconfig["USER_TOKEN"],
         escape_xml=True,
+        compatibility=TRADING_VERSION,
     )
 
 
@@ -519,24 +525,57 @@ def upload_picture(fileobj, filename):
 
 def seller_profiles():
     """
-    The seller's business policies, as {"shipping"/"return"/"payment": [(id,
-    name), ...]}, so their IDs can be copied into config.py.
+    The seller's business policies from GetUserPreferences, as
+    ({"shipping"/"return"/"payment": [(id, name), ...]}, summary, details).
+    `details` says what eBay sent back, for when the lists come back empty.
     """
     resp, summary = _call(
         "GetUserPreferences", {"ShowSellerProfilePreferences": "true"}
     )
     profiles = {"shipping": [], "return": [], "payment": []}
     if resp is None:
-        return profiles, summary
-    prefs = resp.get("SellerProfilePreferences") or {}
-    supported = (prefs.get("SupportedSellerProfiles") or {}).get(
+        return profiles, summary, {}
+    logger.info("GetUserPreferences: " + json.dumps(resp, default=str))
+    prefs = resp.get("SellerProfilePreferences")
+    supported = ((prefs or {}).get("SupportedSellerProfiles") or {}).get(
         "SupportedSellerProfile"
     )
+    details = {
+        "ack": resp.get("Ack"),
+        "returned_preferences": prefs is not None,
+        "opted_in": (prefs or {}).get("SellerProfileOptedIn"),
+        "profile_count": len(_as_list(supported)),
+    }
     kinds = {"SHIPPING": "shipping", "RETURN_POLICY": "return", "PAYMENT": "payment"}
     for p in _as_list(supported):
         kind = kinds.get(p.get("ProfileType"))
         if kind:
             profiles[kind].append((p.get("ProfileID"), p.get("ProfileName")))
+    return profiles, summary, details
+
+
+def listing_profiles(item_id):
+    """
+    The business policies an existing listing uses, from GetItem, as
+    ({"shipping"/"return"/"payment": (id, name) or None}, summary).
+    """
+    resp, summary = _call("GetItem", {"ItemID": item_id})
+    profiles = {"shipping": None, "return": None, "payment": None}
+    if resp is None:
+        return profiles, summary
+    sp = (resp.get("Item") or {}).get("SellerProfiles") or {}
+    for kind, container, prefix in (
+        ("shipping", "SellerShippingProfile", "ShippingProfile"),
+        ("return", "SellerReturnProfile", "ReturnProfile"),
+        ("payment", "SellerPaymentProfile", "PaymentProfile"),
+    ):
+        p = sp.get(container)
+        if p and p.get(prefix + "ID"):
+            profiles[kind] = (p[prefix + "ID"], p.get(prefix + "Name"))
+    if not any(profiles.values()):
+        summary["warnings"].append(
+            "Listing " + str(item_id) + " doesn't use business policies."
+        )
     return profiles, summary
 
 
