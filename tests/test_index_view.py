@@ -1,5 +1,7 @@
 import datetime
 
+import pytest
+
 from fbc import db
 from fbc.index import MyIndexView
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
@@ -47,9 +49,6 @@ def _unit(lot, box=None, sold=False, sales_receipt=None, name="Unit"):
 
 
 def test_index_renders_successfully_with_data(app):
-    # NOTE: fbc/templates/index.html divides by unit_total and by totals['net']
-    # with no zero check, so an empty/all-unsold database makes the real
-    # template raise ZeroDivisionError; seed a sold unit so both are non-zero.
     lot = _lot()
     _unit(lot, sold=False, name="Unsold")
     _unit(lot, sold=True, name="Sold", sales_receipt=_receipt(50.0, 45.0))
@@ -111,6 +110,10 @@ def test_index_aggregates_totals_across_lots_and_boxes(app):
     assert captured["totals"]["fees"] == 6.0
     assert captured["totals"]["profit"] == -46.0
     assert captured["total_net_profit"] == -56.0
+    assert captured["profit_margin"] == pytest.approx(-56.0 / 54.0 * 100)
+    assert captured["supply_per_unit"] == 5.0
+    # (100.0 capital / 2 units) / (1 - 10% fees) + 5.0 supplies per unit
+    assert captured["breakeven_per_unit"] == pytest.approx(50.0 / 0.9 + 5.0)
 
     box_totals = captured["box_totals"]
     assert box_totals[box.id]["instock"] == 1
@@ -146,3 +149,18 @@ def test_index_handles_units_without_storage_box(app):
     assert captured["box_totals"][0]["name"] == "No Box Assigned"
     assert captured["box_totals"][0]["gross"] == 30.0
     assert captured["box_totals"][0]["net"] == 27.0
+
+
+def test_index_renders_with_empty_inventory(app):
+    with app.test_client() as client:
+        response = client.get("/")
+        assert response.status_code == 200
+
+
+def test_index_renders_with_no_sales(app):
+    lot = _lot()
+    _unit(lot, sold=False, name="Unsold")
+
+    with app.test_client() as client:
+        response = client.get("/")
+        assert response.status_code == 200
