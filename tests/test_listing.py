@@ -254,8 +254,16 @@ def test_check_ready_needs_a_picture_and_business_policies(app, monkeypatch):
     monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "LISTING", {})
     draft.set_picture_list(["https://i.ebayimg.com/a.jpg"])
     problems = check_ready(draft)
-    assert len(problems) == 3
-    assert all("PROFILE_ID" in p for p in problems)
+    assert len(problems) == 1
+    assert "TEMPLATE_ITEM_ID" in problems[0]
+
+
+def test_check_ready_accepts_a_template_listing_instead_of_policies(app, monkeypatch):
+    monkeypatch.setitem(
+        fbc.app.config["EBAY_SETTINGS"], "LISTING", {"TEMPLATE_ITEM_ID": "397798127145"}
+    )
+    draft = _draft(pictures=["https://i.ebayimg.com/a.jpg"])
+    assert check_ready(draft) == []
 
 
 def test_summarize_response_splits_errors_warnings_and_fees():
@@ -391,7 +399,184 @@ def test_draft_picture_list_round_trips(app):
     assert draft.picture_count() == 2
 
 
-def test_listing_profiles_reads_seller_profiles_off_get_item(monkeypatch):
+# GetItem's Item for a listing like https://www.ebay.com/itm/397798127145,
+# as ebaysdk's response.dict() presents it (attributes as "_name", element
+# text as "value").
+FLAT_ITEM = {
+    "ItemID": "397798127145",
+    "Location": "Georgetown, Texas",
+    "PostalCode": "78626",
+    "Country": "US",
+    "DispatchTimeMax": "2",
+    "ShippingDetails": {
+        "ShippingType": "Flat",
+        "ShippingServiceOptions": {
+            "ShippingService": "USPSMedia",
+            "ShippingServiceCost": {"_currencyID": "USD", "value": "4.39"},
+            "ShippingServicePriority": "1",
+            "ExpeditedService": "false",
+            "ShippingTimeMin": "2",
+            "ShippingTimeMax": "8",
+        },
+        "SalesTax": {"SalesTaxPercent": "0.0"},
+        "ShippingDiscountProfileID": "0",
+        "ThirdPartyCheckout": "false",
+    },
+    "ReturnPolicy": {
+        "ReturnsAcceptedOption": "ReturnsNotAccepted",
+        "ReturnsAccepted": "No returns accepted",
+    },
+    "ShippingPackageDetails": {
+        "WeightMajor": {"_unit": "lbs", "_measurementSystem": "English", "value": "1"},
+    },
+}
+
+
+def test_to_request_turns_ebaysdk_attributes_back_into_request_form():
+    assert listing.to_request({"_currencyID": "USD", "value": "4.39"}) == {
+        "#text": "4.39",
+        "@attrs": {"currencyID": "USD"},
+    }
+    assert listing.to_request({"A": [{"value": "1"}, "2"], "_skip": "x"}) == {
+        "A": [{"#text": "1"}, "2"]
+    }
+
+
+def test_template_from_a_flat_rate_listing_keeps_only_input_fields():
+    assert listing.template_from_item(FLAT_ITEM) == {
+        "ShippingDetails": {
+            "ShippingType": "Flat",
+            "ShippingServiceOptions": [
+                {
+                    "ShippingService": "USPSMedia",
+                    "ShippingServicePriority": "1",
+                    "ShippingServiceCost": {
+                        "#text": "4.39",
+                        "@attrs": {"currencyID": "USD"},
+                    },
+                }
+            ],
+        },
+        "ReturnPolicy": {"ReturnsAcceptedOption": "ReturnsNotAccepted"},
+        "DispatchTimeMax": "2",
+        "PostalCode": "78626",
+        "Location": "Georgetown, Texas",
+    }
+
+
+def test_template_from_a_calculated_listing_sends_the_package_not_the_cost():
+    item = {
+        "ShippingDetails": {
+            "ShippingType": "Calculated",
+            "ShippingServiceOptions": [
+                {
+                    "ShippingService": "USPSMedia",
+                    "ShippingServiceCost": {"_currencyID": "USD", "value": "4.39"},
+                    "ShippingServicePriority": "1",
+                }
+            ],
+        },
+        "ShippingPackageDetails": {
+            "WeightMajor": {"_unit": "lbs", "value": "1"},
+            "WeightMinor": {"_unit": "oz", "value": "4"},
+            "ShippingPackage": "PackageThickEnvelope",
+            "ShippingIrregular": "false",
+        },
+    }
+    fields = listing.template_from_item(item)
+
+    assert fields["ShippingDetails"]["ShippingServiceOptions"] == [
+        {"ShippingService": "USPSMedia", "ShippingServicePriority": "1"}
+    ]
+    assert fields["ShippingPackageDetails"]["WeightMinor"] == {
+        "#text": "4",
+        "@attrs": {"unit": "oz"},
+    }
+    assert ("Shipping", "USPSMedia, calculated by eBay") in listing.describe_template(
+        fields
+    )
+    assert ("Package weight", "1 lbs 4 oz") in listing.describe_template(fields)
+
+
+def test_describe_template_for_the_example_listing():
+    assert listing.describe_template(listing.template_from_item(FLAT_ITEM)) == [
+        ("Shipping", "USPSMedia, $4.39"),
+        ("Shipping type", "Flat"),
+        ("Returns", "ReturnsNotAccepted"),
+        ("Handling time", "2 business days"),
+        ("Ships from", "Georgetown, Texas, 78626"),
+    ]
+
+
+def test_build_item_copies_the_template_when_there_are_no_policies(app):
+    draft = _draft()
+    template = listing.template_from_item(FLAT_ITEM)
+    item = build_item(draft, {"POSTAL_CODE": "78628"}, template)
+
+    assert "SellerProfiles" not in item
+    assert item["ShippingDetails"] == template["ShippingDetails"]
+    assert item["ReturnPolicy"] == {"ReturnsAcceptedOption": "ReturnsNotAccepted"}
+    assert item["DispatchTimeMax"] == "2"
+    # config.py wins over the template for the location.
+    assert item["PostalCode"] == "78628"
+
+
+def test_build_item_prefers_policies_over_the_template(app):
+    draft = _draft()
+    item = build_item(draft, SETTINGS, listing.template_from_item(FLAT_ITEM))
+
+    assert "SellerProfiles" in item
+    assert "ShippingDetails" not in item
+
+
+def test_publish_copies_shipping_from_the_template_listing(app, monkeypatch):
+    monkeypatch.setitem(
+        fbc.app.config["EBAY_SETTINGS"], "LISTING", {"TEMPLATE_ITEM_ID": "397798127145"}
+    )
+    calls = []
+
+    def fake_call(verb, data):
+        calls.append((verb, data))
+        if verb == "GetItem":
+            resp = {"Item": FLAT_ITEM}
+        else:
+            resp = {"ItemID": "555", "StartTime": "2026-10-29T16:00:00.000Z"}
+        return resp, summarize_response(resp)
+
+    monkeypatch.setattr(listing, "_call", fake_call)
+    draft = _draft(pictures=["https://i.ebayimg.com/a.jpg"])
+
+    summary = publish_draft(draft)
+
+    assert summary["errors"] == []
+    assert [verb for verb, _ in calls] == ["GetItem", "AddFixedPriceItem"]
+    assert calls[0][1] == {"ItemID": "397798127145"}
+    sent = calls[1][1]["Item"]
+    assert sent["ShippingDetails"]["ShippingServiceOptions"][0]["ShippingService"] == "USPSMedia"
+    assert draft.status == "published"
+
+
+def test_publish_stops_if_the_template_listing_cant_be_read(app, monkeypatch):
+    monkeypatch.setitem(
+        fbc.app.config["EBAY_SETTINGS"], "LISTING", {"TEMPLATE_ITEM_ID": "1"}
+    )
+    verbs = []
+
+    def fake_call(verb, data):
+        verbs.append(verb)
+        return None, {"errors": ["Item not found."], "warnings": [], "fees": []}
+
+    monkeypatch.setattr(listing, "_call", fake_call)
+    draft = _draft(pictures=["https://i.ebayimg.com/a.jpg"])
+
+    summary = publish_draft(draft)
+
+    assert verbs == ["GetItem"]
+    assert summary["errors"] == ["Couldn't read template listing 1.", "Item not found."]
+    assert draft.status == "draft"
+
+
+def test_listing_details_reads_seller_profiles_off_get_item(monkeypatch):
     resp = {
         "Item": {
             "SellerProfiles": {
@@ -412,7 +597,7 @@ def test_listing_profiles_reads_seller_profiles_off_get_item(monkeypatch):
     }
     monkeypatch.setattr(listing, "_call", lambda verb, data: (resp, summarize_response(resp)))
 
-    profiles, summary = listing.listing_profiles("397798127145")
+    profiles, _, summary = listing.listing_details("397798127145")
 
     assert profiles == {
         "shipping": ("111", "Media Mail"),
@@ -422,14 +607,15 @@ def test_listing_profiles_reads_seller_profiles_off_get_item(monkeypatch):
     assert summary["warnings"] == []
 
 
-def test_listing_profiles_warns_when_listing_has_no_policies(monkeypatch):
-    resp = {"Item": {}}
+def test_listing_details_without_policies_returns_what_would_be_copied(monkeypatch):
+    resp = {"Item": FLAT_ITEM}
     monkeypatch.setattr(listing, "_call", lambda verb, data: (resp, summarize_response(resp)))
 
-    profiles, summary = listing.listing_profiles("1")
+    profiles, fields, summary = listing.listing_details("397798127145")
 
     assert profiles == {"shipping": None, "return": None, "payment": None}
-    assert summary["warnings"] == ["Listing 1 doesn't use business policies."]
+    assert fields == listing.template_from_item(FLAT_ITEM)
+    assert summary["warnings"] == []
 
 
 def test_seller_profiles_reports_what_ebay_returned(monkeypatch):

@@ -123,10 +123,15 @@ EBAY_SETTINGS = {
     'DEV_ID': '',
     'CERT_ID': '',
     'USER_TOKEN': '',
-    # Used when publishing a Unit as a listing (eBay Drafts). The business
-    # policy IDs are shown under Sales > eBay Drafts > Business Policies.
+    # Used when publishing a Unit as a listing (eBay Drafts). See
+    # Sales > eBay Drafts > Shipping & Returns for the values to use.
     'LISTING': {
         'CATEGORY_ID': '176985',  # Music > Vinyl Records
+        # Without business policies: an existing listing whose shipping,
+        # returns and handling time new listings copy.
+        'TEMPLATE_ITEM_ID': '',
+        # With business policies: the three policy IDs (these win over
+        # TEMPLATE_ITEM_ID when all are set).
         'SHIPPING_PROFILE_ID': '',
         'RETURN_PROFILE_ID': '',
         'PAYMENT_PROFILE_ID': '',

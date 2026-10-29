@@ -127,7 +127,7 @@ def test_policies_page_lists_profile_ids(client, monkeypatch):
     assert "111" in html
 
 
-def test_policies_page_reads_ids_off_the_newest_listing(client, monkeypatch):
+def _add_listings():
     import datetime
 
     from fbc.models.ebay import EbayListing
@@ -143,24 +143,57 @@ def test_policies_page_reads_ids_off_the_newest_listing(client, monkeypatch):
             )
         )
     db.session.commit()
+
+
+def test_policies_page_shows_policy_ids_off_the_newest_listing(client, monkeypatch):
+    _add_listings()
     asked = []
 
-    def fake_listing_profiles(item_id):
+    def fake_listing_details(item_id):
         asked.append(item_id)
         return (
             {"shipping": ("111", "Media Mail"), "return": ("222", "No returns"), "payment": None},
+            {},
             {"errors": [], "warnings": [], "fees": []},
         )
 
     monkeypatch.setattr("fbc.views.listing.seller_profiles", _no_account_profiles)
-    monkeypatch.setattr("fbc.views.listing.listing_profiles", fake_listing_profiles)
+    monkeypatch.setattr("fbc.views.listing.listing_details", fake_listing_details)
 
     html = client.get("/ebaydraftmodelview/policies").get_data(as_text=True)
     assert asked == ["NEW"]
-    assert "Used by listing" in html
+    assert "uses business policies" in html
     assert "No returns" in html
     assert "Not set on this listing" in html
-    assert "listed no policies" in html
+    assert "sets shipping and returns on each listing" in html
 
     client.get("/ebaydraftmodelview/policies?item_id=397798127145")
     assert asked == ["NEW", "397798127145"]
+
+
+def test_policies_page_shows_what_a_listing_without_policies_would_copy(
+    client, monkeypatch
+):
+    from test_listing import FLAT_ITEM
+
+    _add_listings()
+    monkeypatch.setattr("fbc.views.listing.seller_profiles", _no_account_profiles)
+    monkeypatch.setattr(
+        "fbc.views.listing.listing_details",
+        lambda item_id: (
+            {"shipping": None, "return": None, "payment": None},
+            listing.template_from_item(FLAT_ITEM),
+            {"errors": [], "warnings": [], "fees": []},
+        ),
+    )
+
+    html = client.get("/ebaydraftmodelview/policies").get_data(as_text=True)
+    assert "'TEMPLATE_ITEM_ID': 'NEW'" in html
+    assert "USPSMedia, $4.39" in html
+
+    monkeypatch.setitem(
+        fbc.app.config["EBAY_SETTINGS"]["LISTING"], "TEMPLATE_ITEM_ID", "OLD"
+    )
+    html = client.get("/ebaydraftmodelview/policies").get_data(as_text=True)
+    assert "New listings copy this from it" in html
+    assert "ebay.com/itm/OLD" in html

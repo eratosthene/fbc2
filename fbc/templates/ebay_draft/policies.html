@@ -1,12 +1,17 @@
 {% extends "appbuilder/base.html" %}
 {% set kinds = [("shipping", "SHIPPING_PROFILE_ID"), ("return", "RETURN_PROFILE_ID"), ("payment", "PAYMENT_PROFILE_ID")] %}
 {% block content %}
-<h3>eBay Business Policies</h3>
-<p>Copy the IDs of the policies new listings should use into
-<code>EBAY_SETTINGS["LISTING"]</code> in config.py.</p>
+<h3>Shipping &amp; Returns</h3>
+<p>New listings get their shipping, returns and handling time either from
+business policies or, if the account doesn't use them, by copying them from
+an existing listing. Set one or the other in <code>EBAY_SETTINGS["LISTING"]</code>
+in config.py.</p>
 
-{% if used %}
-<h4>Used by listing <a href="https://www.ebay.com/itm/{{ item_id }}">{{ item_id }}</a></h4>
+{% if item_id %}
+<h4>Listing <a href="https://www.ebay.com/itm/{{ item_id }}">{{ item_id }}</a>
+{% if item_id == template_id %}<small>the configured <code>TEMPLATE_ITEM_ID</code></small>{% endif %}</h4>
+{% if used and (used.shipping or used["return"] or used.payment) %}
+<p>This listing uses business policies:</p>
 <table class="table table-bordered table-condensed" style="width: auto">
   <tr><th>Setting</th><th>ID</th><th>Name</th></tr>
   {% for kind, key in kinds %}
@@ -20,13 +25,28 @@
   </tr>
   {% endfor %}
 </table>
+{% elif copied %}
+<p>{% if item_id == template_id %}New listings copy this from it:{% else %}This listing
+doesn't use business policies. To copy its shipping and returns into new listings,
+set <code>'TEMPLATE_ITEM_ID': '{{ item_id }}'</code>. It would copy:{% endif %}</p>
+<table class="table table-bordered table-condensed" style="width: auto">
+  {% for label, text in copied %}
+  <tr><th>{{ label }}</th><td>{{ text }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
 {% endif %}
 <form method="get" class="form-inline" style="margin-bottom: 20px">
   <input type="text" name="item_id" placeholder="eBay item ID" value="{{ item_id or '' }}" class="form-control">
-  <button class="btn btn-default">Show policies for this listing</button>
+  <button class="btn btn-default">Look at this listing</button>
 </form>
 
-<h4>All policies on the account</h4>
+<h4>Business policies on the account</h4>
+{% if details and not details.profile_count %}
+<p class="text-muted">None. eBay's GetUserPreferences answered {{ details.ack }} without listing any
+(preferences returned: {{ details.returned_preferences }}, opted in: {{ details.opted_in }}),
+so this account sets shipping and returns on each listing. The full response is in the server log.</p>
+{% else %}
 {% for kind, key in kinds %}
 <h5>{{ kind|capitalize }} <small><code>{{ key }}</code></small></h5>
 <table class="table table-bordered table-condensed" style="width: auto">
@@ -38,9 +58,5 @@
   {% endfor %}
 </table>
 {% endfor %}
-{% if details and not details.profile_count %}
-<p class="text-muted">eBay's GetUserPreferences answered {{ details.ack }} but listed no policies
-(preferences returned: {{ details.returned_preferences }}, opted in: {{ details.opted_in }}).
-The full response is in the server log.</p>
 {% endif %}
 {% endblock %}

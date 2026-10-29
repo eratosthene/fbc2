@@ -9,7 +9,9 @@ from wtforms import TextAreaField
 
 from fbc.listing import (
     check_ready,
-    listing_profiles,
+    describe_template,
+    listing_details,
+    listing_settings,
     new_draft,
     publish_draft,
     seller_profiles,
@@ -211,15 +213,17 @@ class EbayDraftModelView(CustomModelView):
     @has_access
     def policies(self):
         """
-        Show business policy IDs for config.py: every policy on the account,
-        and the ones an existing listing uses (the newest one, or ?item_id=).
+        Show where new listings get shipping and returns from: what a listing
+        uses (?item_id=, else the configured template, else the newest
+        listing), and any business policies on the account.
         """
         from fbc import db
         from fbc.models.ebay import EbayListing
 
         profiles, summary, details = seller_profiles()
         self._flash_summary(summary)
-        item_id = request.args.get("item_id")
+        template_id = listing_settings().get("TEMPLATE_ITEM_ID")
+        item_id = request.args.get("item_id") or template_id
         if not item_id:
             newest = (
                 db.session.query(EbayListing)
@@ -228,14 +232,18 @@ class EbayDraftModelView(CustomModelView):
             )
             item_id = newest.item_id if newest else None
         used = None
+        copied = []
         if item_id:
-            used, summary = listing_profiles(item_id)
+            used, fields, summary = listing_details(item_id)
+            copied = describe_template(fields)
             self._flash_summary(summary)
         return self.render_template(
             "ebay_draft/policies.html",
-            title="eBay Business Policies",
+            title="Shipping & Returns",
             profiles=profiles,
             details=details,
             item_id=item_id,
+            template_id=template_id,
             used=used,
+            copied=copied,
         )

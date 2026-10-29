@@ -262,10 +262,21 @@ def build_description(unit):
     return "<p>" + unit.description + "</p>"
 
 
-def build_item(draft, settings):
+POLICY_KEYS = ("SHIPPING_PROFILE_ID", "RETURN_PROFILE_ID", "PAYMENT_PROFILE_ID")
+
+
+def uses_policies(settings):
+    """Whether config.py names business policies for new listings."""
+    return all(settings.get(key) for key in POLICY_KEYS)
+
+
+def build_item(draft, settings, template=None):
     """
     The Item container for AddFixedPriceItem / VerifyAddFixedPriceItem.
-    `settings` is EBAY_SETTINGS["LISTING"] from config.py.
+    `settings` is EBAY_SETTINGS["LISTING"] from config.py. Shipping, returns
+    and handling time come from the business policies named there or, for an
+    account without business policies, from `template`: the fields
+    template_fields() copied from an existing listing.
     """
     specifics = parse_specifics(draft.item_specifics)
     item = {
@@ -287,28 +298,155 @@ def build_item(draft, settings):
                 {"Name": name, "Value": values} for name, values in specifics.items()
             ]
         },
-        "SellerProfiles": {
-            "SellerShippingProfile": {
-                "ShippingProfileID": settings.get("SHIPPING_PROFILE_ID", "")
-            },
-            "SellerReturnProfile": {
-                "ReturnProfileID": settings.get("RETURN_PROFILE_ID", "")
-            },
-            "SellerPaymentProfile": {
-                "PaymentProfileID": settings.get("PAYMENT_PROFILE_ID", "")
-            },
-        },
     }
+    if uses_policies(settings):
+        item["SellerProfiles"] = {
+            "SellerShippingProfile": {
+                "ShippingProfileID": settings["SHIPPING_PROFILE_ID"]
+            },
+            "SellerReturnProfile": {"ReturnProfileID": settings["RETURN_PROFILE_ID"]},
+            "SellerPaymentProfile": {
+                "PaymentProfileID": settings["PAYMENT_PROFILE_ID"]
+            },
+        }
     if settings.get("POSTAL_CODE"):
         item["PostalCode"] = settings["POSTAL_CODE"]
     if settings.get("LOCATION"):
         item["Location"] = settings["LOCATION"]
+    if template and not uses_policies(settings):
+        for key, value in template.items():
+            item.setdefault(key, value)
     if draft.best_offer:
         item["BestOfferDetails"] = {"BestOfferEnabled": "true"}
     pictures = draft.picture_list()
     if pictures:
         item["PictureDetails"] = {"PictureURL": pictures}
     return item
+
+
+def to_request(value):
+    """
+    Turn part of an ebaysdk response dict back into request form: ebaysdk
+    reads <Cost currencyID="USD">4.39</Cost> as {"_currencyID": "USD",
+    "value": "4.39"}, but sends {"#text": ..., "@attrs": {...}}.
+    """
+    if isinstance(value, list):
+        return [to_request(v) for v in value]
+    if not isinstance(value, dict):
+        return value
+    if "value" in value:
+        out = {"#text": value["value"]}
+        attrs = {k[1:]: v for k, v in value.items() if k.startswith("_")}
+        if attrs:
+            out["@attrs"] = attrs
+        return out
+    return {k: to_request(v) for k, v in value.items() if not k.startswith("_")}
+
+
+# What gets copied from a template listing. GetItem returns plenty more
+# (calculated rates, discount profile IDs, sales tax...), much of it output
+# only, so only fields AddFixedPriceItem takes as input are kept.
+SHIPPING_OPTION_FIELDS = (
+    "ShippingService",
+    "ShippingServicePriority",
+    "ShippingServiceCost",
+    "ShippingServiceAdditionalCost",
+    "FreeShipping",
+)
+SHIPPING_COST_FIELDS = ("ShippingServiceCost", "ShippingServiceAdditionalCost")
+# Shipping types where the seller sets the domestic cost; otherwise eBay
+# calculates it from the package details.
+FLAT_SHIPPING_TYPES = ("Flat", "FlatDomesticCalculatedInternational")
+PACKAGE_FIELDS = (
+    "MeasurementUnit",
+    "PackageDepth",
+    "PackageLength",
+    "PackageWidth",
+    "ShippingIrregular",
+    "ShippingPackage",
+    "WeightMajor",
+    "WeightMinor",
+)
+RETURN_FIELDS = (
+    "ReturnsAcceptedOption",
+    "ReturnsWithinOption",
+    "RefundOption",
+    "ShippingCostPaidByOption",
+)
+ITEM_FIELDS = ("DispatchTimeMax", "PostalCode", "Location")
+
+
+def template_from_item(item):
+    """
+    The domestic shipping, returns, handling time and location of a listing
+    (the Item from GetItem), as Item fields for build_item().
+    """
+    fields = {}
+    shipping = item.get("ShippingDetails") or {}
+    shipping_type = shipping.get("ShippingType")
+    options = []
+    for option in _as_list(shipping.get("ShippingServiceOptions")):
+        o = {
+            k: to_request(option[k]) for k in SHIPPING_OPTION_FIELDS if k in option
+        }
+        if shipping_type not in FLAT_SHIPPING_TYPES:
+            for k in SHIPPING_COST_FIELDS:
+                o.pop(k, None)
+        options.append(o)
+    if shipping_type and options:
+        fields["ShippingDetails"] = {
+            "ShippingType": shipping_type,
+            "ShippingServiceOptions": options,
+        }
+    package = item.get("ShippingPackageDetails") or {}
+    if shipping_type not in FLAT_SHIPPING_TYPES and package:
+        fields["ShippingPackageDetails"] = {
+            k: to_request(package[k]) for k in PACKAGE_FIELDS if k in package
+        }
+    returns = item.get("ReturnPolicy") or {}
+    returns = {k: returns[k] for k in RETURN_FIELDS if returns.get(k)}
+    if returns:
+        fields["ReturnPolicy"] = returns
+    for k in ITEM_FIELDS:
+        if item.get(k):
+            fields[k] = item[k]
+    return fields
+
+
+def describe_template(fields):
+    """The template fields as (label, text) rows for people to check."""
+    rows = []
+    shipping = fields.get("ShippingDetails")
+    if shipping:
+        for o in shipping["ShippingServiceOptions"]:
+            if o.get("FreeShipping") == "true":
+                cost = "free"
+            elif "ShippingServiceCost" in o:
+                cost = "$" + o["ShippingServiceCost"]["#text"]
+            else:
+                cost = "calculated by eBay"
+            rows.append(("Shipping", o.get("ShippingService", "?") + ", " + cost))
+        rows.append(("Shipping type", shipping["ShippingType"]))
+    package = fields.get("ShippingPackageDetails")
+    if package:
+        weight = [
+            package[k]["#text"] + " " + package[k].get("@attrs", {}).get("unit", "")
+            for k in ("WeightMajor", "WeightMinor")
+            if k in package
+        ]
+        rows.append(("Package weight", " ".join(w.strip() for w in weight)))
+    returns = fields.get("ReturnPolicy")
+    if returns:
+        text = returns.get("ReturnsAcceptedOption", "")
+        if returns.get("ReturnsWithinOption"):
+            text += ", " + returns["ReturnsWithinOption"]
+        rows.append(("Returns", text))
+    if fields.get("DispatchTimeMax"):
+        rows.append(("Handling time", fields["DispatchTimeMax"] + " business days"))
+    location = ", ".join(fields[k] for k in ("Location", "PostalCode") if fields.get(k))
+    if location:
+        rows.append(("Ships from", location))
+    return rows
 
 
 SKU_PREFIX = "fbc-"
@@ -442,19 +580,44 @@ def check_ready(draft):
     if draft.price is None:
         problems.append("Set a price.")
     settings = listing_settings()
-    for key in ("SHIPPING_PROFILE_ID", "RETURN_PROFILE_ID", "PAYMENT_PROFILE_ID"):
-        if not settings.get(key):
-            problems.append(
-                "Set EBAY_SETTINGS['LISTING']['" + key + "'] in config.py."
-            )
+    if not uses_policies(settings) and not settings.get("TEMPLATE_ITEM_ID"):
+        problems.append(
+            "Set EBAY_SETTINGS['LISTING']['TEMPLATE_ITEM_ID'] in config.py to a"
+            " listing whose shipping and returns new listings should copy."
+        )
     return problems
+
+
+def template_fields(settings):
+    """
+    (fields, summary): the template listing's shipping and returns for
+    build_item(), or ({}, empty summary) when business policies are used.
+    """
+    summary = {"errors": [], "warnings": [], "fees": []}
+    item_id = settings.get("TEMPLATE_ITEM_ID")
+    if uses_policies(settings) or not item_id:
+        return {}, summary
+    resp, summary = _call("GetItem", {"ItemID": item_id})
+    if resp is None:
+        summary["errors"].insert(
+            0, "Couldn't read template listing " + str(item_id) + "."
+        )
+        return {}, summary
+    return template_from_item(resp.get("Item") or {}), summary
+
+
+def _listing_call(verb, draft):
+    """Run AddFixedPriceItem or its Verify twin for `draft`."""
+    settings = listing_settings()
+    template, summary = template_fields(settings)
+    if summary["errors"]:
+        return None, summary
+    return _call(verb, {"Item": build_item(draft, settings, template)})
 
 
 def verify_draft(draft):
     """Have eBay check the listing without creating it."""
-    _, summary = _call(
-        "VerifyAddFixedPriceItem", {"Item": build_item(draft, listing_settings())}
-    )
+    _, summary = _listing_call("VerifyAddFixedPriceItem", draft)
     return summary
 
 
@@ -469,9 +632,7 @@ def publish_draft(draft):
     problems = check_ready(draft)
     if problems:
         return {"errors": problems, "warnings": [], "fees": []}
-    resp, summary = _call(
-        "AddFixedPriceItem", {"Item": build_item(draft, listing_settings())}
-    )
+    resp, summary = _listing_call("AddFixedPriceItem", draft)
     if resp is None or not resp.get("ItemID"):
         return summary
     item_id = resp["ItemID"]
@@ -554,16 +715,18 @@ def seller_profiles():
     return profiles, summary, details
 
 
-def listing_profiles(item_id):
+def listing_details(item_id):
     """
-    The business policies an existing listing uses, from GetItem, as
-    ({"shipping"/"return"/"payment": (id, name) or None}, summary).
+    What an existing listing uses for shipping and returns, from GetItem:
+    (business policies as {"shipping"/"return"/"payment": (id, name) or
+    None}, the fields template_from_item() would copy, summary).
     """
     resp, summary = _call("GetItem", {"ItemID": item_id})
     profiles = {"shipping": None, "return": None, "payment": None}
     if resp is None:
-        return profiles, summary
-    sp = (resp.get("Item") or {}).get("SellerProfiles") or {}
+        return profiles, {}, summary
+    item = resp.get("Item") or {}
+    sp = item.get("SellerProfiles") or {}
     for kind, container, prefix in (
         ("shipping", "SellerShippingProfile", "ShippingProfile"),
         ("return", "SellerReturnProfile", "ReturnProfile"),
@@ -572,11 +735,7 @@ def listing_profiles(item_id):
         p = sp.get(container)
         if p and p.get(prefix + "ID"):
             profiles[kind] = (p[prefix + "ID"], p.get(prefix + "Name"))
-    if not any(profiles.values()):
-        summary["warnings"].append(
-            "Listing " + str(item_id) + " doesn't use business policies."
-        )
-    return profiles, summary
+    return profiles, template_from_item(item), summary
 
 
 def new_draft(unit):
