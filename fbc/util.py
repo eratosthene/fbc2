@@ -43,6 +43,81 @@ def add_ebay_listing(item):
     logger.debug(ebay_listing)
 
 
+def find_relisted_listing(item, remote_item_ids):
+    """
+    Look for a local EbayListing that is actually the same physical item as
+    `item`, just relisted under a new eBay ItemID.
+
+    eBay gives a relisted item a brand new ItemID, so there is no ID to join
+    on. The best signal we have is the listing title, which eBay carries
+    over unchanged on a relist. A candidate old listing must:
+      - have the same title as the new item
+      - no longer be present in eBay's current active listings (an item that
+        is still active can't be the "old" side of a relist)
+      - still be linked to a Unit that hasn't sold (so it's genuinely
+        pending relist, not a stale/ended listing with no inventory tie)
+
+    Returns the matching EbayListing, or None if there isn't exactly one
+    unambiguous match.
+    """
+    from fbc import db
+    from fbc.models.ebay import EbayListing
+    from fbc.models.inventory import Unit
+
+    candidates = (
+        db.session.query(EbayListing)
+        .filter_by(title=item["Title"])
+        .filter(EbayListing.item_id != item["ItemID"])
+        .filter(~EbayListing.item_id.in_(remote_item_ids))
+        .all()
+    )
+    matches = [
+        c
+        for c in candidates
+        if db.session.query(Unit)
+        .filter_by(ebay_listing_id=c.item_id)
+        .filter(Unit.sold.isnot(True))
+        .first()
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        logger.warning(
+            "Multiple possible old listings for relisted item "
+            + str(item["ItemID"])
+            + " ("
+            + item["Title"]
+            + "), skipping auto-relink"
+        )
+    return None
+
+
+def relist_ebay_listing(old_listing, item):
+    """
+    Record a relisted item under its new ItemID, re-point every model that
+    referenced the old listing at the new one, and remove the old listing.
+    """
+    from fbc import db
+    from fbc.models.ebay import EbayOrder
+    from fbc.models.inventory import Unit
+
+    old_item_id = old_listing.item_id
+    add_ebay_listing(item)
+    new_item_id = item["ItemID"]
+
+    db.session.query(Unit).filter_by(ebay_listing_id=old_item_id).update(
+        {"ebay_listing_id": new_item_id}
+    )
+    db.session.query(EbayOrder).filter_by(ebay_listing_id=old_item_id).update(
+        {"ebay_listing_id": new_item_id}
+    )
+    db.session.commit()
+
+    db.session.delete(old_listing)
+    db.session.commit()
+    logger.info("Relisted " + old_item_id + " -> " + new_item_id)
+
+
 def add_ebay_order(item):
     from fbc import db
 
