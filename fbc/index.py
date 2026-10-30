@@ -1,5 +1,6 @@
 import datetime
 import logging
+from collections import Counter
 
 from ebaysdk.exception import ConnectionError
 from flask import flash, redirect, request
@@ -26,12 +27,42 @@ class MyIndexView(IndexView):
         self.update_redirect()
         from fbc import db
         from fbc.models.inventory import PurchaseLot, StorageBox, Unit
+        from fbc.models.sales import SalesReceipt
         from fbc.models.supplies import PurchaseOrder
 
-        stock_total = db.session.query(Unit).filter_by(sold=False).count()
-        unit_total = db.session.query(Unit).count()
+        # Load just the columns the totals need, once, and do every count
+        # from them in Python, rather than a COUNT query per lot, box and
+        # sold unit. Units stay in id order and are still visited one at a
+        # time below, so the floating-point sums add up in the same order
+        # (and so come out exactly the same) as summing unit by unit did.
+        units = (
+            db.session.query(
+                Unit.purchase_lot_id,
+                Unit.storage_box_id,
+                Unit.sales_receipt_id,
+                Unit.sold,
+            )
+            .order_by(Unit.id)
+            .all()
+        )
+        receipts = {
+            r.id: r
+            for r in db.session.query(
+                SalesReceipt.id, SalesReceipt.sold_price, SalesReceipt.net_sold
+            )
+        }
+        units_per_lot = Counter(u.purchase_lot_id for u in units)
+        units_per_receipt = Counter(u.sales_receipt_id for u in units)
+        # sold=False, like filter_by(sold=False), leaves out NULL as well as True.
+        unsold = [u for u in units if u.sold is False]
+        unsold_per_lot = Counter(u.purchase_lot_id for u in unsold)
+        unsold_per_box = Counter(u.storage_box_id for u in unsold)
+
+        stock_total = len(unsold)
+        unit_total = len(units)
         lots = db.session.query(PurchaseLot).all()
         boxes = db.session.query(StorageBox).all()
+        box_ids = {b.id for b in boxes}
         lot_totals = {}
         box_totals = {}
         pos = db.session.query(PurchaseOrder).all()
@@ -48,17 +79,13 @@ class MyIndexView(IndexView):
         for b in boxes:
             box_totals[b.id] = {}
             box_totals[b.id]["name"] = b.name
-            box_totals[b.id]["instock"] = (
-                db.session.query(Unit).filter_by(storage_box=b, sold=False).count()
-            )
+            box_totals[b.id]["instock"] = unsold_per_box[b.id]
             box_totals[b.id]["capital"] = 0.0
             box_totals[b.id]["gross"] = 0.0
             box_totals[b.id]["net"] = 0.0
         box_totals[0] = {}
         box_totals[0]["name"] = "No Box Assigned"
-        box_totals[0]["instock"] = (
-            db.session.query(Unit).filter_by(storage_box=None, sold=False).count()
-        )
+        box_totals[0]["instock"] = unsold_per_box[None]
         box_totals[0]["capital"] = 0.0
         box_totals[0]["gross"] = 0.0
         box_totals[0]["net"] = 0.0
@@ -67,38 +94,28 @@ class MyIndexView(IndexView):
             lot_totals[lot.id] = {}
             lot_totals[lot.id]["gross"] = 0
             lot_totals[lot.id]["net"] = 0
-            plcount = db.session.query(Unit).filter_by(purchase_lot=lot).count()
+            plcount = units_per_lot[lot.id]
             if plcount > 0:
                 lot_totals[lot.id]["perunit"] = round(lot.price / plcount, 2)
             else:
                 lot_totals[lot.id]["perunit"] = 0
         for po in pos:
             supply_total += po.price
-        for u in db.session.query(Unit).all():
-            if u.sales_receipt:
-                num_units = (
-                    db.session.query(Unit)
-                    .filter_by(sales_receipt=u.sales_receipt)
-                    .count()
-                )
-                c_sold_price = u.sales_receipt.sold_price / num_units
-                c_net_sold = u.sales_receipt.net_sold / num_units
-                if u.storage_box:
-                    box_totals[u.storage_box.id]["gross"] += c_sold_price
-                    box_totals[u.storage_box.id]["net"] += c_net_sold
-                else:
-                    box_totals[0]["gross"] += c_sold_price
-                    box_totals[0]["net"] += c_net_sold
-                lot_totals[u.purchase_lot.id]["gross"] += c_sold_price
+        for u in units:
+            # A unit whose box no longer exists counts as having no box.
+            box = box_totals[u.storage_box_id if u.storage_box_id in box_ids else 0]
+            receipt = receipts.get(u.sales_receipt_id)
+            if receipt:
+                num_units = units_per_receipt[u.sales_receipt_id]
+                c_sold_price = receipt.sold_price / num_units
+                c_net_sold = receipt.net_sold / num_units
+                box["gross"] += c_sold_price
+                box["net"] += c_net_sold
+                lot_totals[u.purchase_lot_id]["gross"] += c_sold_price
                 totals["gross"] += c_sold_price
-                lot_totals[u.purchase_lot.id]["net"] += c_net_sold
+                lot_totals[u.purchase_lot_id]["net"] += c_net_sold
                 totals["net"] += c_net_sold
-            if u.storage_box:
-                box_totals[u.storage_box.id]["capital"] += lot_totals[
-                    u.purchase_lot.id
-                ]["perunit"]
-            else:
-                box_totals[0]["capital"] += lot_totals[u.purchase_lot.id]["perunit"]
+            box["capital"] += lot_totals[u.purchase_lot_id]["perunit"]
         for lot in lots:
             lot_totals[lot.id]["fees"] = round(
                 lot_totals[lot.id]["gross"] - lot_totals[lot.id]["net"], 2
@@ -178,9 +195,7 @@ class MyIndexView(IndexView):
         else:
             breakeven_per_unit = 0.0
         for lot in lots:
-            lot_totals[lot.id]["instock"] = (
-                db.session.query(Unit).filter_by(purchase_lot=lot, sold=False).count()
-            )
+            lot_totals[lot.id]["instock"] = unsold_per_lot[lot.id]
         return self.render_template(
             self.index_template,
             appbuilder=self.appbuilder,
