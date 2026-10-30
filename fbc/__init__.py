@@ -54,7 +54,7 @@ from fbc.views.sales import (
     SalesReceiptModelView,
 )
 from fbc.views.listing import EbayDraftModelView
-from fbc.views.connect import ConnectEbayView
+from fbc.views.connect import ConnectDiscogsView, ConnectEbayView
 from fbc.views.supplies import (
     SupplyModelView,
     PurchaseOrderModelView,
@@ -85,6 +85,7 @@ appbuilder.add_view(ArtistModelView, "Artists", category="Discogs")
 appbuilder.add_view(GenreModelView, "Genres", category="Discogs")
 appbuilder.add_view(StyleModelView, "Styles", category="Discogs")
 appbuilder.add_view(FolderModelView, "Folders", category="Discogs")
+appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Discogs")
 appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
 appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
 appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")

@@ -1,0 +1,35 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h3>Connect Discogs</h3>
+<p>fbc signs in to Discogs through your Discogs app (the keys in
+<code>DISCOGS_SETTINGS</code>) to sync the collection, look up release
+details and remove sold copies. Discogs needs your permission once; the token
+it gives fbc doesn't expire, but you can take it back under Settings &gt;
+Applications on Discogs.</p>
+
+{% if saved %}
+<div class="alert alert-success">
+  Connected{% if saved.username %} as {{ saved.username }}{% endif %} {{ saved.created.strftime("%Y-%m-%d") if saved.created }}.
+</div>
+{% else %}
+<div class="alert alert-info">Not connected yet; fbc is using the personal
+access token in <code>DISCOGS_SETTINGS['USER_TOKEN']</code>, if there is one.</div>
+{% endif %}
+
+{% if configured %}
+<p><a href="{{ url_for('ConnectDiscogsView.start') }}" class="btn btn-primary">{% if saved %}Connect again{% else %}Sign in to Discogs{% endif %}</a></p>
+
+{% if pending %}
+<h4>Didn't come back here?</h4>
+<p>If Discogs couldn't send you back to this page, copy the whole address it
+ended on (<code>...?oauth_token=...&amp;oauth_verifier=...</code>) and paste it
+here.</p>
+<form method="post" action="{{ url_for('ConnectDiscogsView.connect') }}">
+  <div class="form-group">
+    <input type="text" name="address" class="form-control" placeholder="https://...?oauth_token=...&amp;oauth_verifier=...">
+  </div>
+  <button class="btn btn-default">Connect</button>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}

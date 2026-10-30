@@ -163,7 +163,12 @@ EBAY_SETTINGS = {
 
 # discogs settings
 DISCOGS_SETTINGS = {
-    'USER_TOKEN': ''
-    'USER_AGENT': 'discogs_exporter/1.0'
+    # Your Discogs app's keys (discogs.com > Settings > Developers), then use
+    # Discogs > Connect Discogs; the token it gets is kept in the database.
+    'CONSUMER_KEY': '',
+    'CONSUMER_SECRET': '',
+    # A personal access token, used only until Connect Discogs is done.
+    'USER_TOKEN': '',
+    'USER_AGENT': 'discogs_exporter/1.0',
 }
 

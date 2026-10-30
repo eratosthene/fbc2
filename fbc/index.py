@@ -1,13 +1,13 @@
 import datetime
 import logging
 
-import discogs_client
 from ebaysdk.exception import ConnectionError
 from ebaysdk.trading import Connection as Trading
 from flask import redirect, request
 from flask_appbuilder import IndexView
 from flask_appbuilder.views import expose
 
+from fbc import discogs
 from fbc.util import add_ebay_listing
 from fbc.util import add_ebay_order
 from fbc.util import add_discogs_release
@@ -196,14 +196,11 @@ class MyIndexView(IndexView):
     @expose("/syncdiscogs")
     def syncdiscogs(self):
         self.update_redirect()
-        from fbc import app, db
+        from fbc import db
         from fbc.models.discogs import DiscogsRelease, DiscogsInstance, Folder
 
         logger.info("Updating discogs...")
-        d = discogs_client.Client(
-            app.config["DISCOGS_SETTINGS"]["USER_AGENT"],
-            user_token=app.config["DISCOGS_SETTINGS"]["USER_TOKEN"],
-        )
+        d = discogs.client()
         me = d.identity()
         folders = me.collection_folders
         for folder in folders:
