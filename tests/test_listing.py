@@ -1361,3 +1361,75 @@ def test_verify_and_publish_say_where_their_fees_came_from(app, monkeypatch):
 
     assert listing.verify_draft(draft)["source"] == "verify"
     assert publish_draft(draft)["source"] == "publish"
+
+
+# Fees eBay sent for the same free insertion, from the live account.
+VERIFY_FEES = {
+    "Fee": [
+        _fee("BoldFee", 0.0),
+        _fee("InsertionFee", 0.37, 0.37),
+        _fee("ListingFee", 0.37, 0.37),
+    ]
+}
+PUBLISH_FEES = {
+    "Fee": [
+        _fee("BoldFee", 0.0),
+        _fee("InsertionFee", 0.0, 0.37),
+        _fee("ListingFee", 0.0, 0.37),
+    ]
+}
+FREE_INSERTION = (
+    [
+        {
+            "name": "InsertionFee",
+            "label": "Insertion fee",
+            "amount": 0.37,
+            "discount": 0.37,
+            "net": 0.0,
+        }
+    ],
+    {"amount": 0.37, "discount": 0.37, "net": 0.0},
+)
+
+
+def test_a_checked_free_insertion_costs_nothing():
+    resp = {"Fees": VERIFY_FEES}
+    summary = summarize_response(resp, "VerifyAddFixedPriceItem")
+
+    assert (summary["fees"], summary["fee_total"]) == FREE_INSERTION
+
+
+def test_a_published_free_insertion_costs_nothing():
+    resp = {"Fees": PUBLISH_FEES}
+    summary = summarize_response(resp, "AddFixedPriceItem")
+
+    assert (summary["fees"], summary["fee_total"]) == FREE_INSERTION
+
+
+def test_a_paid_insertion_on_publish():
+    fees, total = listing.summarize_fees(
+        {"Fee": [_fee("InsertionFee", 0.37), _fee("ListingFee", 0.37)]}, discounted=True
+    )
+    assert total == {"amount": 0.37, "discount": 0.0, "net": 0.37}
+
+
+def test_net_is_never_negative():
+    fees, total = listing.summarize_fees({"Fee": [_fee("InsertionFee", 0.0, 0.37)]})
+    assert fees[0]["net"] == 0.0
+    assert total["net"] == 0.0
+
+
+def test_call_passes_the_verb_through_to_the_fee_summary(app, monkeypatch):
+    class Response:
+        def dict(self):
+            return {"ItemID": "1", "Fees": PUBLISH_FEES}
+
+    class Api:
+        def execute(self, verb, data):
+            return Response()
+
+    monkeypatch.setattr(listing, "trading", lambda: Api())
+
+    _, summary = listing._call("AddFixedPriceItem", {"Item": {}})
+
+    assert summary["fee_total"] == FREE_INSERTION[1]

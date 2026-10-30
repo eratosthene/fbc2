@@ -811,26 +811,38 @@ def _fee_label(name):
     return " ".join([words[0]] + [w.lower() for w in words[1:]])
 
 
-def summarize_fees(fees):
+# Calls whose Fee amounts already have PromotionalDiscount taken off. A
+# free insertion comes back from VerifyAddFixedPriceItem as Fee 0.37 with
+# discount 0.37, but from AddFixedPriceItem as Fee 0.0 with discount 0.37.
+DISCOUNTED_FEE_VERBS = {"AddFixedPriceItem"}
+
+
+def summarize_fees(fees, discounted=False):
     """
-    (fees, total) from a response's Fees container. Each fee is net of any
-    PromotionalDiscount eBay reports, such as a free insertion. eBay's
-    "ListingFee" is normally the sum of the other fees, and then it's the
-    total rather than a fee of its own; if it isn't, it's listed like the
-    rest and the total is their sum. Only fees or discounts that aren't
-    zero are kept.
+    (fees, total) from a response's Fees container, each fee with its full
+    amount, any PromotionalDiscount eBay reports (such as a free
+    insertion) and what's left to pay. `discounted` says the response's Fee
+    amounts already have the discount taken off (see DISCOUNTED_FEE_VERBS).
+    eBay's "ListingFee" is normally the sum of the other fees, and then
+    it's the total rather than a fee of its own; if it isn't, it's listed
+    like the rest and the total is their sum. Only fees or discounts that
+    aren't zero are kept.
     """
     entries = []
     for f in _as_list((fees or {}).get("Fee")):
-        amount = _amount(f.get("Fee"))
+        fee = _amount(f.get("Fee"))
         discount = _amount(f.get("PromotionalDiscount"))
+        if discounted:
+            amount, net = round(fee + discount, 2), fee
+        else:
+            amount, net = fee, round(fee - discount, 2)
         entries.append(
             {
                 "name": f.get("Name"),
                 "label": _fee_label(f.get("Name")),
                 "amount": amount,
                 "discount": discount,
-                "net": round(amount - discount, 2),
+                "net": max(net, 0.0),
             }
         )
     others = [e for e in entries if e["name"] != "ListingFee"]
@@ -852,11 +864,11 @@ def summarize_fees(fees):
     return kept, {k: total[k] for k in ("amount", "discount", "net")}
 
 
-def summarize_response(resp):
+def summarize_response(resp, verb=None):
     """
     Pull the parts of a Trading API response worth showing: errors and
     warnings (both arrive in Errors, told apart by SeverityCode) and the
-    listing fees (see summarize_fees).
+    listing fees (see summarize_fees). `verb` is the call it answers.
     """
     errors = []
     warnings = []
@@ -868,7 +880,7 @@ def summarize_response(resp):
             errors.append(text)
     if resp.get("Fees"):
         logger.info("eBay fees: " + json.dumps(resp["Fees"], default=str))
-    fees, total = summarize_fees(resp.get("Fees"))
+    fees, total = summarize_fees(resp.get("Fees"), verb in DISCOUNTED_FEE_VERBS)
     return {"errors": errors, "warnings": warnings, "fees": fees, "fee_total": total}
 
 
@@ -897,14 +909,14 @@ def _call(verb, data):
     try:
         response = api.execute(verb, escape_request(data))
         resp = response.dict()
-        return resp, summarize_response(resp)
+        return resp, summarize_response(resp, verb)
     except ConnectionError as e:
         logger.error(e)
         try:
             resp = e.response.dict() if e.response is not None else {}
         except Exception:
             resp = {}
-        summary = summarize_response(resp)
+        summary = summarize_response(resp, verb)
         if not summary["errors"]:
             summary["errors"].append(str(e))
         return None, summary
