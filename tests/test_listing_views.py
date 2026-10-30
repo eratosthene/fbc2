@@ -197,3 +197,82 @@ def test_policies_page_shows_what_a_listing_without_policies_would_copy(
     html = client.get("/ebaydraftmodelview/policies").get_data(as_text=True)
     assert "New listings copy this from it" in html
     assert "ebay.com/itm/OLD" in html
+
+
+@pytest.fixture
+def exchanged(monkeypatch):
+    codes = []
+
+    def fake_exchange(code):
+        codes.append(code)
+
+    monkeypatch.setattr("fbc.views.listing.exchange_code", fake_exchange)
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "RUNAME", "the-runame")
+    return codes
+
+
+def _state(client):
+    with client.session_transaction() as s:
+        return s["ebay_oauth_state"]
+
+
+def test_connect_page_links_to_ebay_sign_in(client, exchanged):
+    html = client.get("/ebaydraftmodelview/oauth").get_data(as_text=True)
+
+    assert "Not connected yet." in html
+    assert "https://auth.ebay.com/oauth2/authorize?" in html
+    assert "state=" + _state(client) in html
+
+
+def test_pasted_address_is_exchanged(client, exchanged):
+    client.get("/ebaydraftmodelview/oauth")
+    address = (
+        "https://signin.ebay.com/ws/eBayISAPI.dll?ThirdPartyAuthSucessFailure"
+        "&state=" + _state(client) + "&code=v%5E1.1%23i%5E1&expires_in=299"
+    )
+
+    page = client.post("/ebaydraftmodelview/oauth", data={"address": address})
+
+    assert page.status_code == 302
+    assert exchanged == ["v^1.1#i^1"]
+
+
+def test_ebay_redirecting_straight_back_is_exchanged(client, exchanged):
+    client.get("/ebaydraftmodelview/oauth")
+
+    client.get(
+        "/ebaydraftmodelview/oauth?state=" + _state(client) + "&code=abc&expires_in=299"
+    )
+
+    assert exchanged == ["abc"]
+
+
+def test_sign_in_from_another_page_is_refused(client, exchanged):
+    client.get("/ebaydraftmodelview/oauth")
+
+    page = client.post(
+        "/ebaydraftmodelview/oauth",
+        data={"address": "https://x/?state=forged&code=abc"},
+        follow_redirects=True,
+    )
+
+    assert exchanged == []
+    assert "started from a different page" in page.get_data(as_text=True)
+
+
+def test_connect_page_says_when_connected(client, exchanged):
+    import datetime
+
+    from fbc.models.ebay import EbayOAuthToken
+
+    db.session.add(
+        EbayOAuthToken(
+            refresh_token="r",
+            created=datetime.datetime(2026, 10, 29),
+            expires=datetime.datetime(2028, 4, 28),
+        )
+    )
+    db.session.commit()
+
+    html = client.get("/ebaydraftmodelview/oauth").get_data(as_text=True)
+    assert "Connected 2026-10-29; sign in again before 2028-04-28." in html

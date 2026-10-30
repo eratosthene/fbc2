@@ -1,13 +1,19 @@
 import json
 import logging
+import secrets
 
-from flask import abort, flash, redirect, request, url_for
+from flask import abort, flash, redirect, request, session, url_for
 from flask_appbuilder import expose, has_access
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from markupsafe import Markup
 from wtforms import TextAreaField
 
 from fbc.listing import (
+    OAuthError,
+    code_from,
+    consent_url,
+    exchange_code,
+    saved_oauth_token,
     check_ready,
     describe_template,
     listing_details,
@@ -44,6 +50,7 @@ class EbayDraftModelView(CustomModelView):
         "can_verify",
         "can_publish",
         "can_policies",
+        "can_oauth",
     ]
     list_columns = ["title", "fmt_price", "status", "picture_count", "link_column"]
     search_columns = ["title", "status", "unit"]
@@ -246,4 +253,48 @@ class EbayDraftModelView(CustomModelView):
             template_id=template_id,
             used=used,
             copied=copied,
+        )
+
+    @expose("/oauth", methods=["GET", "POST"])
+    @has_access
+    def oauth(self):
+        """
+        Connect eBay: sign in on eBay, then come back with the one-time code
+        eBay hands the browser. The code arrives here directly if the
+        RuName's auth accepted URL points at this page, or can be pasted in
+        (the whole address eBay ends on) if it doesn't.
+        """
+        text = request.form.get("address") if request.method == "POST" else None
+        if text is None and request.args.get("code"):
+            text = request.query_string.decode()
+        if text is not None:
+            code, state = code_from(text)
+            if not code:
+                flash("That doesn't contain a sign-in code from eBay.", "danger")
+            elif state and state != session.get("ebay_oauth_state"):
+                flash(
+                    "That sign-in was started from a different page; start again.",
+                    "danger",
+                )
+            else:
+                try:
+                    exchange_code(code)
+                    session.pop("ebay_oauth_state", None)
+                    flash("Connected to eBay. Picture uploads will work now.", "success")
+                except OAuthError as e:
+                    flash(str(e), "danger")
+            return redirect(url_for("EbayDraftModelView.oauth"))
+
+        state = session.get("ebay_oauth_state") or secrets.token_urlsafe(16)
+        session["ebay_oauth_state"] = state
+        try:
+            sign_in = consent_url(state)
+        except OAuthError as e:
+            flash(str(e), "warning")
+            sign_in = None
+        return self.render_template(
+            "ebay_draft/oauth.html",
+            title="Connect eBay",
+            sign_in=sign_in,
+            saved=saved_oauth_token(),
         )

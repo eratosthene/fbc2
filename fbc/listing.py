@@ -711,6 +711,7 @@ def publish_draft(draft):
     return summary
 
 
+OAUTH_AUTHORIZE_URL = "https://auth.ebay.com/oauth2/authorize"
 OAUTH_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
 MEDIA_URL = "https://apim.ebay.com/commerce/media/v1_beta/image/create_image_from_file"
 MEDIA_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory"
@@ -724,33 +725,24 @@ class OAuthError(Exception):
     pass
 
 
-def oauth_token():
-    """
-    An OAuth user access token for eBay's REST APIs, minted from
-    EBAY_SETTINGS["OAUTH_REFRESH_TOKEN"]. The Trading API calls keep using
-    the Auth'n'Auth USER_TOKEN; REST APIs don't accept it.
-    """
+def _remember_access_token(body, now):
+    _oauth["token"] = body["access_token"]
+    # Renew a minute early so a token never expires mid-request.
+    _oauth["expires"] = now + datetime.timedelta(
+        seconds=int(body.get("expires_in", 7200)) - 60
+    )
+
+
+def _token_request(data):
+    """POST to eBay's OAuth token endpoint; the parsed reply, or OAuthError."""
     import requests
     from fbc import app
 
-    now = datetime.datetime.utcnow()
-    if _oauth["token"] and _oauth["expires"] > now:
-        return _oauth["token"]
     ebayconfig = app.config["EBAY_SETTINGS"]
-    refresh_token = ebayconfig.get("OAUTH_REFRESH_TOKEN")
-    if not refresh_token:
-        raise OAuthError(
-            "Set EBAY_SETTINGS['OAUTH_REFRESH_TOKEN'] in config.py; eBay's"
-            " picture upload needs an OAuth token."
-        )
     r = requests.post(
         OAUTH_TOKEN_URL,
         auth=(ebayconfig["APP_ID"], ebayconfig["CERT_ID"]),
-        data={
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-            "scope": MEDIA_SCOPE,
-        },
+        data=data,
         timeout=30,
     )
     if r.status_code != 200:
@@ -759,13 +751,137 @@ def oauth_token():
             detail = body.get("error_description") or body.get("error") or str(body)
         except ValueError:
             detail = _http_error(r)
-        raise OAuthError("eBay refused the OAuth refresh token: " + detail)
-    body = r.json()
-    _oauth["token"] = body["access_token"]
-    # Renew a minute early so a token never expires mid-request.
-    _oauth["expires"] = now + datetime.timedelta(
-        seconds=int(body.get("expires_in", 7200)) - 60
+        raise OAuthError(detail)
+    return r.json()
+
+
+def consent_url(state):
+    """
+    The eBay sign-in page that asks the seller to let fbc manage their
+    pictures. eBay then sends the browser to the RuName's "auth accepted"
+    URL with a one-time code for exchange_code().
+    """
+    from urllib.parse import urlencode
+    from fbc import app
+
+    ebayconfig = app.config["EBAY_SETTINGS"]
+    if not ebayconfig.get("RUNAME"):
+        raise OAuthError(
+            "Set EBAY_SETTINGS['RUNAME'] in config.py to your app's eBay"
+            " Redirect URL name (RuName)."
+        )
+    return (
+        OAUTH_AUTHORIZE_URL
+        + "?"
+        + urlencode(
+            {
+                "client_id": ebayconfig["APP_ID"],
+                "redirect_uri": ebayconfig["RUNAME"],
+                "response_type": "code",
+                "scope": MEDIA_SCOPE,
+                "state": state,
+            }
+        )
     )
+
+
+def code_from(text):
+    """
+    The (code, state) in what eBay sent the browser back with: the whole
+    address, just its query string, or the bare code. state is None when
+    there isn't one.
+    """
+    from urllib.parse import parse_qs, unquote, urlparse
+
+    text = (text or "").strip()
+    if "code=" in text:
+        query = urlparse(text).query if "?" in text else text
+        params = parse_qs(query)
+        code = (params.get("code") or [None])[0]
+        state = (params.get("state") or [None])[0]
+        return code, state
+    return (unquote(text) or None), None
+
+
+def exchange_code(code):
+    """
+    Swap a one-time sign-in code for tokens and save the refresh token.
+    Returns the saved EbayOAuthToken; raises OAuthError if eBay says no.
+    """
+    from fbc import app, db
+    from fbc.models.ebay import EbayOAuthToken
+
+    now = datetime.datetime.utcnow()
+    try:
+        body = _token_request(
+            {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": app.config["EBAY_SETTINGS"].get("RUNAME", ""),
+            }
+        )
+    except OAuthError as e:
+        raise OAuthError("eBay didn't accept the sign-in code: " + str(e))
+    expires = None
+    if body.get("refresh_token_expires_in"):
+        expires = now + datetime.timedelta(
+            seconds=int(body["refresh_token_expires_in"])
+        )
+    saved = EbayOAuthToken(
+        refresh_token=body["refresh_token"], expires=expires, created=now
+    )
+    db.session.add(saved)
+    db.session.commit()
+    _remember_access_token(body, now)
+    logger.info("Saved a new eBay OAuth refresh token, expires " + str(expires))
+    return saved
+
+
+def saved_oauth_token():
+    """The newest EbayOAuthToken saved by Connect eBay, or None."""
+    from fbc import db
+    from fbc.models.ebay import EbayOAuthToken
+
+    return db.session.query(EbayOAuthToken).order_by(EbayOAuthToken.id.desc()).first()
+
+
+def oauth_token():
+    """
+    An OAuth user access token for eBay's REST APIs, minted from the refresh
+    token Connect eBay saved (or EBAY_SETTINGS["OAUTH_REFRESH_TOKEN"]). The
+    Trading API calls keep using the Auth'n'Auth USER_TOKEN; REST APIs
+    don't accept it.
+    """
+    from fbc import app
+
+    now = datetime.datetime.utcnow()
+    if _oauth["token"] and _oauth["expires"] > now:
+        return _oauth["token"]
+    saved = saved_oauth_token()
+    refresh_token = (
+        saved.refresh_token
+        if saved
+        else app.config["EBAY_SETTINGS"].get("OAUTH_REFRESH_TOKEN")
+    )
+    if not refresh_token:
+        raise OAuthError(
+            "Connect fbc to eBay first (Sales > eBay Drafts > Connect eBay);"
+            " picture uploads need it."
+        )
+    try:
+        body = _token_request(
+            {
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "scope": MEDIA_SCOPE,
+            }
+        )
+    except OAuthError as e:
+        raise OAuthError(
+            "eBay refused the saved OAuth token (" + str(e) + "); connect"
+            " fbc to eBay again under Sales > eBay Drafts > Connect eBay."
+        )
+    _remember_access_token(body, now)
     return _oauth["token"]
 
 

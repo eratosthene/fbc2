@@ -194,3 +194,19 @@ class EbayDraft(Model):
         if self.ebay_listing:
             ret = ret + '<br><a href="' + self.ebay_listing.url + '">eBay:Listing</a>'
         return Markup(ret)
+
+
+class EbayOAuthToken(Model):
+    """
+    An OAuth refresh token from Connect eBay. eBay's REST APIs (picture
+    uploads) need OAuth; the newest row is the one used.
+    """
+
+    __tablename__ = "ebay_oauth_token"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    refresh_token = Column(Text, nullable=False)
+    expires = Column(DateTime)
+    created = Column(DateTime)
+
+    def __repr__(self):
+        return "EbayOAuthToken " + str(self.id)

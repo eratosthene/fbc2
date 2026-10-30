@@ -788,7 +788,7 @@ def test_upload_without_a_refresh_token_says_what_to_configure(app, monkeypatch)
     url, summary = listing.upload_picture(None, "front.jpg", "image/jpeg")
 
     assert url is None
-    assert "OAUTH_REFRESH_TOKEN" in summary["errors"][0]
+    assert "Connect eBay" in summary["errors"][0]
 
 
 def test_upload_picture_posts_to_the_media_api(app, oauth, monkeypatch):
@@ -881,3 +881,112 @@ def test_call_reports_a_reply_ebaysdk_cant_read(app, monkeypatch):
     assert summary["errors"] == [
         "GetItem failed: HTTP 404 Not Found: <html>Not Found</html> (AttributeError)"
     ]
+
+
+def test_consent_url_asks_for_the_media_scope_through_the_runame(app, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "RUNAME", "Chris-fbc-PRD-runame")
+    url = listing.consent_url("xyz")
+
+    assert url.startswith("https://auth.ebay.com/oauth2/authorize?")
+    assert parse_qs(urlparse(url).query) == {
+        "client_id": ["test-app-id"],
+        "redirect_uri": ["Chris-fbc-PRD-runame"],
+        "response_type": ["code"],
+        "scope": [listing.MEDIA_SCOPE],
+        "state": ["xyz"],
+    }
+
+
+def test_consent_url_needs_a_runame(app, monkeypatch):
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "RUNAME", "")
+    with pytest.raises(listing.OAuthError, match="RUNAME"):
+        listing.consent_url("xyz")
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        (
+            "https://signin.ebay.com/ws/eBayISAPI.dll?ThirdPartyAuthSucessFailure"
+            "&isAuthSuccessful=true&state=xyz&code=v%5E1.1%23i%5E1&expires_in=299",
+            ("v^1.1#i^1", "xyz"),
+        ),
+        ("state=xyz&code=v%5E1.1%23i%5E1&expires_in=299", ("v^1.1#i^1", "xyz")),
+        ("  v%5E1.1%23i%5E1  ", ("v^1.1#i^1", None)),
+        ("", (None, None)),
+    ],
+)
+def test_code_from_finds_the_code_in_what_ebay_returned(text, expected):
+    assert listing.code_from(text) == expected
+
+
+def test_exchange_code_saves_the_refresh_token(app, oauth, monkeypatch):
+    import requests
+
+    from fbc.models.ebay import EbayOAuthToken
+
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "RUNAME", "the-runame")
+    sent = {}
+
+    def fake_post(url, **kwargs):
+        sent.update(kwargs["data"])
+        return FakeHTTPResponse(
+            200,
+            {
+                "access_token": "access",
+                "expires_in": 7200,
+                "refresh_token": "refresh-from-ebay",
+                "refresh_token_expires_in": 47304000,
+            },
+        )
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    saved = listing.exchange_code("v^1.1#i^1")
+
+    assert sent == {
+        "grant_type": "authorization_code",
+        "code": "v^1.1#i^1",
+        "redirect_uri": "the-runame",
+    }
+    assert db.session.query(EbayOAuthToken).one().refresh_token == "refresh-from-ebay"
+    assert (saved.expires - saved.created).days == 547
+    # The access token that came with it is used straight away.
+    monkeypatch.setattr(requests, "post", lambda *a, **k: pytest.fail("asked again"))
+    assert listing.oauth_token() == "access"
+
+
+def test_exchange_code_reports_a_rejected_code(app, oauth, monkeypatch):
+    import requests
+
+    monkeypatch.setattr(
+        requests,
+        "post",
+        lambda url, **kw: FakeHTTPResponse(
+            400, {"error": "invalid_grant", "error_description": "code has expired"}
+        ),
+    )
+    with pytest.raises(listing.OAuthError, match="code has expired"):
+        listing.exchange_code("old")
+
+
+def test_oauth_token_prefers_the_saved_refresh_token(app, oauth, monkeypatch):
+    import requests
+
+    from fbc.models.ebay import EbayOAuthToken
+
+    db.session.add(EbayOAuthToken(refresh_token="older"))
+    db.session.add(EbayOAuthToken(refresh_token="newest"))
+    db.session.commit()
+    used = []
+
+    def fake_post(url, **kwargs):
+        used.append(kwargs["data"]["refresh_token"])
+        return FakeHTTPResponse(200, {"access_token": "access", "expires_in": 7200})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    listing.oauth_token()
+    assert used == ["newest"]
