@@ -40,7 +40,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # The app (and the entrypoint's `flask db upgrade`) needs a database,
+      # The app (and the entrypoint's `flask setup-db`) needs a database,
       # so skip the entrypoint and just check the packages it runs on are
       # installed and importable in the image.
       - name: Check the image's packages import

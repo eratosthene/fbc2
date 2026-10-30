@@ -1,12 +1,15 @@
 # ruff: noqa: E402
 import logging
 import os
+
+import click
+import sqlalchemy as sa
 from flask import render_template
 
 from flask import Flask
 from flask import send_from_directory
 from flask_appbuilder import AppBuilder, SQLA
-from flask_migrate import Migrate
+from flask_migrate import Migrate, stamp, upgrade
 from fbc.index import MyIndexView
 
 logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s")
@@ -38,7 +41,21 @@ def favicon():
     )
 
 
-db.create_all()
+@app.cli.command("setup-db")
+def setup_db():
+    """Create a new database from the models, or migrate an existing one."""
+    # Importing the app has already created Flask-AppBuilder's ab_* tables, so
+    # look for our own. A database from before migrations were added has
+    # `unit` but no `alembic_version`, and still needs every migration.
+    tables = sa.inspect(db.engine).get_table_names()
+    if "alembic_version" in tables or "unit" in tables:
+        upgrade()
+    else:
+        # The models match the migrations' head, so build the schema from them
+        # and record it as being at head (Alembic's recipe for new databases).
+        db.create_all()
+        stamp()
+        click.echo("Created a new database at the latest migration.")
 
 
 # The views below import the models, which need `db` and `appbuilder` to exist
