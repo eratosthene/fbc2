@@ -1,0 +1,49 @@
+name: Dependency audit
+
+# Checks every locked package (including dev ones) against the PyPI/OSV
+# vulnerability databases. The weekly run catches vulnerabilities disclosed
+# after a package was locked; GitHub emails the repo owner when a scheduled
+# run fails.
+on:
+  pull_request:
+    paths:
+      - Pipfile
+      - Pipfile.lock
+      - requirements.txt
+      - .github/workflows/dependency-audit.yml
+  push:
+    branches: [main]
+    paths:
+      - Pipfile
+      - Pipfile.lock
+      - requirements.txt
+      - .github/workflows/dependency-audit.yml
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+
+      - name: Export Pipfile.lock as a requirements file
+        run: |
+          python -m pip install pipenv
+          pipenv requirements --dev > locked-requirements.txt
+
+      # Every version is pinned in the export, so audit it as-is instead of
+      # resolving (and installing) it again. The results also go in the job
+      # summary.
+      - uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: locked-requirements.txt
+          no-deps: true

@@ -96,18 +96,21 @@ repos:
   # ---------------------------------------------------------------------------- #
   #                             🧪 Fast Tests (Local)                            #
   # ---------------------------------------------------------------------------- #
+  # These run inside the project's Pipenv environment (`pipenv install --dev`),
+  # so they work without first running `pipenv shell`. CI skips them because
+  # the Tests workflow runs the suite on its own.
   - repo: local
     hooks:
       - id: pytest-collect
         name: "🧪 test · Validate test formatting"
-        entry: pytest tests --collect-only -q
+        entry: pipenv run pytest tests --collect-only -q
         language: system
         types: [python]
         pass_filenames: false
         always_run: true
       - id: pytest-fast
         name: "🧪 test · Run unit tests"
-        entry: pytest tests -q
+        entry: pipenv run pytest tests -q
         language: system
         types: [python]
         pass_filenames: false

@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Updates Pipfile.lock (and the Pipfile, for upgrades outside its version
+  # ranges). Minor and patch updates come grouped in a single PR.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
