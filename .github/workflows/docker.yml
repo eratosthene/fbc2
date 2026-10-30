@@ -40,12 +40,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # The app itself needs a database to import, so just check the
-      # packages it runs on are installed and importable in the image.
+      # The app (and the entrypoint's `flask db upgrade`) needs a database,
+      # so skip the entrypoint and just check the packages it runs on are
+      # installed and importable in the image.
       - name: Check the image's packages import
         id: smoke
         run: >-
-          docker run --rm fbc2:ci python -c
+          docker run --rm --entrypoint python fbc2:ci -c
           "import flask_appbuilder, flask_migrate, gunicorn, pymysql, discogs_client, ebaysdk, PIL, dotenv"
 
       - name: Get image size
