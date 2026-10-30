@@ -291,7 +291,11 @@ class EbayDraftModelView(CustomModelView):
                 try:
                     exchange_code(code)
                     session.pop("ebay_oauth_state", None)
-                    flash("Connected to eBay. Picture uploads will work now.", "success")
+                    flash(
+                        "Connected to eBay. Picture uploads and Ship This will"
+                        " work now.",
+                        "success",
+                    )
                 except OAuthError as e:
                     flash(str(e), "danger")
             return redirect(url_for("EbayDraftModelView.oauth"))

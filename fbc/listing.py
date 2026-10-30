@@ -1032,22 +1032,35 @@ OAUTH_AUTHORIZE_URL = "https://auth.ebay.com/oauth2/authorize"
 OAUTH_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
 MEDIA_URL = "https://apim.ebay.com/commerce/media/v1_beta/image/create_image_from_file"
 MEDIA_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory"
+# Reading an order's earnings (Ship This) through the Finances API.
+FINANCES_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.finances"
+# What Connect eBay asks the seller to allow.
+CONSENT_SCOPES = [MEDIA_SCOPE, FINANCES_SCOPE]
 
-# The current OAuth access token and when it stops working. Access tokens
-# last two hours, so each worker keeps one rather than asking per upload.
-_oauth = {"token": None, "expires": None}
+# The current OAuth access token for each scope and when it stops working.
+# Access tokens last two hours, so each worker keeps them rather than asking
+# per call. Each is minted for one scope, so a refresh token from before a
+# scope was added to Connect eBay still works for the scopes it has.
+_oauth = {}
 
 
 class OAuthError(Exception):
     pass
 
 
-def _remember_access_token(body, now):
-    _oauth["token"] = body["access_token"]
-    # Renew a minute early so a token never expires mid-request.
-    _oauth["expires"] = now + datetime.timedelta(
-        seconds=int(body.get("expires_in", 7200)) - 60
-    )
+def _remember_access_token(body, now, scopes):
+    for scope in scopes:
+        _oauth[scope] = {
+            "token": body["access_token"],
+            # Renew a minute early so a token never expires mid-request.
+            "expires": now
+            + datetime.timedelta(seconds=int(body.get("expires_in", 7200)) - 60),
+        }
+
+
+def forget_access_token(scope):
+    """Drop a token eBay rejected, so the next call mints a new one."""
+    _oauth.pop(scope, None)
 
 
 def _token_request(data):
@@ -1075,7 +1088,7 @@ def _token_request(data):
 def consent_url(state):
     """
     The eBay sign-in page that asks the seller to let fbc manage their
-    pictures. eBay then sends the browser to the RuName's "auth accepted"
+    pictures and read their order earnings. eBay then sends the browser to the RuName's "auth accepted"
     URL with a one-time code for exchange_code().
     """
     from urllib.parse import urlencode
@@ -1095,7 +1108,7 @@ def consent_url(state):
                 "client_id": ebayconfig["APP_ID"],
                 "redirect_uri": ebayconfig["RUNAME"],
                 "response_type": "code",
-                "scope": MEDIA_SCOPE,
+                "scope": " ".join(CONSENT_SCOPES),
                 "state": state,
             }
         )
@@ -1149,7 +1162,7 @@ def exchange_code(code):
     )
     db.session.add(saved)
     db.session.commit()
-    _remember_access_token(body, now)
+    _remember_access_token(body, now, CONSENT_SCOPES)
     logger.info("Saved a new eBay OAuth refresh token, expires " + str(expires))
     return saved
 
@@ -1162,18 +1175,19 @@ def saved_oauth_token():
     return db.session.query(EbayOAuthToken).order_by(EbayOAuthToken.id.desc()).first()
 
 
-def oauth_token():
+def oauth_token(scope=MEDIA_SCOPE):
     """
-    An OAuth user access token for eBay's REST APIs, minted from the refresh
-    token Connect eBay saved (or EBAY_SETTINGS["OAUTH_REFRESH_TOKEN"]). The
-    Trading API calls keep using the Auth'n'Auth USER_TOKEN; REST APIs
-    don't accept it.
+    An OAuth user access token for `scope` of eBay's REST APIs, minted from
+    the refresh token Connect eBay saved (or
+    EBAY_SETTINGS["OAUTH_REFRESH_TOKEN"]). The Trading API calls keep using
+    the Auth'n'Auth USER_TOKEN; REST APIs don't accept it.
     """
     from fbc import app
 
     now = datetime.datetime.utcnow()
-    if _oauth["token"] and _oauth["expires"] > now:
-        return _oauth["token"]
+    cached = _oauth.get(scope)
+    if cached and cached["expires"] > now:
+        return cached["token"]
     saved = saved_oauth_token()
     refresh_token = (
         saved.refresh_token
@@ -1183,14 +1197,14 @@ def oauth_token():
     if not refresh_token:
         raise OAuthError(
             "Connect fbc to eBay first (Sales > eBay Drafts > Connect eBay);"
-            " picture uploads need it."
+            " picture uploads and Ship This need it."
         )
     try:
         body = _token_request(
             {
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
-                "scope": MEDIA_SCOPE,
+                "scope": scope,
             }
         )
     except OAuthError as e:
@@ -1198,8 +1212,8 @@ def oauth_token():
             "eBay refused the saved OAuth token (" + str(e) + "); connect"
             " fbc to eBay again under Sales > eBay Drafts > Connect eBay."
         )
-    _remember_access_token(body, now)
-    return _oauth["token"]
+    _remember_access_token(body, now, [scope])
+    return _oauth[scope]["token"]
 
 
 def _rest_errors(r):
@@ -1241,7 +1255,7 @@ def upload_picture(fileobj, filename, content_type=None):
     if r.status_code not in (200, 201):
         if r.status_code == 401:
             # A revoked token; fetch a new one next time.
-            _oauth["token"] = None
+            forget_access_token(MEDIA_SCOPE)
         summary["errors"].extend(
             "Uploading " + filename + ": " + m for m in _rest_errors(r)
         )

@@ -1,9 +1,11 @@
 {% extends "appbuilder/base.html" %}
 {% block content %}
 <h3>Connect eBay</h3>
-<p>eBay's picture upload only accepts OAuth sign-ins, not the token fbc uses
-for everything else, so fbc needs your permission once. It keeps the token
-eBay gives it (good for about 18 months) and renews its access from that.</p>
+<p>eBay's picture upload and the order earnings Ship This reads only accept
+OAuth sign-ins, not the token fbc uses for everything else, so fbc needs your
+permission once. It keeps the token eBay gives it (good for about 18 months)
+and renews its access from that. If you connected before Ship This existed,
+connect again so fbc can read order earnings too.</p>
 
 {% if saved %}
 <div class="alert alert-success">
@@ -16,7 +18,8 @@ eBay gives it (good for about 18 months) and renews its access from that.</p>
 {% if sign_in %}
 <h4>1. Sign in to eBay</h4>
 <p><a href="{{ sign_in }}" target="_blank" rel="noopener" class="btn btn-primary">Sign in to eBay</a>
-and agree to let this app manage your listings' pictures.</p>
+and agree to let this app manage your listings' pictures and read your
+earnings.</p>
 
 <h4>2. Come back with the code</h4>
 <p>eBay then sends you to your RuName's "auth accepted" page with a code in the

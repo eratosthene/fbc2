@@ -1,0 +1,57 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h3>Ship This</h3>
+<p>Buy the shipping label on eBay before shipping this here; the earnings below
+come from eBay and only take the label off once it's bought.</p>
+
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>Order</th><td>{{ order.fmt_url() }} {{ order.title }}</td></tr>
+  <tr><th>Buyer</th><td>{{ order.buyer }}</td></tr>
+  <tr><th>Date</th><td>{{ order.created_time.date() }}</td></tr>
+  <tr><th>Sold Price</th><td>{{ order.fmt_price() }}</td></tr>
+  <tr><th>Unit</th><td><a href="{{ url_for('UnitModelView.show', pk=unit.id) }}">{{ unit.name }}</a></td></tr>
+</table>
+
+<h4>Order earnings</h4>
+{% for e in earnings.errors %}<div class="alert alert-danger">{{ e }}</div>{% endfor %}
+{% for w in earnings.warnings %}<div class="alert alert-warning">{{ w }}</div>{% endfor %}
+{% if earnings["items"] > 1 %}
+<div class="alert alert-danger">This order has {{ earnings["items"] }} items, and Ship This
+only handles orders of one Unit. Ship it by hand.</div>
+{% endif %}
+{% if earnings.lines %}
+<table class="table table-bordered table-condensed" style="width: auto">
+  {% for line in earnings.lines %}
+  <tr>
+    <td>{{ line.label }}</td>
+    <td class="text-right">{% if line.amount < 0 %}&minus;{% endif %}${{ "%.2f"|format(line.amount|abs) }}</td>
+  </tr>
+  {% endfor %}
+  {% if earnings.net is not none %}
+  <tr><th>Order earnings</th><th class="text-right">${{ "%.2f"|format(earnings.net) }}</th></tr>
+  {% endif %}
+</table>
+{% endif %}
+
+<form method="post" action="{{ url_for('EbayOrderModelView.ship', pk=order.order_id) }}">
+  <div class="form-group" style="max-width: 200px">
+    <label for="net_sold">Net Sold</label>
+    <input type="text" id="net_sold" name="net_sold" class="form-control" required
+      value="{{ '%.2f'|format(earnings.net) if earnings.net is not none }}">
+  </div>
+  {% if instance %}
+  <div class="checkbox">
+    <label>
+      <input type="checkbox" name="remove_discogs" value="1" checked>
+      Remove {{ unit.discogs_release }} (instance {{ instance.instance_id }}) from the Discogs collection
+    </label>
+  </div>
+  {% elif discogs_problem %}
+  <div class="alert alert-warning">{{ discogs_problem }}</div>
+  {% endif %}
+  <p>Shipping records a Sales Receipt for Net Sold, marks the Unit sold with it{% if instance %}
+  and removes only this Unit's copy from Discogs{% endif %}.</p>
+  <button class="btn btn-primary" {% if earnings["items"] > 1 %}disabled{% endif %}>Ship</button>
+  <a href="{{ url_for('EbayOrderModelView.list') }}" class="btn btn-default">Cancel</a>
+</form>
+{% endblock %}

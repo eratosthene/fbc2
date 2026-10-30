@@ -1,3 +1,5 @@
+from flask import abort, flash, redirect, request, url_for
+from flask_appbuilder import expose, has_access
 from wtforms.validators import Optional
 
 from fbc.util import CustomModelView
@@ -5,6 +7,14 @@ from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.sales import SalesReceipt
+from fbc.shipping import (
+    discogs_plan,
+    order_earnings,
+    order_receipt,
+    order_unit,
+    remove_from_discogs,
+    ship_order,
+)
 from fbc.widgets import (
     DateTimeLocalField,
     EbayListingListWidget,
@@ -68,3 +78,63 @@ class EbayOrderModelView(CustomModelView):
         "created_time": DateTimeLocalField("Created Time", validators=[Optional()])
     }
     edit_form_extra_fields = add_form_extra_fields
+
+    def _order(self, pk):
+        order = self.datamodel.get(pk)
+        if not order:
+            abort(404)
+        return order
+
+    @expose("/ship/<pk>", methods=["GET", "POST"])
+    @has_access
+    def ship(self, pk):
+        """
+        Ship This: once the label is bought on eBay, record the Sales Receipt
+        for the order's earnings, mark its Unit sold and remove the Unit's
+        instance from Discogs. GET shows what will happen; POST does it.
+        """
+        order = self._order(pk)
+        back = redirect(url_for("EbayOrderModelView.list"))
+        if order_receipt(order):
+            flash("This order already has a Sales Receipt.", "warning")
+            return back
+        unit = order_unit(order)
+        if not unit:
+            flash(
+                "This order doesn't have exactly one unsold Unit on its listing;"
+                " ship it by hand.",
+                "warning",
+            )
+            return back
+
+        if request.method == "POST":
+            try:
+                net_sold = float(request.form.get("net_sold", "").strip().lstrip("$"))
+            except ValueError:
+                flash("Enter Net Sold as a number of dollars.", "danger")
+                return redirect(url_for("EbayOrderModelView.ship", pk=pk))
+            ship_order(order, unit, net_sold)
+            flash(
+                "Recorded a Sales Receipt for $"
+                + f"{net_sold:.2f}"
+                + " and marked "
+                + unit.name
+                + " sold.",
+                "success",
+            )
+            if request.form.get("remove_discogs"):
+                message, category = remove_from_discogs(unit)
+                flash(message, category)
+            return back
+
+        earnings = order_earnings(order.order_id)
+        instance, discogs_problem = discogs_plan(unit)
+        return self.render_template(
+            "ebay_order/ship.html",
+            title="Ship This",
+            order=order,
+            unit=unit,
+            earnings=earnings,
+            instance=instance,
+            discogs_problem=discogs_problem,
+        )

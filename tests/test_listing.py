@@ -751,7 +751,7 @@ class FakeHTTPResponse:
 def oauth(monkeypatch):
     """A configured refresh token and an empty access token cache."""
     monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "refresh")
-    monkeypatch.setattr(listing, "_oauth", {"token": None, "expires": None})
+    monkeypatch.setattr(listing, "_oauth", {})
 
 
 def test_oauth_token_is_minted_from_the_refresh_token_and_reused(app, oauth, monkeypatch):
@@ -792,7 +792,7 @@ def test_oauth_token_explains_a_refused_refresh_token(app, oauth, monkeypatch):
 
 def test_upload_without_a_refresh_token_says_what_to_configure(app, monkeypatch):
     monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "")
-    monkeypatch.setattr(listing, "_oauth", {"token": None, "expires": None})
+    monkeypatch.setattr(listing, "_oauth", {})
 
     url, summary = listing.upload_picture(None, "front.jpg", "image/jpeg")
 
@@ -854,7 +854,7 @@ def test_upload_picture_falls_back_to_the_location_header(app, oauth, monkeypatc
 def test_upload_picture_reports_ebay_errors(app, oauth, monkeypatch):
     import requests
 
-    listing._oauth.update(token="stale", expires=datetime.datetime.max)
+    listing._oauth[listing.MEDIA_SCOPE] = {"token": "stale", "expires": datetime.datetime.max}
     monkeypatch.setattr(
         requests,
         "post",
@@ -868,7 +868,7 @@ def test_upload_picture_reports_ebay_errors(app, oauth, monkeypatch):
     assert url is None
     assert summary["errors"] == ["Uploading front.jpg: Invalid access token"]
     # A rejected token isn't reused for the next upload.
-    assert listing._oauth["token"] is None
+    assert listing.MEDIA_SCOPE not in listing._oauth
 
 
 def test_call_reports_a_reply_ebaysdk_cant_read(app, monkeypatch):
@@ -892,7 +892,7 @@ def test_call_reports_a_reply_ebaysdk_cant_read(app, monkeypatch):
     ]
 
 
-def test_consent_url_asks_for_the_media_scope_through_the_runame(app, monkeypatch):
+def test_consent_url_asks_for_every_scope_through_the_runame(app, monkeypatch):
     from urllib.parse import parse_qs, urlparse
 
     monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "RUNAME", "Chris-fbc-PRD-runame")
@@ -903,7 +903,7 @@ def test_consent_url_asks_for_the_media_scope_through_the_runame(app, monkeypatc
         "client_id": ["test-app-id"],
         "redirect_uri": ["Chris-fbc-PRD-runame"],
         "response_type": ["code"],
-        "scope": [listing.MEDIA_SCOPE],
+        "scope": [listing.MEDIA_SCOPE + " " + listing.FINANCES_SCOPE],
         "state": ["xyz"],
     }
 
