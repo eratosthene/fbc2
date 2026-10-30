@@ -994,7 +994,7 @@ def test_oauth_token_prefers_the_saved_refresh_token(app, oauth, monkeypatch):
 
 def test_new_draft_starts_with_the_weight_for_its_record_size(app, monkeypatch):
     unit = _carnaval()
-    assert new_draft(unit).weight_oz == 20
+    assert new_draft(unit).weight_oz == 16
 
     monkeypatch.setitem(
         fbc.app.config["EBAY_SETTINGS"]["LISTING"], "PACKAGE", {"WEIGHT_OZ": {'12"': 22}}
@@ -1038,7 +1038,7 @@ def test_draft_from_before_weights_gets_the_default_weight(app):
     draft = _draft(weight_oz=None)
     package = build_item(draft, SETTINGS)["ShippingPackageDetails"]
 
-    assert (package["WeightMajor"]["#text"], package["WeightMinor"]["#text"]) == ("1", "4")
+    assert (package["WeightMajor"]["#text"], package["WeightMinor"]["#text"]) == ("1", "0")
 
 
 def test_draft_weight_wins_over_the_template_package(app):
@@ -1049,3 +1049,56 @@ def test_draft_weight_wins_over_the_template_package(app):
     )
     assert item["ShippingPackageDetails"]["WeightMajor"]["#text"] == "1"
     assert item["ShippingPackageDetails"]["WeightMinor"]["#text"] == "8"
+
+
+@pytest.mark.parametrize(
+    "formats,weight",
+    [
+        # 12" LP, EP, Single and Maxi-Single: one disc.
+        ([{"name": "Vinyl", "qty": "1", "descriptions": ["LP", "Album"]}], 16),
+        ([{"name": "Vinyl", "qty": "1", "descriptions": ['12"', "EP"]}], 16),
+        ([{"name": "Vinyl", "qty": "1", "descriptions": ['12"', "Single"]}], 16),
+        ([{"name": "Vinyl", "qty": "1", "descriptions": ['12"', "Maxi-Single"]}], 16),
+        # Double and triple LPs.
+        ([{"name": "Vinyl", "qty": "2", "descriptions": ["LP", "Album"]}], 32),
+        ([{"name": "Vinyl", "qty": "3", "descriptions": ["LP", "Album"]}], 48),
+        # Discs listed as separate formats add up; a bonus CD doesn't count.
+        (
+            [
+                {"name": "Vinyl", "qty": "1", "descriptions": ["LP"]},
+                {"name": "Vinyl", "qty": "1", "descriptions": ["LP"]},
+                {"name": "CD", "qty": "1"},
+            ],
+            32,
+        ),
+    ],
+)
+def test_default_weight_is_16_oz_per_12_inch_disc(app, formats, weight):
+    unit = _carnaval()
+    unit.discogs_release.formats = json.dumps(formats)
+    assert new_draft(unit).weight_oz == weight
+
+
+@pytest.mark.parametrize(
+    "unit_type,discs",
+    [
+        ('12" LP', 1),
+        ('12" Double LP', 2),
+        ('12" Triple LP', 3),
+        ('12" 2xLP', 2),
+        ('12" 2 x LP', 2),
+        ('7" Single', 1),
+    ],
+)
+def test_disc_count_falls_back_to_the_unit_type(unit_type, discs):
+    assert listing.disc_count(Unit(name="u", unit_type=unit_type)) == discs
+
+
+def test_draft_from_before_weights_counts_its_discs(app):
+    draft = _draft(weight_oz=None)
+    draft.unit.discogs_release.formats = json.dumps(
+        [{"name": "Vinyl", "qty": "2", "descriptions": ["LP"]}]
+    )
+    package = build_item(draft, SETTINGS)["ShippingPackageDetails"]
+
+    assert (package["WeightMajor"]["#text"], package["WeightMinor"]["#text"]) == ("2", "0")

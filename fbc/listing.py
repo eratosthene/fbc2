@@ -84,11 +84,12 @@ COLORS = [
 
 TITLE_MAX = 80
 
-# A draft's starting package weight in ounces, by record size, packing
-# included. eBay needs a weight for calculated shipping. Replaced by
-# EBAY_SETTINGS["LISTING"]["PACKAGE"] in config.py, which can also give
-# LENGTH/WIDTH/DEPTH in inches and a ShippingPackage TYPE.
-DEFAULT_PACKAGE = {"WEIGHT_OZ": {'12"': 20, '10"': 16, '7"': 8}}
+# A draft's starting package weight in ounces per disc, by record size,
+# packing included: a 12" double LP starts at 32 oz. eBay needs a weight for
+# calculated shipping. Replaced by EBAY_SETTINGS["LISTING"]["PACKAGE"] in
+# config.py, which can also give LENGTH/WIDTH/DEPTH in inches and a
+# ShippingPackage TYPE.
+DEFAULT_PACKAGE = {"WEIGHT_OZ": {'12"': 16, '10"': 16, '7"': 8}}
 
 
 def clean_name(name):
@@ -334,11 +335,46 @@ def build_item(draft, settings, template=None):
     return item
 
 
-def default_weight(specifics, settings):
-    """Starting package weight in ounces for a record with `specifics`."""
+def disc_count(unit):
+    """
+    How many records the Unit is: the quantities of its Discogs Vinyl
+    formats ("2 x Vinyl, LP"), else "Double"/"Triple"/"2xLP" in the unit
+    type, else 1.
+    """
+    release = unit.discogs_release
+    if release and release.formats:
+        try:
+            formats = json.loads(release.formats)
+        except ValueError:
+            formats = []
+        count = 0
+        for f in formats:
+            if f.get("name") == "Vinyl":
+                try:
+                    count += int(f.get("qty") or 1)
+                except ValueError:
+                    count += 1
+        if count:
+            return count
+    unit_type = (unit.unit_type or "").lower()
+    if "triple" in unit_type:
+        return 3
+    if "double" in unit_type:
+        return 2
+    m = re.search(r"\b([2-9])\s*[x×]?\s*lp", unit_type)
+    if m:
+        return int(m.group(1))
+    return 1
+
+
+def default_weight(specifics, settings, discs=1):
+    """Starting package weight in ounces for `discs` records with `specifics`."""
     weights = (settings.get("PACKAGE") or DEFAULT_PACKAGE).get("WEIGHT_OZ") or {}
     size = (specifics.get("Record Size") or ['12"'])[0]
-    return weights.get(size, weights.get('12"'))
+    per_disc = weights.get(size, weights.get('12"'))
+    if per_disc is None:
+        return None
+    return per_disc * discs
 
 
 def build_package(draft, settings):
@@ -349,7 +385,9 @@ def build_package(draft, settings):
     """
     weight = draft.weight_oz
     if weight is None:
-        weight = default_weight(parse_specifics(draft.item_specifics), settings)
+        weight = default_weight(
+            parse_specifics(draft.item_specifics), settings, disc_count(draft.unit)
+        )
     if not weight:
         return None
     lbs, oz = divmod(int(weight), 16)
@@ -1059,6 +1097,6 @@ def new_draft(unit):
         best_offer=settings.get("BEST_OFFER", True),
         description=build_description(unit),
         item_specifics=format_specifics(specifics),
-        weight_oz=default_weight(specifics, settings),
+        weight_oz=default_weight(specifics, settings, disc_count(unit)),
         status="draft",
     )
