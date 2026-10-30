@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
 
-# Bring the database up to date once, before gunicorn starts its workers.
-flask db upgrade
+# Once, before gunicorn starts its workers: build a new database from the
+# models, or bring an existing one up to date with its migrations.
+flask setup-db
 
 exec "$@"

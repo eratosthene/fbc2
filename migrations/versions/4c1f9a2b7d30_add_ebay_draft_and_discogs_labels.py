@@ -22,9 +22,8 @@ def upgrade():
         batch_op.add_column(sa.Column("labels", sa.Text(), nullable=True))
         batch_op.add_column(sa.Column("country", sa.String(length=50), nullable=True))
 
-    # fbc/__init__.py runs db.create_all() on import, which `flask db upgrade`
-    # does before getting here, so the table (and its indexes) may already
-    # exist.
+    # The app used to run db.create_all() on import, before `flask db upgrade`
+    # got here, so on an older database the table (and its indexes) may already exist.
     if sa.inspect(op.get_bind()).has_table("ebay_draft"):
         return
     op.create_table(

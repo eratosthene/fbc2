@@ -18,8 +18,8 @@ depends_on = None
 
 
 def upgrade():
-    # fbc/__init__.py runs db.create_all() on import, which `flask db upgrade`
-    # does before getting here, so the table may already exist.
+    # The app used to run db.create_all() on import, before `flask db upgrade`
+    # got here, so on an older database the table may already exist.
     if sa.inspect(op.get_bind()).has_table("ebay_oauth_token"):
         return
     op.create_table(
