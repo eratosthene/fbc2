@@ -65,7 +65,7 @@ def _carnaval(**unit_kwargs):
         name="Spyro Gyra - Carnaval (1980)",
         unit_type='12" LP',
         grading="VG+/VG+",
-        pressing="First Edition",
+        pressing="US Original",
         matrix="MCA-2395-MD3 MASTERDISK RL",
         description="Cover looks great, very little wear.",
         retail_price=5.0,
@@ -97,7 +97,7 @@ def test_item_specifics_match_the_example_listing(app):
         "Speed": ["33 RPM"],
         "Number of Audio Channels": ["Stereo"],
         "Vinyl Matrix Number": ["MCA-2395-MD3 MASTERDISK RL"],
-        "Edition": ["First Edition"],
+        "Edition": ["First Edition", "First Pressing"],
         "Record Grading": ["Very Good Plus (VG+)"],
         "Sleeve Grading": ["Very Good Plus (VG+)"],
         "Inlay Condition": ["Very Good Plus (VG+)"],
@@ -1133,3 +1133,85 @@ def test_no_era_when_discogs_has_no_year(app):
     assert "Era" not in specifics
     assert "Release Year" not in specifics
     assert specifics["Style"] == ["Fusion", "Jazz Funk"]
+
+
+@pytest.mark.parametrize(
+    "pressing,editions,country",
+    [
+        ("US Original", ["First Edition", "First Pressing"], "United States"),
+        ("UK Reissue", ["Reissue"], "United Kingdom"),
+        ("USA original pressing", ["First Edition", "First Pressing"], "United States"),
+        ("JP Reissue w/ OBI", ["Reissue"], "Japan"),
+        ("Japanese Original", ["First Edition", "First Pressing"], "Japan"),
+        ("Germany Reissue", ["Reissue"], "Germany"),
+        ("West Germany Original", ["First Edition", "First Pressing"], "West Germany"),
+        ("Canada", [], "Canada"),
+        ("Original", ["First Edition", "First Pressing"], None),
+        ("Reissue, 180g", ["Reissue"], None),
+        ("Original Reissue", ["First Edition", "First Pressing", "Reissue"], None),
+        ("Club Edition", [], None),
+        ("LTD numbered", [], None),
+        ("us original", ["First Edition", "First Pressing"], None),
+        ("", [], None),
+        (None, [], None),
+    ],
+)
+def test_parse_pressing(pressing, editions, country):
+    assert listing.parse_pressing(pressing) == (editions, country)
+
+
+@pytest.mark.parametrize(
+    "unit_type,types",
+    [
+        ('12" LP', ["LP"]),
+        ('12" Double LP', ["LP"]),
+        ('12" 2xLP', ["LP"]),
+        ('12" EP', ["EP"]),
+        ('7" Single', ["Single"]),
+        ('12" Maxi-Single', ["Maxi-Single"]),
+        ('12" lp', ["LP"]),
+        ('10"', []),
+        (None, []),
+    ],
+)
+def test_parse_type(unit_type, types):
+    assert listing.parse_type(unit_type) == types
+
+
+def test_pressing_country_wins_over_discogs(app):
+    unit = _carnaval(pressing="Canada Reissue")
+    specifics = build_item_specifics(unit)
+
+    assert specifics["Country of Origin"] == ["Canada"]
+    assert specifics["Edition"] == ["Reissue"]
+
+
+def test_discogs_country_when_pressing_names_none(app):
+    unit = _carnaval(pressing="Reissue")
+    unit.discogs_release.country = "UK"
+
+    assert build_item_specifics(unit)["Country of Origin"] == ["United Kingdom"]
+
+
+def test_no_edition_when_pressing_says_neither(app):
+    assert "Edition" not in build_item_specifics(_carnaval(pressing="Club Edition"))
+
+
+def test_type_comes_from_unit_type_before_discogs(app):
+    # Discogs calls it an LP; the Unit says it's a Maxi-Single.
+    unit = _carnaval(unit_type='12" Maxi-Single')
+
+    assert build_item_specifics(unit)["Type"] == ["Maxi-Single"]
+
+
+def test_type_falls_back_to_discogs(app):
+    unit = _carnaval(unit_type='12"')
+
+    assert build_item_specifics(unit)["Type"] == ["LP"]
+
+
+def test_title_uses_the_parsed_edition(app):
+    title = build_title(_carnaval(pressing="UK Reissue", unit_type='12" Double LP'))
+
+    assert title.startswith("Spyro Gyra - Carnaval 1980 Reissue Vinyl LP ")
+    assert "UK" not in title

@@ -58,9 +58,81 @@ GENRES = {
     "Folk, World, & Country": ["Folk", "World", "Country"],
 }
 
+# Country codes (as Discogs and Unit.pressing use them) and adjectives, to
+# the names eBay's Country of Origin uses. Anything else passes through.
 COUNTRIES = {
     "US": "United States",
+    "USA": "United States",
+    "American": "United States",
     "UK": "United Kingdom",
+    "GB": "United Kingdom",
+    "British": "United Kingdom",
+    "English": "United Kingdom",
+    "CA": "Canada",
+    "CAN": "Canada",
+    "Canadian": "Canada",
+    "JP": "Japan",
+    "JPN": "Japan",
+    "Japanese": "Japan",
+    "DE": "Germany",
+    "GER": "Germany",
+    "German": "Germany",
+    "FR": "France",
+    "French": "France",
+    "IT": "Italy",
+    "Italian": "Italy",
+    "NL": "Netherlands",
+    "Dutch": "Netherlands",
+    "AU": "Australia",
+    "AUS": "Australia",
+    "Australian": "Australia",
+    "NZ": "New Zealand",
+    "ES": "Spain",
+    "Spanish": "Spain",
+    "SE": "Sweden",
+    "Swedish": "Sweden",
+    "BR": "Brazil",
+    "Brazilian": "Brazil",
+    "MX": "Mexico",
+    "Mexican": "Mexico",
+    "EU": "Europe",
+    "European": "Europe",
+}
+# Country names that are more than one word, so "West Germany Original"
+# isn't read as a country called "West".
+TWO_WORD_COUNTRIES = [
+    "United States",
+    "United Kingdom",
+    "West Germany",
+    "East Germany",
+    "New Zealand",
+    "South Africa",
+    "South Korea",
+]
+# Words a Pressing can start with that aren't countries.
+NOT_COUNTRIES = {
+    "Original",
+    "Reissue",
+    "Repress",
+    "Remaster",
+    "Remastered",
+    "First",
+    "Second",
+    "Early",
+    "Late",
+    "Later",
+    "Promo",
+    "Promotional",
+    "Limited",
+    "Club",
+    "Test",
+    "White",
+    "Mono",
+    "Stereo",
+    "Unofficial",
+    "Bootleg",
+    "Deluxe",
+    "Import",
 }
 
 SIZES = ['12"', '10"', '7"']
@@ -142,6 +214,57 @@ def _labels(release):
         return []
 
 
+def parse_pressing(pressing):
+    """
+    (Edition values, Country of Origin or None) from Unit.pressing, e.g.
+    "US Original" -> (["First Edition", "First Pressing"], "United States").
+    Country is the pressing's leading country code (US, UK, JP...) or
+    leading capitalized word ("Germany Reissue"), without checking that the
+    word really is a country.
+    """
+    pressing = (pressing or "").strip()
+    editions = []
+    lowered = pressing.lower()
+    if "original" in lowered:
+        editions += ["First Edition", "First Pressing"]
+    if "reissue" in lowered:
+        editions.append("Reissue")
+    country = None
+    for name in TWO_WORD_COUNTRIES:
+        if lowered.startswith(name.lower()):
+            country = name
+            break
+    if country is None:
+        m = re.match(r"[A-Za-z]+", pressing)
+        word = m.group(0) if m else ""
+        if word in COUNTRIES:
+            # A code ("US", "JP") or adjective ("Japanese"), as written.
+            country = COUNTRIES[word]
+        elif (
+            len(word) > 2
+            and word[0].isupper()
+            and not word.isupper()
+            and word not in NOT_COUNTRIES
+        ):
+            # Any other capitalized word is taken to be a country's name.
+            country = word
+    return editions, country
+
+
+def parse_type(unit_type):
+    """
+    The eBay Type values in Unit.unit_type: '12" Double LP' -> ["LP"],
+    '12" 2xLP' -> ["LP"], '12" Maxi-Single' -> ["Maxi-Single"].
+    """
+    by_name = {t.lower(): t for t in TYPES}
+    found = []
+    for token in re.split(r"[\s/,+&]+", unit_type or ""):
+        token = re.sub(r"^\d*\s*[x×]", "", token).strip(" ()").lower()
+        if token in by_name:
+            found.append(by_name[token])
+    return list(dict.fromkeys(found))
+
+
 def decade(year):
     if not year:
         return None
@@ -187,13 +310,19 @@ def build_item_specifics(unit, defaults=None):
             genres.extend(GENRES.get(g.name, [g.name]))
         put("Genre", *genres)
         put("Style", decade(original_year), *[s.name for s in release.styles])
-        if release.country:
-            put("Country of Origin", COUNTRIES.get(release.country, release.country))
+    # Where the copy was pressed: the Pressing's leading country, else
+    # Discogs' country for the release.
+    editions, pressing_country = parse_pressing(unit.pressing)
+    discogs_country = release.country if release else None
+    put(
+        "Country of Origin",
+        pressing_country or COUNTRIES.get(discogs_country, discogs_country),
+    )
 
     descriptions, text = _format_descriptions(release)
     unit_type = unit.unit_type or ""
+    put("Type", *parse_type(unit_type))
     put("Type", *[t for t in TYPES if t in descriptions])
-    put("Type", *[t for t in TYPES if t in unit_type.split()])
     put("Record Size", *[s for s in SIZES if s in descriptions])
     put("Record Size", *[s for s in SIZES if unit_type.startswith(s)])
     for d in descriptions:
@@ -206,7 +335,7 @@ def build_item_specifics(unit, defaults=None):
     put("Color", *[c for c in COLORS if c.lower() in text.lower()])
 
     put("Vinyl Matrix Number", unit.matrix)
-    put("Edition", unit.pressing)
+    put("Edition", *editions)
     record, sleeve = split_grading(unit.grading)
     put("Record Grading", grade_name(record))
     put("Sleeve Grading", grade_name(sleeve))
@@ -240,8 +369,9 @@ def parse_specifics(text):
 def build_title(unit):
     """
     A title in the house style, e.g.
-    "Spyro Gyra - Carnaval 1980 First Edition Vinyl LP Fusion Jazz-Funk VG+",
-    dropping styles and then the edition until it fits in 80 characters.
+    "Spyro Gyra - Carnaval 1980 First Edition Vinyl LP Fusion Jazz-Funk VG+"
+    for a "US Original" pressing, dropping styles and then the edition until
+    it fits in 80 characters.
     """
     release = unit.discogs_release
     if release:
@@ -253,10 +383,10 @@ def build_title(unit):
         head = unit.name
         year = ""
         styles = []
-    unit_type = unit.unit_type or ""
-    kind = next((t for t in TYPES if t in unit_type.split()), "")
+    kind = (parse_type(unit.unit_type) or [""])[0]
     record, _ = split_grading(unit.grading)
-    edition = unit.pressing or ""
+    # "First Edition" or "Reissue", as parsed for the Edition specific.
+    edition = (parse_pressing(unit.pressing)[0] or [""])[0]
 
     def assemble(edition, styles):
         parts = [head, year, edition, "Vinyl", kind] + styles + [record or ""]
