@@ -340,7 +340,9 @@ def test_publish_records_the_listing_and_links_the_unit(app, monkeypatch):
 
 def test_publish_failure_leaves_the_draft_unpublished(app, monkeypatch):
     monkeypatch.setattr(
-        listing, "_call", lambda verb, data: (None, {"errors": ["No."], "warnings": [], "fees": []})
+        listing,
+        "_call",
+        lambda verb, data: (None, {"errors": ["No."], "warnings": [], "fees": []}),
     )
     draft = _draft(pictures=["https://i.ebayimg.com/a.jpg"])
 
@@ -561,7 +563,10 @@ def test_publish_copies_shipping_from_the_template_listing(app, monkeypatch):
     assert [verb for verb, _ in calls] == ["GetItem", "AddFixedPriceItem"]
     assert calls[0][1] == {"ItemID": "397798127145"}
     sent = calls[1][1]["Item"]
-    assert sent["ShippingDetails"]["ShippingServiceOptions"][0]["ShippingService"] == "USPSMedia"
+    assert (
+        sent["ShippingDetails"]["ShippingServiceOptions"][0]["ShippingService"]
+        == "USPSMedia"
+    )
     assert draft.status == "published"
 
 
@@ -604,7 +609,9 @@ def test_listing_details_reads_seller_profiles_off_get_item(monkeypatch):
             }
         }
     }
-    monkeypatch.setattr(listing, "_call", lambda verb, data: (resp, summarize_response(resp)))
+    monkeypatch.setattr(
+        listing, "_call", lambda verb, data: (resp, summarize_response(resp))
+    )
 
     profiles, _, summary = listing.listing_details("397798127145")
 
@@ -618,7 +625,9 @@ def test_listing_details_reads_seller_profiles_off_get_item(monkeypatch):
 
 def test_listing_details_without_policies_returns_what_would_be_copied(monkeypatch):
     resp = {"Item": FLAT_ITEM}
-    monkeypatch.setattr(listing, "_call", lambda verb, data: (resp, summarize_response(resp)))
+    monkeypatch.setattr(
+        listing, "_call", lambda verb, data: (resp, summarize_response(resp))
+    )
 
     profiles, fields, summary = listing.listing_details("397798127145")
 
@@ -641,7 +650,9 @@ def test_seller_profiles_reports_what_ebay_returned(monkeypatch):
             },
         },
     }
-    monkeypatch.setattr(listing, "_call", lambda verb, data: (resp, summarize_response(resp)))
+    monkeypatch.setattr(
+        listing, "_call", lambda verb, data: (resp, summarize_response(resp))
+    )
 
     profiles, _, details = listing.seller_profiles()
 
@@ -654,8 +665,43 @@ def test_seller_profiles_reports_what_ebay_returned(monkeypatch):
     }
 
 
-def test_trading_asks_for_a_current_api_version(app):
+@pytest.fixture
+def trading_token(monkeypatch):
+    """A Trading API access token already minted from Connect eBay."""
+    monkeypatch.setattr(
+        listing,
+        "_oauth",
+        {
+            listing.TRADING_SCOPE: {
+                "token": "trading-access",
+                "expires": datetime.datetime.max,
+            }
+        },
+    )
+
+
+def test_trading_asks_for_a_current_api_version(app, trading_token):
     assert listing.trading().config.get("compatibility") == listing.TRADING_VERSION
+
+
+def test_trading_can_keep_ebaysdks_default_api_version(app, trading_token):
+    assert listing.trading(compatibility=None).config.get("compatibility") == "837"
+
+
+def test_trading_signs_in_with_the_oauth_token(app, trading_token):
+    config = listing.trading().config
+    assert config.get("iaf_token") == "trading-access"
+    assert config.get("token") is None
+
+
+def test_call_without_connect_ebay_says_what_to_do(app, monkeypatch):
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "")
+    monkeypatch.setattr(listing, "_oauth", {})
+
+    resp, summary = listing._call("GetItem", {"ItemID": "1"})
+
+    assert resp is None
+    assert "Connect eBay" in summary["errors"][0]
 
 
 def test_escape_request_escapes_text_and_attributes_but_not_tags():
@@ -672,7 +718,9 @@ def test_escape_request_escapes_text_and_attributes_but_not_tags():
     }
 
 
-def test_listing_request_is_well_formed_xml_with_special_characters(app, monkeypatch):
+def test_listing_request_is_well_formed_xml_with_special_characters(
+    app, monkeypatch, trading_token
+):
     """
     Build the real request ebaysdk would send for a draft full of
     characters XML reserves, and check eBay could parse it.
@@ -688,6 +736,7 @@ def test_listing_request_is_well_formed_xml_with_special_characters(app, monkeyp
 
     def capture(self):
         sent["body"] = self.request.body
+        sent["headers"] = self.request.headers
         raise Sent()
 
     monkeypatch.setattr(BaseConnection, "execute_request", capture)
@@ -716,9 +765,14 @@ def test_listing_request_is_well_formed_xml_with_special_characters(app, monkeyp
 
     ns = {"e": "urn:ebay:apis:eBLBaseComponents"}
     root = ET.fromstring(sent["body"])
+    # Signed in with the OAuth token, not an Auth'n'Auth one in the body.
+    assert sent["headers"]["X-EBAY-API-IAF-TOKEN"] == "trading-access"
+    assert root.find("e:RequesterCredentials", ns) is None
     sent_item = root.find("e:Item", ns)
     assert sent_item.find("e:Title", ns).text == 'Simon & Garfunkel - "Bookends" <1968>'
-    assert sent_item.find("e:Description", ns).text == "<p>Tiny scuff & a seam split.</p>"
+    assert (
+        sent_item.find("e:Description", ns).text == "<p>Tiny scuff & a seam split.</p>"
+    )
     assert sent_item.find("e:PictureDetails/e:PictureURL", ns).text == (
         "https://i.ebayimg.com/a.jpg?set=1&size=2"
     )
@@ -750,11 +804,15 @@ class FakeHTTPResponse:
 @pytest.fixture
 def oauth(monkeypatch):
     """A configured refresh token and an empty access token cache."""
-    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "refresh")
+    monkeypatch.setitem(
+        fbc.app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "refresh"
+    )
     monkeypatch.setattr(listing, "_oauth", {})
 
 
-def test_oauth_token_is_minted_from_the_refresh_token_and_reused(app, oauth, monkeypatch):
+def test_oauth_token_is_minted_from_the_refresh_token_and_reused(
+    app, oauth, monkeypatch
+):
     import requests
 
     posts = []
@@ -854,7 +912,10 @@ def test_upload_picture_falls_back_to_the_location_header(app, oauth, monkeypatc
 def test_upload_picture_reports_ebay_errors(app, oauth, monkeypatch):
     import requests
 
-    listing._oauth[listing.MEDIA_SCOPE] = {"token": "stale", "expires": datetime.datetime.max}
+    listing._oauth[listing.MEDIA_SCOPE] = {
+        "token": "stale",
+        "expires": datetime.datetime.max,
+    }
     monkeypatch.setattr(
         requests,
         "post",
@@ -895,7 +956,9 @@ def test_call_reports_a_reply_ebaysdk_cant_read(app, monkeypatch):
 def test_consent_url_asks_for_every_scope_through_the_runame(app, monkeypatch):
     from urllib.parse import parse_qs, urlparse
 
-    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "RUNAME", "Chris-fbc-PRD-runame")
+    monkeypatch.setitem(
+        fbc.app.config["EBAY_SETTINGS"], "RUNAME", "Chris-fbc-PRD-runame"
+    )
     url = listing.consent_url("xyz")
 
     assert url.startswith("https://auth.ebay.com/oauth2/authorize?")
@@ -903,7 +966,11 @@ def test_consent_url_asks_for_every_scope_through_the_runame(app, monkeypatch):
         "client_id": ["test-app-id"],
         "redirect_uri": ["Chris-fbc-PRD-runame"],
         "response_type": ["code"],
-        "scope": [listing.MEDIA_SCOPE + " " + listing.FINANCES_SCOPE],
+        "scope": [
+            " ".join(
+                [listing.TRADING_SCOPE, listing.MEDIA_SCOPE, listing.FINANCES_SCOPE]
+            )
+        ],
         "state": ["xyz"],
     }
 
@@ -1006,14 +1073,18 @@ def test_new_draft_starts_with_the_weight_for_its_record_size(app, monkeypatch):
     assert new_draft(unit).weight_oz == 16
 
     monkeypatch.setitem(
-        fbc.app.config["EBAY_SETTINGS"]["LISTING"], "PACKAGE", {"WEIGHT_OZ": {'12"': 22}}
+        fbc.app.config["EBAY_SETTINGS"]["LISTING"],
+        "PACKAGE",
+        {"WEIGHT_OZ": {'12"': 22}},
     )
     assert new_draft(unit).weight_oz == 22
 
 
 def test_new_draft_weight_for_a_seven_inch(app):
     unit = _carnaval(unit_type='7" Single')
-    unit.discogs_release.formats = json.dumps([{"name": "Vinyl", "descriptions": ['7"']}])
+    unit.discogs_release.formats = json.dumps(
+        [{"name": "Vinyl", "descriptions": ['7"']}]
+    )
     assert new_draft(unit).weight_oz == 8
 
 
@@ -1047,7 +1118,10 @@ def test_draft_from_before_weights_gets_the_default_weight(app):
     draft = _draft(weight_oz=None)
     package = build_item(draft, SETTINGS)["ShippingPackageDetails"]
 
-    assert (package["WeightMajor"]["#text"], package["WeightMinor"]["#text"]) == ("1", "0")
+    assert (package["WeightMajor"]["#text"], package["WeightMinor"]["#text"]) == (
+        "1",
+        "0",
+    )
 
 
 def test_draft_weight_wins_over_the_template_package(app):
@@ -1110,7 +1184,10 @@ def test_draft_from_before_weights_counts_its_discs(app):
     )
     package = build_item(draft, SETTINGS)["ShippingPackageDetails"]
 
-    assert (package["WeightMajor"]["#text"], package["WeightMinor"]["#text"]) == ("2", "0")
+    assert (package["WeightMajor"]["#text"], package["WeightMinor"]["#text"]) == (
+        "2",
+        "0",
+    )
 
 
 def test_era_of_a_reissue_comes_from_its_master_release(app):
@@ -1235,10 +1312,14 @@ def test_title_uses_the_parsed_edition(app):
 
 
 def _vinyl(qty, descriptions=("LP", "Album")):
-    return json.dumps([{"name": "Vinyl", "qty": str(qty), "descriptions": list(descriptions)}])
+    return json.dumps(
+        [{"name": "Vinyl", "qty": str(qty), "descriptions": list(descriptions)}]
+    )
 
 
-@pytest.mark.parametrize("qty,expected", [(1, "LP"), (2, "Double LP"), (3, "Triple LP")])
+@pytest.mark.parametrize(
+    "qty,expected", [(1, "LP"), (2, "Double LP"), (3, "Triple LP")]
+)
 def test_discogs_disc_count_sets_double_and_triple_lp(app, qty, expected):
     unit = _carnaval()
     unit.discogs_release.formats = _vinyl(qty)
@@ -1301,7 +1382,6 @@ def test_more_than_three_lps_stay_lp(app):
     assert build_item_specifics(unit)["Type"] == ["LP"]
 
 
-
 def _fee(name, amount, discount=None):
     fee = {"Name": name, "Fee": {"_currencyID": "USD", "value": str(amount)}}
     if discount is not None:
@@ -1311,7 +1391,13 @@ def _fee(name, amount, discount=None):
 
 def test_listing_fee_that_adds_up_the_others_is_the_total():
     fees, total = listing.summarize_fees(
-        {"Fee": [_fee("InsertionFee", 0.35), _fee("BoldFee", 0.0), _fee("ListingFee", 0.35)]}
+        {
+            "Fee": [
+                _fee("InsertionFee", 0.35),
+                _fee("BoldFee", 0.0),
+                _fee("ListingFee", 0.35),
+            ]
+        }
     )
 
     assert [f["name"] for f in fees] == ["InsertionFee"]
