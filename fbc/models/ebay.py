@@ -119,6 +119,15 @@ class EbayOrder(Model):
             )
             + '">Add&nbsp;SR</a>'
         )
+        from fbc.shipping import can_ship
+
+        if can_ship(self):
+            retval = (
+                retval
+                + '<br><a href="'
+                + url_for("EbayOrderModelView.ship", pk=self.order_id)
+                + '">Ship&nbsp;This</a>'
+            )
         if self.ebay_listing:
             from fbc.models.inventory import Unit
             from fbc import db

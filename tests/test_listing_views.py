@@ -207,7 +207,7 @@ def exchanged(monkeypatch):
     def fake_exchange(code):
         codes.append(code)
 
-    monkeypatch.setattr("fbc.views.listing.exchange_code", fake_exchange)
+    monkeypatch.setattr("fbc.views.connect.exchange_code", fake_exchange)
     monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "RUNAME", "the-runame")
     return codes
 
@@ -218,7 +218,7 @@ def _state(client):
 
 
 def test_connect_page_links_to_ebay_sign_in(client, exchanged):
-    html = client.get("/ebaydraftmodelview/oauth").get_data(as_text=True)
+    html = client.get("/connectebay/").get_data(as_text=True)
 
     assert "Not connected yet." in html
     assert "https://auth.ebay.com/oauth2/authorize?" in html
@@ -226,33 +226,52 @@ def test_connect_page_links_to_ebay_sign_in(client, exchanged):
 
 
 def test_pasted_address_is_exchanged(client, exchanged):
-    client.get("/ebaydraftmodelview/oauth")
+    client.get("/connectebay/")
     address = (
         "https://signin.ebay.com/ws/eBayISAPI.dll?ThirdPartyAuthSucessFailure"
         "&state=" + _state(client) + "&code=v%5E1.1%23i%5E1&expires_in=299"
     )
 
-    page = client.post("/ebaydraftmodelview/oauth", data={"address": address})
+    page = client.post("/connectebay/", data={"address": address})
 
     assert page.status_code == 302
     assert exchanged == ["v^1.1#i^1"]
 
 
 def test_ebay_redirecting_straight_back_is_exchanged(client, exchanged):
-    client.get("/ebaydraftmodelview/oauth")
+    client.get("/connectebay/")
 
     client.get(
-        "/ebaydraftmodelview/oauth?state=" + _state(client) + "&code=abc&expires_in=299"
+        "/connectebay/?state=" + _state(client) + "&code=abc&expires_in=299"
     )
 
     assert exchanged == ["abc"]
 
 
+def test_connect_ebay_is_in_the_sales_menu(client, exchanged):
+    html = client.get("/ebaydraftmodelview/list/").get_data(as_text=True)
+
+    assert 'href="/connectebay/"' in html
+    assert html.count("Connect eBay") == 1
+
+
+def test_the_old_connect_address_still_works(client, exchanged):
+    client.get("/connectebay/")
+    query = "state=" + _state(client) + "&code=abc&expires_in=299"
+
+    page = client.get("/ebaydraftmodelview/oauth?" + query)
+
+    assert page.status_code == 307
+    assert page.headers["Location"].endswith("/connectebay/?" + query)
+    client.get(page.headers["Location"])
+    assert exchanged == ["abc"]
+
+
 def test_sign_in_from_another_page_is_refused(client, exchanged):
-    client.get("/ebaydraftmodelview/oauth")
+    client.get("/connectebay/")
 
     page = client.post(
-        "/ebaydraftmodelview/oauth",
+        "/connectebay/",
         data={"address": "https://x/?state=forged&code=abc"},
         follow_redirects=True,
     )
@@ -275,7 +294,7 @@ def test_connect_page_says_when_connected(client, exchanged):
     )
     db.session.commit()
 
-    html = client.get("/ebaydraftmodelview/oauth").get_data(as_text=True)
+    html = client.get("/connectebay/").get_data(as_text=True)
     assert "Connected 2026-10-29; sign in again before 2028-04-28." in html
 
 

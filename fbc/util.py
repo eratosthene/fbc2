@@ -301,6 +301,39 @@ def add_discogs_release(item):
     logger.debug(discogs_release)
 
 
+def forget_discogs_instance(instance):
+    """
+    Remove a DiscogsInstance that's no longer in the Discogs collection:
+    unlink it from its Unit, drop it from its DiscogsRelease, and remove the
+    release too once it has no instances left.
+    """
+    from fbc import db
+    from fbc.models.discogs import DiscogsRelease
+    from fbc.models.inventory import Unit
+
+    for u in db.session.query(Unit).filter_by(discogs_instance_id=instance.instance_id):
+        logger.info("Updating Unit " + str(u))
+        u.discogs_instance_id = None
+    dr = (
+        db.session.query(DiscogsRelease)
+        .filter(DiscogsRelease.discogs_instances.contains(instance))
+        .first()
+    )
+    if dr:
+        logger.info("Updating DiscogsRelease " + str(dr))
+        logger.debug("Removing instance from release")
+        dr.discogs_instances.remove(instance)
+        if len(dr.discogs_instances) == 0:
+            logger.info("All instances are gone, removing DiscogsRelease " + str(dr))
+            for u in db.session.query(Unit).filter_by(discogs_release_id=dr.release_id):
+                logger.info("Updating Unit " + str(u))
+                u.discogs_release_id = None
+            db.session.delete(dr)
+    logger.debug("Removing instance")
+    db.session.delete(instance)
+    db.session.commit()
+
+
 class CustomForm(FlaskForm):
     """
     A custom FlaskForm which reads data from request params

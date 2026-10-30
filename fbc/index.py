@@ -12,6 +12,7 @@ from fbc.util import add_ebay_listing
 from fbc.util import add_ebay_order
 from fbc.util import add_discogs_release
 from fbc.util import find_relisted_listing
+from fbc.util import forget_discogs_instance
 from fbc.util import relist_ebay_listing
 
 logger = logging.getLogger()
@@ -197,7 +198,6 @@ class MyIndexView(IndexView):
         self.update_redirect()
         from fbc import app, db
         from fbc.models.discogs import DiscogsRelease, DiscogsInstance, Folder
-        from fbc.models.inventory import Unit
 
         logger.info("Updating discogs...")
         d = discogs_client.Client(
@@ -237,41 +237,7 @@ class MyIndexView(IndexView):
                 logger.debug(
                     "Local instance " + str(item.instance_id) + " should be removed"
                 )
-                u = (
-                    db.session.query(Unit)
-                    .filter_by(discogs_instance_id=item.instance_id)
-                    .first()
-                )
-                if u:
-                    logger.info("Updating Unit " + str(u))
-                    u.discogs_instance_id = None
-                dr = (
-                    db.session.query(DiscogsRelease)
-                    .filter(DiscogsRelease.discogs_instances.contains(item))
-                    .first()
-                )
-                if dr:
-                    logger.info("Updating DiscogsRelease " + str(dr))
-                    for di in dr.discogs_instances:
-                        if di.instance_id == item.instance_id:
-                            logger.debug("Removing instance from release")
-                            dr.discogs_instances.remove(di)
-                    if len(dr.discogs_instances) == 0:
-                        logger.info(
-                            "All instances are gone, removing DiscogsRelease " + str(dr)
-                        )
-                        u = (
-                            db.session.query(Unit)
-                            .filter_by(discogs_release_id=dr.release_id)
-                            .first()
-                        )
-                        if u:
-                            logger.info("Updating Unit " + str(u))
-                            u.discogs_release_id = None
-                        db.session.delete(dr)
-                logger.debug("Removing instance")
-                db.session.delete(item)
-                db.session.commit()
+                forget_discogs_instance(item)
 
         ref = request.referrer
         if ref:

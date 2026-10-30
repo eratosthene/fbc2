@@ -123,10 +123,10 @@ EBAY_SETTINGS = {
     'DEV_ID': '',
     'CERT_ID': '',
     'USER_TOKEN': '',
-    # eBay's REST APIs (picture uploads) need OAuth. Set RUNAME to the app's
-    # eBay Redirect URL name (developer.ebay.com > User Tokens), then use
-    # Sales > eBay Drafts > Connect eBay; the token it gets is kept in the
-    # database. OAUTH_REFRESH_TOKEN, if set, is used only until then.
+    # eBay's REST APIs (picture uploads, Ship This) need OAuth. Set RUNAME to
+    # the app's eBay Redirect URL name (developer.ebay.com > User Tokens),
+    # then use Sales > Connect eBay; the token it gets is kept in the database.
+    # OAUTH_REFRESH_TOKEN, if set, is used only until then.
     'RUNAME': '',
     'OAUTH_REFRESH_TOKEN': '',
     # Used when publishing a Unit as a listing (eBay Drafts). See
