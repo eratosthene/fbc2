@@ -1,17 +1,18 @@
+# syntax=docker/dockerfile:1
 FROM python:3.10-alpine
 
-RUN apk add --virtual .build-dependencies \
-            --no-cache \
-            build-base \
-            linux-headers \
-            git
-
-RUN python -m pip install --upgrade pip
 COPY ./requirements.txt /app/requirements.txt
 
-RUN python -m pip install --no-cache-dir --upgrade -r /app/requirements.txt
-
-RUN apk del .build-dependencies && rm -rf /var/cache/apk/*
+# Install, build and remove the build dependencies in one layer so they don't
+# end up in the image. The cache mount keeps pip's downloads between builds.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    apk add --no-cache --virtual .build-dependencies \
+            build-base \
+            linux-headers \
+            git \
+    && python -m pip install --upgrade pip \
+    && python -m pip install --upgrade -r /app/requirements.txt \
+    && apk del .build-dependencies
 
 COPY ./config.py /app
 COPY ./fbc /app/fbc
