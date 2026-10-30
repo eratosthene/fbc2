@@ -303,9 +303,7 @@ def test_average_sold_price_falls_back_to_receipt_ebay_order(db):
 
 
 def test_average_sold_price_falls_back_to_listing_ebay_order(db):
-    db.session.add(
-        EbayListing(item_id="L1", title="T", price=40.0, url="https://x")
-    )
+    db.session.add(EbayListing(item_id="L1", title="T", price=40.0, url="https://x"))
     db.session.commit()
     _ebay_order(db, "222", 40.0, listing_id="L1")
     _sold_unit(db, "200", listing_id="L1")

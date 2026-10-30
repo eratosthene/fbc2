@@ -82,6 +82,7 @@ class DiscogsInstance(Model):
 
 class DiscogsRelease(Model):
     from fbc import db
+
     assoc_artist_discogs_release = db.Table(
         "artist_discogs_release",
         Model.metadata,

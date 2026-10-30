@@ -1,10 +1,8 @@
 import sys
-sys.path.insert(0, '..')
+
+sys.path.insert(0, "..")
 from fbc.models.inventory import Unit
-from fbc.models.discogs import DiscogsRelease
 from fbc import db
-from sqlalchemy import select
-import pprint
 
 units = db.session.query(Unit).all()
 for unit in units:
@@ -15,7 +13,6 @@ for unit in units:
             unit.discogs_master = str(master_id)
             print(str(unit.id) + " master set to " + str(unit.discogs_master))
         else:
-            unit.discogs_master = 'r' + str(release_id)
+            unit.discogs_master = "r" + str(release_id)
             print(str(unit.id) + " master set to " + str(unit.discogs_master))
         db.session.commit()
-

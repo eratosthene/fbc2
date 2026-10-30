@@ -4,18 +4,18 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-flask-appbuilder = "4.7.0"
-pillow = "*"
-python-dotenv = "*"
-pymysql = "*"
-python3-discogs-client = "*"
+flask-appbuilder = "4.8.1"
+pillow = "~=12.3"
+python-dotenv = "~=1.2"
+pymysql = "~=1.1"
+python3-discogs-client = "~=2.8"
 certifi = "*"
-ebaysdk = "*"
-gunicorn = "*"
-flask-migrate = "*"
+ebaysdk = "~=2.2"
+gunicorn = "~=25.1"
+flask-migrate = "~=4.1"
 
 [dev-packages]
-pymongo = "*"
+pymongo = "~=4.18"
 pytest = "*"
 pytest-mock = "*"
 

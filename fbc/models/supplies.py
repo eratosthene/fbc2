@@ -25,6 +25,7 @@ class PurchaseOrder(Model):
 
 class Supply(Model):
     from fbc import db
+
     assoc_purchase_order_supply = db.Table(
         "purchase_order_supply",
         Model.metadata,

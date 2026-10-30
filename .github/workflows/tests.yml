@@ -1,0 +1,82 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: pipenv
+
+      - name: Install Pipenv
+        run: python -m pip install pipenv
+
+      # --deploy fails the job if Pipfile.lock is out of date with the Pipfile.
+      - name: Install dependencies from Pipfile.lock
+        run: pipenv install --dev --deploy
+
+      # One line per test, in colour and unbuffered, so the step's log can be
+      # watched live while it runs.
+      - name: Run tests
+        run: pipenv run pytest -v --color=yes --junitxml=test-results/junit.xml
+        env:
+          PYTHONUNBUFFERED: "1"
+
+      # Posts a results comment on the PR (updated on each push) and adds the
+      # results to this job's summary. Dependabot PRs and PRs from forks get a
+      # read-only token, so the results only show in the job log for those.
+      - name: Publish test results
+        if: >-
+          !cancelled() && (
+            github.event_name != 'pull_request' || (
+              github.event.pull_request.head.repo.full_name == github.repository &&
+              github.event.pull_request.user.login != 'dependabot[bot]'
+            )
+          )
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: test-results/junit.xml
+          # A check run made with the workflow's token gets filed under
+          # whichever workflow run GitHub picks (it showed up under Docker
+          # build), where it has no logs to show. The pytest job's own status
+          # already passes or fails the PR.
+          check_run: false
+
+  # The Docker image installs from requirements.txt rather than Pipfile.lock,
+  # so make sure the two haven't drifted apart.
+  requirements-txt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+
+      - name: Install Pipenv
+        run: python -m pip install pipenv
+
+      - name: Check requirements.txt matches Pipfile.lock
+        run: |
+          if ! diff -u requirements.txt <(pipenv requirements); then
+            echo "::error file=requirements.txt::requirements.txt is out of date with Pipfile.lock. Run: pipenv requirements > requirements.txt"
+            exit 1
+          fi

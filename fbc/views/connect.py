@@ -115,7 +115,10 @@ class ConnectDiscogsView(BaseView):
                 try:
                     saved = exchange_verifier(pending[0], pending[1], verifier)
                     session.pop("discogs_oauth_request", None)
-                    flash("Connected to Discogs as " + str(saved.username) + ".", "success")
+                    flash(
+                        "Connected to Discogs as " + str(saved.username) + ".",
+                        "success",
+                    )
                 except DiscogsAuthError as e:
                     flash(str(e), "danger")
             return redirect(url_for("ConnectDiscogsView.connect"))
