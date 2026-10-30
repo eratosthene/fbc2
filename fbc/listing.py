@@ -175,12 +175,18 @@ def build_item_specifics(unit, defaults=None):
         put("MPN", *catnos)
         if release.year:
             put("Release Year", str(release.year))
-            put("Era", decade(release.year))
+        # Era (and the decade in Style) is when the music came out, so a
+        # reissue keeps its original's: the master release's year when
+        # Discogs has one.
+        original_year = release.year
+        if release.master_year and release.master_year > 0:
+            original_year = release.master_year
+        put("Era", decade(original_year))
         genres = []
         for g in release.genres:
             genres.extend(GENRES.get(g.name, [g.name]))
         put("Genre", *genres)
-        put("Style", decade(release.year), *[s.name for s in release.styles])
+        put("Style", decade(original_year), *[s.name for s in release.styles])
         if release.country:
             put("Country of Origin", COUNTRIES.get(release.country, release.country))
 

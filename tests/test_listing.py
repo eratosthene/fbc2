@@ -1102,3 +1102,34 @@ def test_draft_from_before_weights_counts_its_discs(app):
     package = build_item(draft, SETTINGS)["ShippingPackageDetails"]
 
     assert (package["WeightMajor"]["#text"], package["WeightMinor"]["#text"]) == ("2", "0")
+
+
+def test_era_of_a_reissue_comes_from_its_master_release(app):
+    unit = _carnaval()
+    unit.discogs_release.year = 2016
+    unit.discogs_release.master_year = 1980
+    specifics = build_item_specifics(unit)
+
+    assert specifics["Release Year"] == ["2016"]
+    assert specifics["Era"] == ["1980s"]
+    assert specifics["Style"][0] == "1980s"
+
+
+@pytest.mark.parametrize("master_year", [None, 0, -1])
+def test_era_falls_back_to_the_release_year(app, master_year):
+    unit = _carnaval()
+    unit.discogs_release.year = 1992
+    unit.discogs_release.master_year = master_year
+
+    assert build_item_specifics(unit)["Era"] == ["1990s"]
+
+
+def test_no_era_when_discogs_has_no_year(app):
+    unit = _carnaval()
+    unit.discogs_release.year = 0
+    unit.discogs_release.master_year = 0
+    specifics = build_item_specifics(unit)
+
+    assert "Era" not in specifics
+    assert "Release Year" not in specifics
+    assert specifics["Style"] == ["Fusion", "Jazz Funk"]
