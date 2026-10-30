@@ -14,8 +14,8 @@ from fbc.listing import (
 
 class ConnectEbayView(BaseView):
     """
-    Connect eBay, under Sales: the OAuth sign-in that eBay's REST APIs need,
-    for picture uploads (eBay Drafts) and order earnings (Ship This).
+    Connect eBay, under Sales: the OAuth sign-in every eBay call fbc makes
+    uses (syncing listings and orders, eBay Drafts, Ship This).
     """
 
     route_base = "/connectebay"
@@ -47,8 +47,7 @@ class ConnectEbayView(BaseView):
                     exchange_code(code)
                     session.pop("ebay_oauth_state", None)
                     flash(
-                        "Connected to eBay. Picture uploads and Ship This will"
-                        " work now.",
+                        "Connected to eBay.",
                         "success",
                     )
                 except OAuthError as e:

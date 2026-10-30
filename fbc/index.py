@@ -3,11 +3,11 @@ import logging
 
 import discogs_client
 from ebaysdk.exception import ConnectionError
-from ebaysdk.trading import Connection as Trading
-from flask import redirect, request
+from flask import flash, redirect, request
 from flask_appbuilder import IndexView
 from flask_appbuilder.views import expose
 
+from fbc.listing import OAuthError, trading
 from fbc.util import add_ebay_listing
 from fbc.util import add_ebay_order
 from fbc.util import add_discogs_release
@@ -76,7 +76,11 @@ class MyIndexView(IndexView):
             supply_total += po.price
         for u in db.session.query(Unit).all():
             if u.sales_receipt:
-                num_units = db.session.query(Unit).filter_by(sales_receipt=u.sales_receipt).count()
+                num_units = (
+                    db.session.query(Unit)
+                    .filter_by(sales_receipt=u.sales_receipt)
+                    .count()
+                )
                 c_sold_price = u.sales_receipt.sold_price / num_units
                 c_net_sold = u.sales_receipt.net_sold / num_units
                 if u.storage_box:
@@ -248,25 +252,16 @@ class MyIndexView(IndexView):
     @expose("/syncebaylistings")
     def syncebaylistings(self):
         self.update_redirect()
-        from fbc import app, db
+        from fbc import db
         from fbc.models.ebay import EbayListing
 
-        ebayconfig = app.config["EBAY_SETTINGS"]
         totalpages = 1
         currentpage = 1
         all_items = []
         while currentpage <= totalpages:
             logger.info("Getting page " + str(currentpage) + "...")
             try:
-                api = Trading(
-                    debug=False,
-                    config_file=None,
-                    appid=ebayconfig["APP_ID"],
-                    domain="api.ebay.com",
-                    certid=ebayconfig["CERT_ID"],
-                    devid=ebayconfig["DEV_ID"],
-                    token=ebayconfig["USER_TOKEN"],
-                )
+                api = trading(compatibility=None)
 
                 response = api.execute(
                     "GetMyeBaySelling",
@@ -288,6 +283,9 @@ class MyIndexView(IndexView):
                 )
                 logging.info("Total pages: " + str(totalpages))
                 all_items.extend(resp["ActiveList"]["ItemArray"]["Item"])
+            except OAuthError as e:
+                flash(str(e), "danger")
+                break
             except ConnectionError as e:
                 logging.error(e)
                 logging.error(e.response.dict())
@@ -352,27 +350,16 @@ class MyIndexView(IndexView):
 
     @expose("/syncebayorders")
     def syncebayorders(self):
-        from fbc import app
-
         doupdate = request.args.get("doupdate")
         self.update_redirect()
         if doupdate == "True":
             logger.info("Updating eBay orders...")
         else:
             logger.info("Adding new eBay orders...")
-        ebayconfig = app.config["EBAY_SETTINGS"]
         try:
             currentTime = datetime.datetime.now() + datetime.timedelta(days=1)
             startTime = currentTime + datetime.timedelta(days=-10)
-            api = Trading(
-                debug=False,
-                config_file=None,
-                appid=ebayconfig["APP_ID"],
-                domain="api.ebay.com",
-                certid=ebayconfig["CERT_ID"],
-                devid=ebayconfig["DEV_ID"],
-                token=ebayconfig["USER_TOKEN"],
-            )
+            api = trading(compatibility=None)
 
             response = api.execute(
                 "GetOrders",
@@ -383,6 +370,8 @@ class MyIndexView(IndexView):
                 },
             )
             self.doebaysync(doupdate, api, response)
+        except OAuthError as e:
+            flash(str(e), "danger")
         except ConnectionError as e:
             logging.error(e)
             logging.error(e.response.dict())
@@ -395,22 +384,11 @@ class MyIndexView(IndexView):
     @expose("/syncebayordersdeep")
     def syncebayordersdeep(self):
         self.update_redirect()
-        from fbc import app
-
         logger.info("Deep updating eBay orders...")
-        ebayconfig = app.config["EBAY_SETTINGS"]
         try:
             currentTime = datetime.datetime.now() + datetime.timedelta(days=1)
             startTime = currentTime + datetime.timedelta(days=-88)
-            api = Trading(
-                debug=False,
-                config_file=None,
-                appid=ebayconfig["APP_ID"],
-                domain="api.ebay.com",
-                certid=ebayconfig["CERT_ID"],
-                devid=ebayconfig["DEV_ID"],
-                token=ebayconfig["USER_TOKEN"],
-            )
+            api = trading(compatibility=None)
 
             response = api.execute(
                 "GetOrders",
@@ -421,6 +399,8 @@ class MyIndexView(IndexView):
                 },
             )
             self.doebaysync("False", api, response)
+        except OAuthError as e:
+            flash(str(e), "danger")
         except ConnectionError as e:
             logging.error(e)
             logging.error(e.response.dict())

@@ -34,7 +34,6 @@ def _install_fake_config():
         "APP_ID": "test-app-id",
         "DEV_ID": "test-dev-id",
         "CERT_ID": "test-cert-id",
-        "USER_TOKEN": "test-user-token",
     }
     config.DISCOGS_SETTINGS = {
         "USER_TOKEN": "test-discogs-token",

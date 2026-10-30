@@ -209,8 +209,8 @@ class EbayDraft(Model):
 
 class EbayOAuthToken(Model):
     """
-    An OAuth refresh token from Connect eBay. eBay's REST APIs (picture
-    uploads) need OAuth; the newest row is the one used.
+    An OAuth refresh token from Connect eBay, which every eBay call fbc
+    makes is signed in with; the newest row is the one used.
     """
 
     __tablename__ = "ebay_oauth_token"
