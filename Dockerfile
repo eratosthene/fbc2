@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.10-alpine
+FROM python:3.12-alpine
 
 COPY ./requirements.txt /app/requirements.txt
 
@@ -19,7 +19,7 @@ COPY ./fbc /app/fbc
 COPY ./migrations /app/migrations
 COPY --chmod=755 ./docker-entrypoint.sh /app/docker-entrypoint.sh
 
-ENV STATIC_PATH=/usr/local/lib/python3.10/site-packages/flask_appbuilder/static
+ENV STATIC_PATH=/usr/local/lib/python3.12/site-packages/flask_appbuilder/static
 ENV LOG_LEVEL=info
 ENV FLASK_APP=fbc
 
