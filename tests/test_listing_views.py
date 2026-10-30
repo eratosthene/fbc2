@@ -110,7 +110,12 @@ def _no_account_profiles():
     return (
         {"shipping": [], "return": [], "payment": []},
         {"errors": [], "warnings": [], "fees": []},
-        {"ack": "Success", "returned_preferences": False, "opted_in": None, "profile_count": 0},
+        {
+            "ack": "Success",
+            "returned_preferences": False,
+            "opted_in": None,
+            "profile_count": 0,
+        },
     )
 
 
@@ -120,7 +125,12 @@ def test_policies_page_lists_profile_ids(client, monkeypatch):
         lambda: (
             {"shipping": [("111", "Media Mail")], "return": [], "payment": []},
             {"errors": [], "warnings": [], "fees": []},
-            {"ack": "Success", "returned_preferences": True, "opted_in": "true", "profile_count": 1},
+            {
+                "ack": "Success",
+                "returned_preferences": True,
+                "opted_in": "true",
+                "profile_count": 1,
+            },
         ),
     )
     html = client.get("/ebaydraftmodelview/policies").get_data(as_text=True)
@@ -153,7 +163,11 @@ def test_policies_page_shows_policy_ids_off_the_newest_listing(client, monkeypat
     def fake_listing_details(item_id):
         asked.append(item_id)
         return (
-            {"shipping": ("111", "Media Mail"), "return": ("222", "No returns"), "payment": None},
+            {
+                "shipping": ("111", "Media Mail"),
+                "return": ("222", "No returns"),
+                "payment": None,
+            },
             {},
             {"errors": [], "warnings": [], "fees": []},
         )
@@ -241,9 +255,7 @@ def test_pasted_address_is_exchanged(client, exchanged):
 def test_ebay_redirecting_straight_back_is_exchanged(client, exchanged):
     client.get("/connectebay/")
 
-    client.get(
-        "/connectebay/?state=" + _state(client) + "&code=abc&expires_in=299"
-    )
+    client.get("/connectebay/?state=" + _state(client) + "&code=abc&expires_in=299")
 
     assert exchanged == ["abc"]
 
@@ -327,9 +339,13 @@ def test_checked_fees_are_shown_as_an_estimate_with_discounts(client):
             "fee_total": {"amount": 0.35, "discount": 0.35, "net": 0.0},
         }
     )
-    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(as_text=True)
+    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
+        as_text=True
+    )
 
-    assert "These are eBay&#39;s estimate." in html or "These are eBay's estimate." in html
+    assert (
+        "These are eBay&#39;s estimate." in html or "These are eBay's estimate." in html
+    )
     assert "Insertion fee" in html
     assert "&minus;$0.35" in html
     assert "<th>Total</th>" in html
@@ -343,7 +359,9 @@ def test_fees_saved_before_discounts_still_show(client):
             "fees": [{"name": "InsertionFee", "amount": 0.35}],
         }
     )
-    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(as_text=True)
+    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
+        as_text=True
+    )
 
     assert "InsertionFee" in html
     assert "$0.35" in html

@@ -203,9 +203,7 @@ def test_unit_add_handles_none_master_id(app, db):
 def test_add_unit_form_prefills_retail_price_from_query_args(app):
     from fbc import appbuilder
 
-    view = next(
-        v for v in appbuilder.baseviews if type(v).__name__ == "UnitModelView"
-    )
+    view = next(v for v in appbuilder.baseviews if type(v).__name__ == "UnitModelView")
     with app.test_request_context("/?retail_price=25.50"):
         form = view.add_form.refresh()
         assert form.retail_price.data == 25.5

@@ -104,7 +104,9 @@ def test_add_ebay_order_is_idempotent_for_existing_order(app):
 
 
 def test_find_relisted_listing_matches_by_title_when_old_item_gone(app):
-    add_ebay_listing(_ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP"))
+    add_ebay_listing(
+        _ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP")
+    )
     old_listing = db.session.query(EbayListing).filter_by(item_id="OLD-1").first()
     _make_unit(sold=False, ebay_listing_id="OLD-1")
 
@@ -116,7 +118,9 @@ def test_find_relisted_listing_matches_by_title_when_old_item_gone(app):
 
 
 def test_find_relisted_listing_ignores_old_item_still_active(app):
-    add_ebay_listing(_ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP"))
+    add_ebay_listing(
+        _ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP")
+    )
     _make_unit(sold=False, ebay_listing_id="OLD-1")
 
     new_item = _ebay_listing_payload(item_id="NEW-1", title="Manhattan Transfer LP")
@@ -128,7 +132,9 @@ def test_find_relisted_listing_ignores_old_item_still_active(app):
 
 
 def test_find_relisted_listing_ignores_listing_with_no_unit(app):
-    add_ebay_listing(_ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP"))
+    add_ebay_listing(
+        _ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP")
+    )
 
     new_item = _ebay_listing_payload(item_id="NEW-1", title="Manhattan Transfer LP")
     match = find_relisted_listing(new_item, remote_item_ids={"NEW-1"})
@@ -137,7 +143,9 @@ def test_find_relisted_listing_ignores_listing_with_no_unit(app):
 
 
 def test_find_relisted_listing_ignores_listing_with_sold_unit(app):
-    add_ebay_listing(_ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP"))
+    add_ebay_listing(
+        _ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP")
+    )
     _make_unit(sold=True, ebay_listing_id="OLD-1")
 
     new_item = _ebay_listing_payload(item_id="NEW-1", title="Manhattan Transfer LP")
@@ -147,8 +155,12 @@ def test_find_relisted_listing_ignores_listing_with_sold_unit(app):
 
 
 def test_find_relisted_listing_is_none_when_ambiguous(app):
-    add_ebay_listing(_ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP"))
-    add_ebay_listing(_ebay_listing_payload(item_id="OLD-2", title="Manhattan Transfer LP"))
+    add_ebay_listing(
+        _ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP")
+    )
+    add_ebay_listing(
+        _ebay_listing_payload(item_id="OLD-2", title="Manhattan Transfer LP")
+    )
     _make_unit(sold=False, ebay_listing_id="OLD-1")
     _make_unit(sold=False, ebay_listing_id="OLD-2")
 
@@ -159,7 +171,9 @@ def test_find_relisted_listing_is_none_when_ambiguous(app):
 
 
 def test_relist_ebay_listing_repoints_unit_and_removes_old_listing(app):
-    add_ebay_listing(_ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP"))
+    add_ebay_listing(
+        _ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP")
+    )
     old_listing = db.session.query(EbayListing).filter_by(item_id="OLD-1").first()
     unit = _make_unit(sold=False, ebay_listing_id="OLD-1")
 
@@ -175,7 +189,9 @@ def test_relist_ebay_listing_repoints_unit_and_removes_old_listing(app):
 
 
 def test_relist_ebay_listing_repoints_existing_orders(app):
-    add_ebay_listing(_ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP"))
+    add_ebay_listing(
+        _ebay_listing_payload(item_id="OLD-1", title="Manhattan Transfer LP")
+    )
     old_listing = db.session.query(EbayListing).filter_by(item_id="OLD-1").first()
     add_ebay_order(_ebay_order_payload(order_id="O-1", item_id="OLD-1"))
 

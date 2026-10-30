@@ -348,12 +348,13 @@ class CustomForm(FlaskForm):
         form = cls(**kw)
         return form
 
+
 class CustomModelView(ModelView):
     """
     A custom ModelView which overrides the various CRUD templates
     """
-    
-    list_template = 'crud/list.html'
-    edit_template = 'crud/edit.html'
-    add_template = 'crud/add.html'
-    show_template = 'crud/show.html'
+
+    list_template = "crud/list.html"
+    edit_template = "crud/edit.html"
+    add_template = "crud/add.html"
+    show_template = "crud/show.html"

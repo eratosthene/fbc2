@@ -162,6 +162,7 @@ class StorageBox(Model):
 class Unit(Model):
     from fbc.models.ebay import EbayListing
     from fbc.models.sales import SalesReceipt
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     old_id = Column(String(24))
     name = Column(String(200), nullable=False, index=True)
@@ -176,9 +177,7 @@ class Unit(Model):
     )
     discogs_instance = relationship("DiscogsInstance")
     discogs_master = Column(String(21), index=True)
-    ebay_listing_id = Column(
-        String(20), ForeignKey("ebay_listing.item_id"), index=True
-    )
+    ebay_listing_id = Column(String(20), ForeignKey("ebay_listing.item_id"), index=True)
     ebay_listing = relationship("EbayListing")
     purchase_lot_id = Column(Integer, ForeignKey("purchase_lot.id"), index=True)
     purchase_lot = relationship("PurchaseLot")
@@ -256,10 +255,12 @@ class Unit(Model):
     def master_show(self, markup=True):
         s = (
             '<a href="'
-            + url_for("UnitModelView.list", _flt_3_discogs_master=str(self.discogs_master))
+            + url_for(
+                "UnitModelView.list", _flt_3_discogs_master=str(self.discogs_master)
+            )
             + '">Filter:Master</a><br>'
         )
-        if self.discogs_master.startswith('r'):
+        if self.discogs_master.startswith("r"):
             s = s + (
                 '<a href="https://www.discogs.com/release/'
                 + str(self.discogs_master[1:])
@@ -279,17 +280,9 @@ class Unit(Model):
     def link_column(self):
         ret = ""
         if self.discogs_release:
-            ret = (
-                ret
-                + self.discogs_release.release_show(False)
-                + "<br/>"
-            )
+            ret = ret + self.discogs_release.release_show(False) + "<br/>"
         if self.discogs_master:
-            ret = (
-                ret
-                + self.master_show(False)
-                + "<br/>"
-            )
+            ret = ret + self.master_show(False) + "<br/>"
         if self.ebay_listing:
             ret = (
                 ret
@@ -318,7 +311,7 @@ class Unit(Model):
             if self.sales_receipt.ebay_order:
                 ret = ret + self.sales_receipt.fmt_ebay_order(False)
         return Markup(ret)
-        
+
     def discogs_genre_column(self):
         ret = ""
         if self.discogs_release:
@@ -330,6 +323,6 @@ class Unit(Model):
                 g.append(str(a))
             for a in styles:
                 s.append(str(a))
-            l = list(set(g).union(s))
-            ret = ', '.join(l)
+            names = list(set(g).union(s))
+            ret = ", ".join(names)
         return Markup(ret)

@@ -27,7 +27,7 @@ from fbc.util import CustomForm
 class SalesReceiptModelView(CustomModelView):
     datamodel = SQLAInterface(SalesReceipt)
     related_views = [UnitModelView]
-    base_order = ('date', 'desc')
+    base_order = ("date", "desc")
     list_columns = ["date", "link_column", "fmt_sold_price", "fmt_net_sold"]
     label_columns = {
         "link_column": "Order Link",
@@ -43,7 +43,7 @@ class SalesReceiptModelView(CustomModelView):
 
 class EbayListingModelView(CustomModelView):
     datamodel = SQLAInterface(EbayListing)
-    base_order = ('start_time', 'desc')
+    base_order = ("start_time", "desc")
     list_widget = EbayListingListWidget
     list_columns = ["item_id", "title", "start_time", "fmt_price", "fmt_url"]
     search_columns = ["item_id", "price", "title"]
@@ -59,7 +59,7 @@ class EbayListingModelView(CustomModelView):
 
 class EbayOrderModelView(CustomModelView):
     datamodel = SQLAInterface(EbayOrder)
-    base_order = ('created_time', 'desc')
+    base_order = ("created_time", "desc")
     list_widget = EbayOrderListWidget
     list_columns = ["created_time", "fmt_url", "title", "buyer", "fmt_price", "links"]
     search_columns = ["order_id", "price", "title", "buyer"]

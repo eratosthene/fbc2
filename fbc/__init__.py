@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 import logging
 import os
 from flask import render_template
@@ -40,6 +41,8 @@ def favicon():
 db.create_all()
 
 
+# The views below import the models, which need `db` and `appbuilder` to exist
+# first, so these imports can't move to the top of the file.
 from fbc.views.discogs import (
     DiscogsReleaseModelView,
     DiscogsReleaseModelNoUnitView,
@@ -64,7 +67,6 @@ from fbc.views.inventory import (
     PurchaseLotModelView,
     StorageBoxModelView,
     UnitModelNoListingView,
-    UnitModelNoDiscogsView,
     UnitModelNoMasterView,
     UnitModelReboxView,
 )
