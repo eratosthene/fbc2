@@ -122,7 +122,43 @@ EBAY_SETTINGS = {
     'APP_ID': '',
     'DEV_ID': '',
     'CERT_ID': '',
-    'USER_TOKEN': ''
+    'USER_TOKEN': '',
+    # eBay's REST APIs (picture uploads) need OAuth. Set RUNAME to the app's
+    # eBay Redirect URL name (developer.ebay.com > User Tokens), then use
+    # Sales > eBay Drafts > Connect eBay; the token it gets is kept in the
+    # database. OAUTH_REFRESH_TOKEN, if set, is used only until then.
+    'RUNAME': '',
+    'OAUTH_REFRESH_TOKEN': '',
+    # Used when publishing a Unit as a listing (eBay Drafts). See
+    # Sales > eBay Drafts > Shipping & Returns for the values to use.
+    'LISTING': {
+        'CATEGORY_ID': '176985',  # Music > Vinyl Records
+        # Without business policies: an existing listing whose shipping,
+        # returns and handling time new listings copy.
+        'TEMPLATE_ITEM_ID': '',
+        # With business policies: the three policy IDs (these win over
+        # TEMPLATE_ITEM_ID when all are set).
+        'SHIPPING_PROFILE_ID': '',
+        'RETURN_PROFILE_ID': '',
+        'PAYMENT_PROFILE_ID': '',
+        'POSTAL_CODE': '',
+        'LOCATION': '',
+        'BEST_OFFER': True,
+        # Starting package weight for a draft, in ounces packed per disc, by
+        # record size: a 12" double LP starts at 2 x 16 = 32 oz (eBay needs a
+        # weight for calculated shipping). Optionally also 'LENGTH', 'WIDTH',
+        # 'DEPTH' in inches and a 'TYPE' such as 'PackageThickEnvelope'.
+        'PACKAGE': {
+            'WEIGHT_OZ': {'12"': 16, '10"': 16, '7"': 8},
+        },
+        # Item specifics added to every listing when fbc can't work them out.
+        'DEFAULT_SPECIFICS': {
+            'Format': ['Record'],
+            'Material': ['Vinyl'],
+            'Case Type': ['Cardboard Sleeve'],
+            'Color': ['Black'],
+        },
+    },
 }
 
 # discogs settings

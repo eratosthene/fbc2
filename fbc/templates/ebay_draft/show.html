@@ -1,0 +1,75 @@
+{% extends "crud/show.html" %}
+{% block show_form %}
+{{ super() }}
+<hr>
+<h4>Pictures <small>{{ draft.picture_list()|length }} of 24. The first one is the main picture.</small></h4>
+<div class="row">
+  {% for url in draft.picture_list() %}
+  <div class="col-xs-6 col-sm-3" style="margin-bottom: 15px">
+    <a href="{{ url }}"><img src="{{ url }}" class="img-responsive img-thumbnail"></a>
+    {% if draft.status == "draft" %}
+    <form method="post" action="{{ url_for('EbayDraftModelView.picture', pk=draft.id, index=loop.index0, action='first') }}" style="display: inline">
+      <button class="btn btn-xs btn-default" {% if loop.first %}disabled{% endif %}>Make main</button>
+    </form>
+    <form method="post" action="{{ url_for('EbayDraftModelView.picture', pk=draft.id, index=loop.index0, action='remove') }}" style="display: inline">
+      <button class="btn btn-xs btn-danger">Remove</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% if draft.status == "draft" %}
+<form method="post" enctype="multipart/form-data" action="{{ url_for('EbayDraftModelView.pictures', pk=draft.id) }}" class="form-inline">
+  <input type="file" name="pictures" accept="image/*" multiple class="form-control">
+  <button class="btn btn-default">Upload to eBay</button>
+</form>
+<hr>
+<a href="{{ url_for('EbayDraftModelView.edit', pk=draft.id) }}" class="btn btn-default">Edit</a>
+<form method="post" action="{{ url_for('EbayDraftModelView.verify', pk=draft.id) }}" style="display: inline">
+  <button class="btn btn-info">Check with eBay</button>
+</form>
+<form method="post" action="{{ url_for('EbayDraftModelView.publish', pk=draft.id) }}" style="display: inline">
+  <button class="btn btn-primary" {% if problems %}disabled{% endif %}>Publish to eBay (goes live)</button>
+</form>
+{% if problems %}
+<ul class="text-warning" style="margin-top: 10px">
+  {% for p in problems %}<li>{{ p }}</li>{% endfor %}
+</ul>
+{% endif %}
+{% endif %}
+{% if result %}
+<h4>Last eBay response</h4>
+{% for e in result.errors %}<div class="alert alert-danger">{{ e }}</div>{% endfor %}
+{% for w in result.warnings %}<div class="alert alert-warning">{{ w }}</div>{% endfor %}
+{% if result.fees %}
+{% if result.source == "verify" %}
+<p class="text-muted">These are eBay's estimate. Check with eBay may leave out discounts
+such as your free monthly insertions, which are applied when you publish; Seller Hub
+shows what you were actually charged.</p>
+{% elif result.source == "publish" %}
+<p class="text-muted">The fees eBay reported when it listed this.</p>
+{% endif %}
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>Fee</th><th>Amount</th><th>Discount</th><th>You pay</th></tr>
+  {% for f in result.fees %}
+  <tr>
+    <td>{{ f.label or f.name }}</td>
+    <td>${{ "%.2f"|format(f.amount) }}</td>
+    <td>{% if f.discount %}&minus;${{ "%.2f"|format(f.discount) }}{% endif %}</td>
+    <td>${{ "%.2f"|format(f.net if f.net is defined else f.amount) }}</td>
+  </tr>
+  {% endfor %}
+  {% if result.fee_total %}
+  <tr>
+    <th>Total</th>
+    <th>${{ "%.2f"|format(result.fee_total.amount) }}</th>
+    <th>{% if result.fee_total.discount %}&minus;${{ "%.2f"|format(result.fee_total.discount) }}{% endif %}</th>
+    <th>${{ "%.2f"|format(result.fee_total.net) }}</th>
+  </tr>
+  {% endif %}
+</table>
+{% elif not result.errors %}
+<p>No listing fees.</p>
+{% endif %}
+{% endif %}
+{% endblock show_form %}

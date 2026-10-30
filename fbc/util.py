@@ -36,11 +36,30 @@ def add_ebay_listing(item):
             item_id=item_id, title=title, price=price, url=url, start_time=d
         )
         db.session.add(ebay_listing)
+        link_unit_by_sku(item)
     else:
         logger.debug("Listing already exists!")
     db.session.commit()
     db.session.refresh(ebay_listing)
     logger.debug(ebay_listing)
+
+
+def link_unit_by_sku(item):
+    """
+    Listings published from fbc carry the Unit's id in their Custom label
+    (SKU). Link such a listing to its Unit if the Unit has no listing yet.
+    """
+    from fbc import db
+    from fbc.listing import unit_id_from_sku
+    from fbc.models.inventory import Unit
+
+    unit_id = unit_id_from_sku(item.get("SKU"))
+    if unit_id is None:
+        return
+    unit = db.session.query(Unit).get(unit_id)
+    if unit and not unit.ebay_listing_id:
+        unit.ebay_listing_id = item["ItemID"]
+        logger.info("Linked unit " + str(unit_id) + " to " + str(item["ItemID"]))
 
 
 def find_relisted_listing(item, remote_item_ids):
@@ -213,6 +232,10 @@ def add_discogs_release(item):
         master_id = item.release.master.id
         master_year = item.release.master.year
     date_added = item.date_added
+    labels = json.dumps(
+        [{"name": label.name, "catno": label.catno} for label in item.release.labels]
+    )
+    country = item.release.country
     # TODO: make this whole thing atomic instead of if/then
     discogs_release = (
         db.session.query(DiscogsRelease).filter_by(release_id=item.id).first()
@@ -247,6 +270,8 @@ def add_discogs_release(item):
         discogs_release.master_id = master_id
         discogs_release.master_year = master_year
         discogs_release.formats = json.dumps(item.release.formats)
+        discogs_release.labels = labels
+        discogs_release.country = country
         discogs_release.released = item.release.fetch("released")
         discogs_release.folder_id = folder_id
         discogs_release.notes = json.dumps(item.notes)
@@ -263,6 +288,8 @@ def add_discogs_release(item):
             master_id=master_id,
             master_year=master_year,
             formats=json.dumps(item.release.formats),
+            labels=labels,
+            country=country,
             released=item.release.fetch("released"),
             folder_id=folder_id,
             notes=json.dumps(item.notes),

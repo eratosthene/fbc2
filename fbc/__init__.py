@@ -53,6 +53,7 @@ from fbc.views.sales import (
     EbayListingModelView,
     SalesReceiptModelView,
 )
+from fbc.views.listing import EbayDraftModelView
 from fbc.views.supplies import (
     SupplyModelView,
     PurchaseOrderModelView,
@@ -86,5 +87,6 @@ appbuilder.add_view(FolderModelView, "Folders", category="Discogs")
 appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
 appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
 appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
+appbuilder.add_view(EbayDraftModelView, "eBay Drafts", category="Sales")
 appbuilder.add_view(SupplyModelView, "Supply List", category="Supplies")
 appbuilder.add_view(PurchaseOrderModelView, "Purchase Orders", category="Supplies")

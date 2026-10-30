@@ -1,14 +1,18 @@
+import json
 import logging
 
 from flask_appbuilder import Model
 from markupsafe import Markup
 from flask import url_for
 from sqlalchemy import (
+    Boolean,
     Column,
-    String,
-    ForeignKey,
-    Float,
     DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 
@@ -135,3 +139,76 @@ class EbayOrder(Model):
                     retval = retval + "<br>" + o.discogs_release.release_show(False)
 
         return Markup(retval)
+
+
+class EbayDraft(Model):
+    """
+    A listing being prepared for a Unit. It stays here, never on eBay, until
+    it has pictures and is published.
+    """
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    unit_id = Column(Integer, ForeignKey("unit.id"), nullable=False, index=True)
+    unit = relationship("Unit")
+    title = Column(String(80), nullable=False)
+    price = Column(Float)
+    best_offer = Column(Boolean, default=True)
+    description = Column(Text)
+    item_specifics = Column(Text)
+    # Package weight in ounces, packing included.
+    weight_oz = Column(Integer)
+    # JSON list of eBay-hosted picture URLs, in listing order.
+    pictures = Column(Text)
+    status = Column(String(20), default="draft", index=True)
+    # The last Verify/Publish outcome from eBay: errors, warnings and fees.
+    messages = Column(Text)
+    ebay_listing_id = Column(String(20), ForeignKey("ebay_listing.item_id"))
+    ebay_listing = relationship("EbayListing")
+
+    def __unicode__(self):
+        return self.title
+
+    def __repr__(self):
+        return self.title
+
+    def picture_list(self):
+        if not self.pictures:
+            return []
+        return json.loads(self.pictures)
+
+    def set_picture_list(self, urls):
+        self.pictures = json.dumps(urls)
+
+    def fmt_price(self):
+        if self.price is None:
+            return None
+        return "$" + f"{self.price:.2f}"
+
+    def picture_count(self):
+        return len(self.picture_list())
+
+    def link_column(self):
+        ret = (
+            '<a href="'
+            + url_for("UnitModelView.show", pk=str(self.unit_id))
+            + '">Unit</a>'
+        )
+        if self.ebay_listing:
+            ret = ret + '<br><a href="' + self.ebay_listing.url + '">eBay:Listing</a>'
+        return Markup(ret)
+
+
+class EbayOAuthToken(Model):
+    """
+    An OAuth refresh token from Connect eBay. eBay's REST APIs (picture
+    uploads) need OAuth; the newest row is the one used.
+    """
+
+    __tablename__ = "ebay_oauth_token"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    refresh_token = Column(Text, nullable=False)
+    expires = Column(DateTime)
+    created = Column(DateTime)
+
+    def __repr__(self):
+        return "EbayOAuthToken " + str(self.id)

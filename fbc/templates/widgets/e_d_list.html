@@ -1,0 +1,5 @@
+{% extends 'appbuilder/general/widgets/list.html' %} {% block list_header %} {{
+super() }}
+<a href="{{ url_for('EbayDraftModelView.policies') }}" class="btn btn-sm btn-default">Shipping &amp; Returns</a>
+<a href="{{ url_for('EbayDraftModelView.oauth') }}" class="btn btn-sm btn-default">Connect eBay</a>
+{% endblock %}
