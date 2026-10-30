@@ -2,7 +2,10 @@ import sys
 
 sys.path.insert(0, "..")
 from fbc.models.inventory import Unit
-from fbc import db
+from fbc import app, db
+
+# db.session needs an app context.
+app.app_context().push()
 
 units = db.session.query(Unit).all()
 for unit in units:

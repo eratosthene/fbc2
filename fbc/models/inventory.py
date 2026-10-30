@@ -17,6 +17,7 @@ from fbc.util import fpercent, fprice
 
 
 class PurchaseLot(Model):
+    __tablename__ = "purchase_lot"
     id = Column(Integer, primary_key=True, autoincrement=True)
     old_id = Column(String(24))
     name = Column(String(100), nullable=False)
@@ -157,6 +158,7 @@ class PurchaseLot(Model):
 
 
 class StorageBox(Model):
+    __tablename__ = "storage_box"
     id = Column(Integer, primary_key=True, autoincrement=True)
     old_id = Column(String(24))
     name = Column(String(100), nullable=False)
@@ -169,6 +171,8 @@ class StorageBox(Model):
 
 
 class Unit(Model):
+    __tablename__ = "unit"
+
     from fbc.models.ebay import EbayListing
     from fbc.models.sales import SalesReceipt
 

@@ -127,7 +127,7 @@ class EbayDraftModelView(CustomModelView):
         from fbc import db
         from fbc.models.inventory import Unit
 
-        unit = db.session.query(Unit).get(pk)
+        unit = db.session.get(Unit, pk)
         if not unit:
             abort(404)
         draft = (

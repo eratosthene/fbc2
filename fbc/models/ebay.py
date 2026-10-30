@@ -20,6 +20,7 @@ logger = logging.getLogger()
 
 
 class EbayListing(Model):
+    __tablename__ = "ebay_listing"
     item_id = Column(String(20), primary_key=True, unique=True)
     title = Column(String(100))
     price = Column(Float)
@@ -40,6 +41,7 @@ class EbayListing(Model):
 
 
 class EbayOrder(Model):
+    __tablename__ = "ebay_order"
     order_id = Column(String(20), primary_key=True, unique=True)
     created_time = Column(DateTime)
     buyer = Column(String(50))
@@ -156,6 +158,7 @@ class EbayDraft(Model):
     it has pictures and is published.
     """
 
+    __tablename__ = "ebay_draft"
     id = Column(Integer, primary_key=True, autoincrement=True)
     unit_id = Column(Integer, ForeignKey("unit.id"), nullable=False, index=True)
     unit = relationship("Unit")

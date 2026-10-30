@@ -20,6 +20,7 @@ logger = logging.getLogger()
 
 
 class Artist(Model):
+    __tablename__ = "artist"
     artist_id = Column(Integer, primary_key=True, unique=True)
     name = Column(String(100), nullable=False)
     sort_name = Column(String(100))
@@ -38,6 +39,7 @@ class Artist(Model):
 
 
 class Genre(Model):
+    __tablename__ = "genre"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False, unique=True)
 
@@ -49,6 +51,7 @@ class Genre(Model):
 
 
 class Style(Model):
+    __tablename__ = "style"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False, unique=True)
 
@@ -60,6 +63,7 @@ class Style(Model):
 
 
 class Folder(Model):
+    __tablename__ = "folder"
     folder_id = Column(Integer, primary_key=True, unique=True)
     name = Column(String(100), nullable=False)
 
@@ -71,6 +75,7 @@ class Folder(Model):
 
 
 class DiscogsInstance(Model):
+    __tablename__ = "discogs_instance"
     instance_id = Column(BigInteger, primary_key=True, unique=True)
 
     def __unicode__(self):
@@ -81,6 +86,8 @@ class DiscogsInstance(Model):
 
 
 class DiscogsRelease(Model):
+    __tablename__ = "discogs_release"
+
     from fbc import db
 
     assoc_artist_discogs_release = db.Table(

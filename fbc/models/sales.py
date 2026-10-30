@@ -5,6 +5,7 @@ from sqlalchemy.orm import relationship
 
 
 class SalesReceipt(Model):
+    __tablename__ = "sales_receipt"
     id = Column(Integer, primary_key=True, autoincrement=True)
     old_id = Column(String(24))
     date = Column(Date, nullable=False)
