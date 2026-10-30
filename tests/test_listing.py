@@ -1178,12 +1178,20 @@ def test_parse_type(unit_type, types):
     assert listing.parse_type(unit_type) == types
 
 
-def test_pressing_country_wins_over_discogs(app):
+def test_discogs_country_wins_over_pressing(app):
     unit = _carnaval(pressing="Canada Reissue")
     specifics = build_item_specifics(unit)
 
-    assert specifics["Country of Origin"] == ["Canada"]
+    assert specifics["Country of Origin"] == ["United States"]
     assert specifics["Edition"] == ["Reissue"]
+
+
+@pytest.mark.parametrize("discogs_country", [None, ""])
+def test_pressing_country_when_discogs_has_none(app, discogs_country):
+    unit = _carnaval(pressing="Canada Reissue")
+    unit.discogs_release.country = discogs_country
+
+    assert build_item_specifics(unit)["Country of Origin"] == ["Canada"]
 
 
 def test_discogs_country_when_pressing_names_none(app):
@@ -1215,3 +1223,70 @@ def test_title_uses_the_parsed_edition(app):
 
     assert title.startswith("Spyro Gyra - Carnaval 1980 Reissue Vinyl LP ")
     assert "UK" not in title
+
+
+def _vinyl(qty, descriptions=("LP", "Album")):
+    return json.dumps([{"name": "Vinyl", "qty": str(qty), "descriptions": list(descriptions)}])
+
+
+@pytest.mark.parametrize("qty,expected", [(1, "LP"), (2, "Double LP"), (3, "Triple LP")])
+def test_discogs_disc_count_sets_double_and_triple_lp(app, qty, expected):
+    unit = _carnaval()
+    unit.discogs_release.formats = _vinyl(qty)
+    specifics = build_item_specifics(unit)
+
+    assert specifics["Type"] == [expected]
+    assert specifics["Speed"] == ["33 RPM"]
+
+
+def test_title_says_double_lp(app):
+    unit = _carnaval()
+    unit.discogs_release.formats = _vinyl(2)
+
+    assert "1980 First Edition Vinyl Double LP " in build_title(unit)
+
+
+def test_discogs_disc_count_wins_over_unit_type(app):
+    unit = _carnaval(unit_type='12" Double LP')
+    unit.discogs_release.formats = _vinyl(1)
+
+    assert build_item_specifics(unit)["Type"] == ["LP"]
+    assert listing.disc_count(unit) == 1
+
+
+@pytest.mark.parametrize(
+    "unit_type,expected",
+    [
+        ('12" Double LP', "Double LP"),
+        ('12" Triple LP', "Triple LP"),
+        ('12" 2xLP', "Double LP"),
+        ('12" LP', "LP"),
+    ],
+)
+def test_without_discogs_formats_discs_come_from_unit_type(app, unit_type, expected):
+    unit = _carnaval(unit_type=unit_type)
+    unit.discogs_release.formats = None
+
+    assert build_item_specifics(unit)["Type"] == [expected]
+
+
+def test_pressing_is_not_used_for_the_disc_count(app):
+    unit = _carnaval(unit_type='12" LP', pressing="US Original 2xLP")
+    unit.discogs_release.formats = None
+
+    assert listing.disc_count(unit) == 1
+    assert build_item_specifics(unit)["Type"] == ["LP"]
+
+
+def test_a_two_disc_single_stays_a_single(app):
+    unit = _carnaval(unit_type='7" Single')
+    unit.discogs_release.formats = _vinyl(2, ['7"', "Single"])
+
+    assert build_item_specifics(unit)["Type"] == ["Single"]
+
+
+def test_more_than_three_lps_stay_lp(app):
+    unit = _carnaval()
+    unit.discogs_release.formats = _vinyl(4)
+
+    assert build_item_specifics(unit)["Type"] == ["LP"]

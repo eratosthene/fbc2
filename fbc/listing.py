@@ -310,26 +310,25 @@ def build_item_specifics(unit, defaults=None):
             genres.extend(GENRES.get(g.name, [g.name]))
         put("Genre", *genres)
         put("Style", decade(original_year), *[s.name for s in release.styles])
-    # Where the copy was pressed: the Pressing's leading country, else
-    # Discogs' country for the release.
+    # Where the copy was pressed: Discogs' country for the release, else the
+    # Pressing's leading country.
     editions, pressing_country = parse_pressing(unit.pressing)
     discogs_country = release.country if release else None
     put(
         "Country of Origin",
-        pressing_country or COUNTRIES.get(discogs_country, discogs_country),
+        COUNTRIES.get(discogs_country, discogs_country) or pressing_country,
     )
 
     descriptions, text = _format_descriptions(release)
     unit_type = unit.unit_type or ""
-    put("Type", *parse_type(unit_type))
-    put("Type", *[t for t in TYPES if t in descriptions])
+    put("Type", *record_types(unit))
     put("Record Size", *[s for s in SIZES if s in descriptions])
     put("Record Size", *[s for s in SIZES if unit_type.startswith(s)])
     for d in descriptions:
         m = re.match(r"(\d+)", d)
         if m and "RPM" in d:
             put("Speed", m.group(1) + " RPM")
-    if "LP" in specifics.get("Type", []):
+    if any(t.endswith("LP") for t in specifics.get("Type", [])):
         put("Speed", "33 RPM")
     put("Number of Audio Channels", *[c for c in CHANNELS if c in descriptions])
     put("Color", *[c for c in COLORS if c.lower() in text.lower()])
@@ -383,7 +382,7 @@ def build_title(unit):
         head = unit.name
         year = ""
         styles = []
-    kind = (parse_type(unit.unit_type) or [""])[0]
+    kind = (record_types(unit) or [""])[0]
     record, _ = split_grading(unit.grading)
     # "First Edition" or "Reissue", as parsed for the Edition specific.
     edition = (parse_pressing(unit.pressing)[0] or [""])[0]
@@ -471,11 +470,24 @@ def build_item(draft, settings, template=None):
     return item
 
 
+def _discs_in_text(text):
+    """A disc count written in free text: "Double", "Triple", "2xLP", "2 x LP"."""
+    text = (text or "").lower()
+    if "triple" in text:
+        return 3
+    if "double" in text:
+        return 2
+    m = re.search(r"\b([2-9])\s*[x×]?\s*lp", text)
+    if m:
+        return int(m.group(1))
+    return None
+
+
 def disc_count(unit):
     """
     How many records the Unit is: the quantities of its Discogs Vinyl
-    formats ("2 x Vinyl, LP"), else "Double"/"Triple"/"2xLP" in the unit
-    type, else 1.
+    formats ("2 x Vinyl, LP"), else a count in its Unit Type ("Double",
+    "Triple", "2xLP"), else 1.
     """
     release = unit.discogs_release
     if release and release.formats:
@@ -492,15 +504,25 @@ def disc_count(unit):
                     count += 1
         if count:
             return count
-    unit_type = (unit.unit_type or "").lower()
-    if "triple" in unit_type:
-        return 3
-    if "double" in unit_type:
-        return 2
-    m = re.search(r"\b([2-9])\s*[x×]?\s*lp", unit_type)
-    if m:
-        return int(m.group(1))
-    return 1
+    return _discs_in_text(unit.unit_type) or 1
+
+
+# eBay's Type for an LP that's more than one disc.
+MULTI_DISC_TYPES = {2: "Double LP", 3: "Triple LP"}
+
+
+def record_types(unit):
+    """
+    The Type values for `unit`: from its Unit Type, else Discogs' format
+    descriptions, with an LP of 2 or 3 discs (see disc_count) made a
+    "Double LP" or "Triple LP".
+    """
+    descriptions, _ = _format_descriptions(unit.discogs_release)
+    types = parse_type(unit.unit_type) or [t for t in TYPES if t in descriptions]
+    multi = MULTI_DISC_TYPES.get(disc_count(unit))
+    if multi and types in ([], ["LP"]):
+        return [multi]
+    return types
 
 
 def default_weight(specifics, settings, discs=1):
