@@ -1196,7 +1196,7 @@ def oauth_token(scope=MEDIA_SCOPE):
     )
     if not refresh_token:
         raise OAuthError(
-            "Connect fbc to eBay first (Sales > eBay Drafts > Connect eBay);"
+            "Connect fbc to eBay first (Sales > Connect eBay);"
             " picture uploads and Ship This need it."
         )
     try:
@@ -1210,7 +1210,7 @@ def oauth_token(scope=MEDIA_SCOPE):
     except OAuthError as e:
         raise OAuthError(
             "eBay refused the saved OAuth token (" + str(e) + "); connect"
-            " fbc to eBay again under Sales > eBay Drafts > Connect eBay."
+            " fbc to eBay again under Sales > Connect eBay."
         )
     _remember_access_token(body, now, [scope])
     return _oauth[scope]["token"]

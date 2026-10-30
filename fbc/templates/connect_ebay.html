@@ -26,7 +26,7 @@ earnings.</p>
 address (<code>...?state=...&amp;code=v%5E1.1...</code>). If that page is this one,
 you're done. Otherwise copy the whole address from the browser's address bar
 and paste it here within 5 minutes, before the code expires.</p>
-<form method="post" action="{{ url_for('EbayDraftModelView.oauth') }}">
+<form method="post" action="{{ url_for('ConnectEbayView.connect') }}">
   <div class="form-group">
     <input type="text" name="address" class="form-control" placeholder="https://...?state=...&amp;code=...">
   </div>
