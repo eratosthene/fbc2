@@ -144,6 +144,13 @@ EBAY_SETTINGS = {
         'POSTAL_CODE': '',
         'LOCATION': '',
         'BEST_OFFER': True,
+        # Starting package weight for a draft, in ounces packed, by record
+        # size (eBay needs it for calculated shipping). Optionally also
+        # 'LENGTH', 'WIDTH', 'DEPTH' in inches and a 'TYPE' such as
+        # 'PackageThickEnvelope'.
+        'PACKAGE': {
+            'WEIGHT_OZ': {'12"': 20, '10"': 16, '7"': 8},
+        },
         # Item specifics added to every listing when fbc can't work them out.
         'DEFAULT_SPECIFICS': {
             'Format': ['Record'],

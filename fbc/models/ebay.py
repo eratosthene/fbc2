@@ -155,6 +155,8 @@ class EbayDraft(Model):
     best_offer = Column(Boolean, default=True)
     description = Column(Text)
     item_specifics = Column(Text)
+    # Package weight in ounces, packing included.
+    weight_oz = Column(Integer)
     # JSON list of eBay-hosted picture URLs, in listing order.
     pictures = Column(Text)
     status = Column(String(20), default="draft", index=True)

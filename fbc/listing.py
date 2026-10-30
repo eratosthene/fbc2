@@ -84,6 +84,12 @@ COLORS = [
 
 TITLE_MAX = 80
 
+# A draft's starting package weight in ounces, by record size, packing
+# included. eBay needs a weight for calculated shipping. Replaced by
+# EBAY_SETTINGS["LISTING"]["PACKAGE"] in config.py, which can also give
+# LENGTH/WIDTH/DEPTH in inches and a ShippingPackage TYPE.
+DEFAULT_PACKAGE = {"WEIGHT_OZ": {'12"': 20, '10"': 16, '7"': 8}}
+
 
 def clean_name(name):
     """Drop the " (2)" Discogs adds to tell same-named artists/labels apart."""
@@ -314,6 +320,9 @@ def build_item(draft, settings, template=None):
         item["PostalCode"] = settings["POSTAL_CODE"]
     if settings.get("LOCATION"):
         item["Location"] = settings["LOCATION"]
+    package = build_package(draft, settings)
+    if package:
+        item["ShippingPackageDetails"] = package
     if template and not uses_policies(settings):
         for key, value in template.items():
             item.setdefault(key, value)
@@ -323,6 +332,43 @@ def build_item(draft, settings, template=None):
     if pictures:
         item["PictureDetails"] = {"PictureURL": pictures}
     return item
+
+
+def default_weight(specifics, settings):
+    """Starting package weight in ounces for a record with `specifics`."""
+    weights = (settings.get("PACKAGE") or DEFAULT_PACKAGE).get("WEIGHT_OZ") or {}
+    size = (specifics.get("Record Size") or ['12"'])[0]
+    return weights.get(size, weights.get('12"'))
+
+
+def build_package(draft, settings):
+    """
+    Item.ShippingPackageDetails for the draft's weight (whole ounces, sent
+    as pounds plus ounces) and any package size set in config.py. A draft
+    made before drafts had a weight gets the default for its record size.
+    """
+    weight = draft.weight_oz
+    if weight is None:
+        weight = default_weight(parse_specifics(draft.item_specifics), settings)
+    if not weight:
+        return None
+    lbs, oz = divmod(int(weight), 16)
+    package = {
+        "MeasurementUnit": "English",
+        "WeightMajor": {"#text": str(lbs), "@attrs": {"unit": "lbs"}},
+        "WeightMinor": {"#text": str(oz), "@attrs": {"unit": "oz"}},
+    }
+    config = settings.get("PACKAGE") or {}
+    for key, field in (
+        ("LENGTH", "PackageLength"),
+        ("WIDTH", "PackageWidth"),
+        ("DEPTH", "PackageDepth"),
+    ):
+        if config.get(key):
+            package[field] = {"#text": str(config[key]), "@attrs": {"unit": "in"}}
+    if config.get("TYPE"):
+        package["ShippingPackage"] = config["TYPE"]
+    return package
 
 
 def to_request(value):
@@ -1005,14 +1051,14 @@ def new_draft(unit):
 
     ensure_release_details(unit.discogs_release)
     settings = listing_settings()
+    specifics = build_item_specifics(unit, settings.get("DEFAULT_SPECIFICS"))
     return EbayDraft(
         unit=unit,
         title=build_title(unit),
         price=unit.retail_price,
         best_offer=settings.get("BEST_OFFER", True),
         description=build_description(unit),
-        item_specifics=format_specifics(
-            build_item_specifics(unit, settings.get("DEFAULT_SPECIFICS"))
-        ),
+        item_specifics=format_specifics(specifics),
+        weight_oz=default_weight(specifics, settings),
         status="draft",
     )

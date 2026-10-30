@@ -990,3 +990,62 @@ def test_oauth_token_prefers_the_saved_refresh_token(app, oauth, monkeypatch):
 
     listing.oauth_token()
     assert used == ["newest"]
+
+
+def test_new_draft_starts_with_the_weight_for_its_record_size(app, monkeypatch):
+    unit = _carnaval()
+    assert new_draft(unit).weight_oz == 20
+
+    monkeypatch.setitem(
+        fbc.app.config["EBAY_SETTINGS"]["LISTING"], "PACKAGE", {"WEIGHT_OZ": {'12"': 22}}
+    )
+    assert new_draft(unit).weight_oz == 22
+
+
+def test_new_draft_weight_for_a_seven_inch(app):
+    unit = _carnaval(unit_type='7" Single')
+    unit.discogs_release.formats = json.dumps([{"name": "Vinyl", "descriptions": ['7"']}])
+    assert new_draft(unit).weight_oz == 8
+
+
+def test_build_item_sends_the_weight_as_pounds_and_ounces(app):
+    draft = _draft(weight_oz=20)
+    item = build_item(draft, SETTINGS)
+
+    assert item["ShippingPackageDetails"] == {
+        "MeasurementUnit": "English",
+        "WeightMajor": {"#text": "1", "@attrs": {"unit": "lbs"}},
+        "WeightMinor": {"#text": "4", "@attrs": {"unit": "oz"}},
+    }
+
+
+def test_build_item_adds_package_size_from_config(app):
+    draft = _draft(weight_oz=8)
+    settings = dict(
+        SETTINGS,
+        PACKAGE={"LENGTH": 13, "WIDTH": 13, "DEPTH": 1, "TYPE": "PackageThickEnvelope"},
+    )
+    package = build_item(draft, settings)["ShippingPackageDetails"]
+
+    assert package["WeightMajor"]["#text"] == "0"
+    assert package["WeightMinor"]["#text"] == "8"
+    assert package["PackageLength"] == {"#text": "13", "@attrs": {"unit": "in"}}
+    assert package["PackageDepth"] == {"#text": "1", "@attrs": {"unit": "in"}}
+    assert package["ShippingPackage"] == "PackageThickEnvelope"
+
+
+def test_draft_from_before_weights_gets_the_default_weight(app):
+    draft = _draft(weight_oz=None)
+    package = build_item(draft, SETTINGS)["ShippingPackageDetails"]
+
+    assert (package["WeightMajor"]["#text"], package["WeightMinor"]["#text"]) == ("1", "4")
+
+
+def test_draft_weight_wins_over_the_template_package(app):
+    item = build_item(
+        _draft(weight_oz=24),
+        {"TEMPLATE_ITEM_ID": "1"},
+        {"ShippingPackageDetails": {"WeightMajor": {"#text": "9"}}},
+    )
+    assert item["ShippingPackageDetails"]["WeightMajor"]["#text"] == "1"
+    assert item["ShippingPackageDetails"]["WeightMinor"]["#text"] == "8"

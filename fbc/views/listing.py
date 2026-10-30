@@ -61,6 +61,7 @@ class EbayDraftModelView(CustomModelView):
         "best_offer": "Best Offer",
         "item_specifics": "Item Specifics",
         "ebay_listing": "eBay Listing",
+        "weight_oz": "Package Weight (oz)",
     }
     show_columns = [
         "unit",
@@ -68,13 +69,23 @@ class EbayDraftModelView(CustomModelView):
         "price",
         "best_offer",
         "status",
+        "weight_oz",
         "description",
         "item_specifics",
         "ebay_listing",
     ]
-    edit_columns = ["title", "price", "best_offer", "description", "item_specifics"]
+    edit_columns = [
+        "title",
+        "price",
+        "best_offer",
+        "weight_oz",
+        "description",
+        "item_specifics",
+    ]
     description_columns = {
         "description": "Shown to buyers. Simple HTML such as <p> and <br> is allowed.",
+        "weight_oz": "Packed for shipping, in ounces (16 oz = 1 lb). eBay uses it to"
+        " work out calculated shipping.",
     }
     edit_form_extra_fields = {
         "item_specifics": TextAreaField(
