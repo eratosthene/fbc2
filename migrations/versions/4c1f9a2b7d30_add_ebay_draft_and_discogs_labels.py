@@ -22,9 +22,8 @@ def upgrade():
         batch_op.add_column(sa.Column("labels", sa.Text(), nullable=True))
         batch_op.add_column(sa.Column("country", sa.String(length=50), nullable=True))
 
-    # fbc/__init__.py runs db.create_all() on import, which `flask db upgrade`
-    # does before getting here, so the table (and its indexes) may already
-    # exist.
+    # The app used to run db.create_all() on import, before `flask db upgrade`
+    # got here, so on an older database the table (and its indexes) may already exist.
     if sa.inspect(op.get_bind()).has_table("ebay_draft"):
         return
     op.create_table(
@@ -54,9 +53,8 @@ def upgrade():
 
 
 def downgrade():
-    with op.batch_alter_table("ebay_draft", schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f("ix_ebay_draft_status"))
-        batch_op.drop_index(batch_op.f("ix_ebay_draft_unit_id"))
+    # Dropping the table drops its indexes too. MySQL won't drop
+    # ix_ebay_draft_unit_id on its own while the unit_id foreign key uses it.
     op.drop_table("ebay_draft")
 
     with op.batch_alter_table("discogs_release", schema=None) as batch_op:

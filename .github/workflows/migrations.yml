@@ -1,0 +1,107 @@
+name: Migrations
+
+# Runs the migrations against a real MySQL server when a PR adds one, and
+# checks the database they produce matches the models. New databases are
+# built from the models by `flask setup-db` rather than by the migrations, so
+# this is what catches a migration and a model change that don't agree.
+on:
+  pull_request:
+    paths:
+      - migrations/**
+      - .github/workflows/migrations.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      # The checkout is GitHub's merge of the PR into its base, so HEAD^1 is
+      # the base. Also runs when this check itself changes, so changes to it
+      # get tested.
+      - name: Look for new migrations
+        id: check
+        run: |
+          added=$(git diff --name-only --diff-filter=A HEAD^1 HEAD -- migrations/versions)
+          check=$(git diff --name-only HEAD^1 HEAD -- .github/workflows/migrations.yml migrations/pre_migration_schema.sql)
+          if [ -n "$added$check" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            printf 'Testing migrations for:\n%s\n%s\n' "$added" "$check" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No new migrations, so the migrations weren't run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  migrations:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: fbc
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      FLASK_APP: fbc
+      MYSQL: mysql -h 127.0.0.1 -uroot -proot
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+          cache: pipenv
+
+      - name: Install dependencies from Pipfile.lock
+        run: |
+          python -m pip install pipenv
+          pipenv install --dev --deploy
+
+      # config.py holds real credentials and isn't committed, so use the
+      # template, pointed at the MySQL service.
+      - name: Use config.py.tpl as config.py
+        run: >-
+          sed "s|^SQLALCHEMY_DATABASE_URI = .*|SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:root@127.0.0.1/fbc'|"
+          config.py.tpl > config.py
+
+      # PyMySQL can only log in to MySQL 8.4 once the server has cached the
+      # login (the full exchange needs the cryptography package, which isn't
+      # installed). Each step runs the mysql client first, which does that.
+      - name: Migrate a database from before migrations
+        run: |
+          $MYSQL fbc < migrations/pre_migration_schema.sql
+          pipenv run flask setup-db
+          pipenv run flask db check
+
+      - name: Downgrade to the start and upgrade again
+        run: |
+          $MYSQL -e "SELECT 1" > /dev/null
+          pipenv run flask db downgrade base
+          pipenv run flask setup-db
+          pipenv run flask db check
+
+      - name: Set up a new database
+        run: |
+          $MYSQL -e "DROP DATABASE fbc; CREATE DATABASE fbc"
+          pipenv run flask setup-db
+          pipenv run flask db current | grep -q "(head)"
+          pipenv run flask db check

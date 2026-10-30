@@ -2,7 +2,16 @@ from flask_appbuilder import Model
 from markupsafe import Markup
 from flask import url_for
 from flask_appbuilder.models.decorators import renders
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, Date
+from sqlalchemy import (
+    Column,
+    Integer,
+    BigInteger,
+    String,
+    ForeignKey,
+    Float,
+    Boolean,
+    Date,
+)
 from sqlalchemy.orm import relationship
 from fbc.util import fpercent, fprice
 
@@ -173,7 +182,9 @@ class Unit(Model):
     )
     discogs_release = relationship("DiscogsRelease")
     discogs_instance_id = Column(
-        Integer, ForeignKey("discogs_instance.instance_id"), index=True
+        BigInteger,
+        ForeignKey("discogs_instance.instance_id", ondelete="CASCADE"),
+        index=True,
     )
     discogs_instance = relationship("DiscogsInstance")
     discogs_master = Column(String(21), index=True)

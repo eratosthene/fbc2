@@ -52,12 +52,9 @@ _install_fake_config()
 # (E402); importlib.import_module is a regular call, so it doesn't.
 fbc = importlib.import_module("fbc")
 
-# fbc/__init__.py calls db.create_all() before the model modules (which live
-# under fbc.models and get imported further down in that same file) have
-# been loaded, so the first create_all() only creates Flask-AppBuilder's own
-# security tables. By the time this module finishes importing `fbc`, all of
-# our own models have been registered on the metadata too, so calling
-# create_all() again fills in the rest.
+# Importing fbc only creates Flask-AppBuilder's own security tables (the app's
+# tables come from `flask setup-db`). By now all of our own models are
+# registered on the metadata too, so create_all() fills in the rest.
 fbc.db.create_all()
 
 
