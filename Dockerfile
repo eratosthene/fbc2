@@ -16,10 +16,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 COPY ./config.py /app
 COPY ./fbc /app/fbc
+COPY ./migrations /app/migrations
+COPY --chmod=755 ./docker-entrypoint.sh /app/docker-entrypoint.sh
 
 ENV STATIC_PATH=/usr/local/lib/python3.10/site-packages/flask_appbuilder/static
 ENV LOG_LEVEL=info
+ENV FLASK_APP=fbc
 
 WORKDIR /app
+ENTRYPOINT [ "/app/docker-entrypoint.sh" ]
 CMD [ "gunicorn", "-w", "4", "--timeout", "300", "--bind", "0.0.0.0:20000", "fbc:app" ]
 EXPOSE 20000
