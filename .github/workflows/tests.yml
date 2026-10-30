@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
@@ -37,9 +36,9 @@ jobs:
       - name: Run tests
         run: pipenv run pytest --junitxml=test-results/junit.xml
 
-      # Posts a results comment on the PR (updated on each push) and adds a
-      # "Test results" check. Dependabot PRs and PRs from forks get a read-only
-      # token, so the results only show in the job log for those.
+      # Posts a results comment on the PR (updated on each push) and adds the
+      # results to this job's summary. Dependabot PRs and PRs from forks get a
+      # read-only token, so the results only show in the job log for those.
       - name: Publish test results
         if: >-
           !cancelled() && (
@@ -51,6 +50,11 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           files: test-results/junit.xml
+          # A check run made with the workflow's token gets filed under
+          # whichever workflow run GitHub picks (it showed up under Docker
+          # build), where it has no logs to show. The pytest job's own status
+          # already passes or fails the PR.
+          check_run: false
 
   # The Docker image installs from requirements.txt rather than Pipfile.lock,
   # so make sure the two haven't drifted apart.
