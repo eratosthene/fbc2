@@ -1,6 +1,5 @@
 import os
 from flask_appbuilder.security.manager import (
-    AUTH_OID,
     AUTH_REMOTE_USER,
     AUTH_DB,
     AUTH_LDAP,
@@ -35,7 +34,7 @@ APP_NAME = "FBC"
 # AUTHENTICATION CONFIG
 # ----------------------------------------------------
 # The authentication type
-# AUTH_OID : Is for OpenID
+# AUTH_OAUTH : Is for OAuth 2.0 / OpenID Connect
 # AUTH_DB : Is for database (username/password()
 # AUTH_LDAP : Is for LDAP
 # AUTH_REMOTE_USER : Is for using REMOTE_USER from web server
@@ -56,12 +55,6 @@ AUTH_USER_REGISTRATION = False
 # When using LDAP Auth, setup the ldap server
 # AUTH_LDAP_SERVER = "ldap://ldapserver.new"
 
-# Uncomment to setup OpenID providers example for OpenID authentication
-# OPENID_PROVIDERS = [
-#    { 'name': 'Yahoo', 'url': 'https://me.yahoo.com' },
-#    { 'name': 'AOL', 'url': 'http://openid.aol.com/<username>' },
-#    { 'name': 'Flickr', 'url': 'http://www.flickr.com/<username>' },
-#    { 'name': 'MyOpenID', 'url': 'https://www.myopenid.com' }]
 # ---------------------------------------------------
 # Babel config for translations
 # ---------------------------------------------------

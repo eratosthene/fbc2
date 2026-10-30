@@ -4,10 +4,13 @@ sys.path.insert(0, "..")
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit
 from fbc.models.sales import SalesReceipt
-from fbc import db
+from fbc import app, db
 from fbc.listing import trading
 from ebaysdk.exception import ConnectionError
 import logging
+
+# db.session needs an app context.
+app.app_context().push()
 
 logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger()

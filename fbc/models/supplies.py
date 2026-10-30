@@ -5,6 +5,7 @@ from sqlalchemy.orm import relationship
 
 
 class PurchaseOrder(Model):
+    __tablename__ = "purchase_order"
     id = Column(Integer, primary_key=True, autoincrement=True)
     old_id = Column(String(24))
     date = Column(Date, nullable=False)
@@ -24,6 +25,8 @@ class PurchaseOrder(Model):
 
 
 class Supply(Model):
+    __tablename__ = "supply"
+
     from fbc import db
 
     assoc_purchase_order_supply = db.Table(

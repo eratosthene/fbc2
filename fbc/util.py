@@ -56,7 +56,7 @@ def link_unit_by_sku(item):
     unit_id = unit_id_from_sku(item.get("SKU"))
     if unit_id is None:
         return
-    unit = db.session.query(Unit).get(unit_id)
+    unit = db.session.get(Unit, unit_id)
     if unit and not unit.ebay_listing_id:
         unit.ebay_listing_id = item["ItemID"]
         logger.info("Linked unit " + str(unit_id) + " to " + str(item["ItemID"]))

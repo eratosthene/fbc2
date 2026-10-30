@@ -8,7 +8,8 @@ from flask import render_template
 
 from flask import Flask
 from flask import send_from_directory
-from flask_appbuilder import AppBuilder, SQLA
+from flask_appbuilder import AppBuilder, Model
+from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate, stamp, upgrade
 from fbc.index import MyIndexView
 
@@ -17,12 +18,17 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 app = Flask(__name__)
 app.config.from_object("config")
-db = SQLA(app)
+# Flask-AppBuilder's Model is the models' base class, so passing it here puts
+# its metadata (ours and the ab_* tables) on db.
+db = SQLAlchemy(app, model_class=Model)
 migrate = Migrate(app, db)
-appbuilder = AppBuilder(app, db.session, indexview=MyIndexView)
+# Flask-AppBuilder reads the config and sets up its security tables through
+# current_app, so it needs an app context, here and when adding views below.
+with app.app_context():
+    appbuilder = AppBuilder(app, db.session, indexview=MyIndexView)
 
 
-@appbuilder.app.errorhandler(404)
+@app.errorhandler(404)
 def page_not_found(e):
     return (
         render_template(
@@ -88,27 +94,30 @@ from fbc.views.inventory import (
     UnitModelReboxView,
 )
 
-appbuilder.add_view(UnitModelView, "Units", category="Inventory")
-appbuilder.add_view(
-    UnitModelNoListingView, "Units w/out Listings", category="Inventory"
-)
-appbuilder.add_view(UnitModelReboxView, "Rebox Units", category="Inventory")
-appbuilder.add_view(UnitModelNoMasterView, "Units w/out Master", category="Inventory")
-appbuilder.add_view(PurchaseLotModelView, "Purchase Lots", category="Inventory")
-appbuilder.add_view(StorageBoxModelView, "Storage Boxes", category="Inventory")
-appbuilder.add_view(DiscogsReleaseModelView, "Releases", category="Discogs")
-appbuilder.add_view(
-    DiscogsReleaseModelNoUnitView, "Releases w/out Units", category="Discogs"
-)
-appbuilder.add_view(ArtistModelView, "Artists", category="Discogs")
-appbuilder.add_view(GenreModelView, "Genres", category="Discogs")
-appbuilder.add_view(StyleModelView, "Styles", category="Discogs")
-appbuilder.add_view(FolderModelView, "Folders", category="Discogs")
-appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Discogs")
-appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
-appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
-appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
-appbuilder.add_view(EbayDraftModelView, "eBay Drafts", category="Sales")
-appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Sales")
-appbuilder.add_view(SupplyModelView, "Supply List", category="Supplies")
-appbuilder.add_view(PurchaseOrderModelView, "Purchase Orders", category="Supplies")
+with app.app_context():
+    appbuilder.add_view(UnitModelView, "Units", category="Inventory")
+    appbuilder.add_view(
+        UnitModelNoListingView, "Units w/out Listings", category="Inventory"
+    )
+    appbuilder.add_view(UnitModelReboxView, "Rebox Units", category="Inventory")
+    appbuilder.add_view(
+        UnitModelNoMasterView, "Units w/out Master", category="Inventory"
+    )
+    appbuilder.add_view(PurchaseLotModelView, "Purchase Lots", category="Inventory")
+    appbuilder.add_view(StorageBoxModelView, "Storage Boxes", category="Inventory")
+    appbuilder.add_view(DiscogsReleaseModelView, "Releases", category="Discogs")
+    appbuilder.add_view(
+        DiscogsReleaseModelNoUnitView, "Releases w/out Units", category="Discogs"
+    )
+    appbuilder.add_view(ArtistModelView, "Artists", category="Discogs")
+    appbuilder.add_view(GenreModelView, "Genres", category="Discogs")
+    appbuilder.add_view(StyleModelView, "Styles", category="Discogs")
+    appbuilder.add_view(FolderModelView, "Folders", category="Discogs")
+    appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Discogs")
+    appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
+    appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
+    appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
+    appbuilder.add_view(EbayDraftModelView, "eBay Drafts", category="Sales")
+    appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Sales")
+    appbuilder.add_view(SupplyModelView, "Supply List", category="Supplies")
+    appbuilder.add_view(PurchaseOrderModelView, "Purchase Orders", category="Supplies")

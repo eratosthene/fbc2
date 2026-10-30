@@ -52,11 +52,6 @@ _install_fake_config()
 # (E402); importlib.import_module is a regular call, so it doesn't.
 fbc = importlib.import_module("fbc")
 
-# Importing fbc only creates Flask-AppBuilder's own security tables (the app's
-# tables come from `flask setup-db`). By now all of our own models are
-# registered on the metadata too, so create_all() fills in the rest.
-fbc.db.create_all()
-
 
 @pytest.fixture
 def app():

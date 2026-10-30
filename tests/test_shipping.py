@@ -268,9 +268,9 @@ def test_remove_from_discogs_deletes_only_the_units_instance(app, discogs):
         "https://api.discogs.com/users/me/collection/folders/7/releases/1/instances/1002"
     ]
     db.session.expire_all()
-    release = db.session.query(DiscogsRelease).get(1)
+    release = db.session.get(DiscogsRelease, 1)
     assert [i.instance_id for i in release.discogs_instances] == [1001]
-    assert db.session.query(DiscogsInstance).get(1002) is None
+    assert db.session.get(DiscogsInstance, 1002) is None
     assert unit.discogs_instance_id is None
     assert unit.discogs_release_id == 1
 
@@ -284,7 +284,7 @@ def test_remove_from_discogs_cleans_up_an_instance_already_gone(app, discogs):
     assert category == "success"
     assert "already gone" in message
     assert discogs.deleted == []
-    assert db.session.query(DiscogsInstance).get(1002) is None
+    assert db.session.get(DiscogsInstance, 1002) is None
 
 
 def test_remove_from_discogs_keeps_fbc_as_is_when_discogs_fails(app, discogs):
@@ -295,7 +295,7 @@ def test_remove_from_discogs_keeps_fbc_as_is_when_discogs_fails(app, discogs):
 
     assert category == "danger"
     assert "Remove it by hand" in message
-    assert db.session.query(DiscogsInstance).get(1002) is not None
+    assert db.session.get(DiscogsInstance, 1002) is not None
 
 
 def test_forgetting_the_last_instance_removes_the_release(app):
@@ -306,10 +306,10 @@ def test_forgetting_the_last_instance_removes_the_release(app):
     ]
     db.session.commit()
 
-    forget_discogs_instance(db.session.query(DiscogsInstance).get(1002))
+    forget_discogs_instance(db.session.get(DiscogsInstance, 1002))
 
     db.session.expire_all()
-    assert db.session.query(DiscogsRelease).get(1) is None
+    assert db.session.get(DiscogsRelease, 1) is None
     assert unit.discogs_release_id is None
     assert unit.discogs_instance_id is None
 
@@ -362,7 +362,7 @@ def test_shipping_records_the_receipt_marks_sold_and_removes_from_discogs(
         25.0,
         16.5,
     )
-    unit = db.session.query(Unit).get(unit.id)
+    unit = db.session.get(Unit, unit.id)
     assert unit.sold is True
     assert unit.sales_receipt_id == receipt.id
     assert len(discogs.deleted) == 1
@@ -380,7 +380,7 @@ def test_shipping_can_leave_discogs_alone(client, discogs):
     )
 
     assert discogs.deleted == []
-    assert db.session.query(DiscogsInstance).get(1002) is not None
+    assert db.session.get(DiscogsInstance, 1002) is not None
 
 
 def test_shipping_needs_a_net_sold(client, discogs):

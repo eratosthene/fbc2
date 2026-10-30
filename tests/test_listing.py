@@ -332,7 +332,7 @@ def test_publish_records_the_listing_and_links_the_unit(app, monkeypatch):
     assert draft.status == "published"
     assert draft.ebay_listing_id == "397798127145"
     assert draft.unit.ebay_listing_id == "397798127145"
-    ebay_listing = db.session.query(EbayListing).get("397798127145")
+    ebay_listing = db.session.get(EbayListing, "397798127145")
     assert ebay_listing.url == "https://www.ebay.com/itm/397798127145"
     assert ebay_listing.price == 5.0
     assert ebay_listing.start_time == datetime.datetime(2026, 10, 29, 16, 0)
@@ -374,7 +374,7 @@ def test_synced_listing_with_fbc_sku_is_linked_to_its_unit(app):
             },
         }
     )
-    assert db.session.query(Unit).get(unit.id).ebay_listing_id == "999"
+    assert db.session.get(Unit, unit.id).ebay_listing_id == "999"
 
 
 def test_synced_listing_with_other_sku_is_not_linked(app):
@@ -391,7 +391,7 @@ def test_synced_listing_with_other_sku_is_not_linked(app):
             },
         }
     )
-    assert db.session.query(Unit).get(unit.id).ebay_listing_id is None
+    assert db.session.get(Unit, unit.id).ebay_listing_id is None
 
 
 def test_unit_link_column_offers_list_on_ebay_until_listed(app):

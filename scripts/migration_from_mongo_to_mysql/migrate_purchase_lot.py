@@ -2,9 +2,12 @@ import sys
 
 sys.path.insert(0, "..")
 from fbc.models.inventory import PurchaseLot
-from fbc import db
+from fbc import app, db
 from pymongo import MongoClient
 import datetime
+
+# db.session needs an app context.
+app.app_context().push()
 
 conn = MongoClient("mongodb://192.168.1.10:27017")
 mdb = conn["fbc"]

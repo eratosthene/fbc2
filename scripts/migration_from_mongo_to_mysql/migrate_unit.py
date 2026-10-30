@@ -4,9 +4,12 @@ sys.path.insert(0, "..")
 from fbc.models.inventory import Unit, PurchaseLot, StorageBox
 from fbc.models.sales import SalesReceipt
 from fbc.models.discogs import DiscogsRelease
-from fbc import db
+from fbc import app, db
 from pymongo import MongoClient
 import logging
+
+# db.session needs an app context.
+app.app_context().push()
 
 logging.getLogger("pymongo.command").setLevel(logging.INFO)
 logging.getLogger("pymongo.connection").setLevel(logging.INFO)
