@@ -123,6 +123,10 @@ EBAY_SETTINGS = {
     'DEV_ID': '',
     'CERT_ID': '',
     'USER_TOKEN': '',
+    # OAuth refresh token for eBay's REST APIs (picture uploads). Get one
+    # from developer.ebay.com > Application Keys > User Tokens, choosing
+    # OAuth and the sell.inventory scope. It lasts 18 months.
+    'OAUTH_REFRESH_TOKEN': '',
     # Used when publishing a Unit as a listing (eBay Drafts). See
     # Sales > eBay Drafts > Shipping & Returns for the values to use.
     'LISTING': {

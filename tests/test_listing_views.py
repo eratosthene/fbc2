@@ -50,7 +50,7 @@ def test_draft_page_shows_specifics_and_blocks_publish_without_pictures(client):
 def test_uploading_pictures_adds_them_in_order(client, monkeypatch):
     uploaded = []
 
-    def fake_upload(fileobj, filename):
+    def fake_upload(fileobj, filename, content_type=None):
         uploaded.append(filename)
         return "https://i.ebayimg.com/" + filename, {
             "errors": [],

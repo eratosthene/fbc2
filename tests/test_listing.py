@@ -701,8 +701,9 @@ def test_listing_request_is_well_formed_xml_with_special_characters(app, monkeyp
     )
     item = build_item(draft, {}, template)
 
-    with pytest.raises(Sent):
-        listing._call("VerifyAddFixedPriceItem", {"Item": item})
+    # _call reports the interrupted request as a failure; only what it
+    # would have sent matters here.
+    listing._call("VerifyAddFixedPriceItem", {"Item": item})
 
     ns = {"e": "urn:ebay:apis:eBLBaseComponents"}
     root = ET.fromstring(sent["body"])
@@ -721,3 +722,162 @@ def test_listing_request_is_well_formed_xml_with_special_characters(app, monkeyp
         "e:ShippingDetails/e:ShippingServiceOptions/e:ShippingServiceCost", ns
     )
     assert (cost.text, cost.get("currencyID")) == ("4.39", "USD")
+
+
+class FakeHTTPResponse:
+    def __init__(self, status_code, body=None, headers=None, text=None, reason=""):
+        self.status_code = status_code
+        self._body = body
+        self.headers = headers or {}
+        self.reason = reason
+        self.text = text if text is not None else json.dumps(body)
+
+    def json(self):
+        if self._body is None:
+            raise ValueError("not JSON")
+        return self._body
+
+
+@pytest.fixture
+def oauth(monkeypatch):
+    """A configured refresh token and an empty access token cache."""
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "refresh")
+    monkeypatch.setattr(listing, "_oauth", {"token": None, "expires": None})
+
+
+def test_oauth_token_is_minted_from_the_refresh_token_and_reused(app, oauth, monkeypatch):
+    import requests
+
+    posts = []
+
+    def fake_post(url, **kwargs):
+        posts.append((url, kwargs))
+        return FakeHTTPResponse(200, {"access_token": "access", "expires_in": 7200})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    assert listing.oauth_token() == "access"
+    assert listing.oauth_token() == "access"
+    assert len(posts) == 1
+    url, kwargs = posts[0]
+    assert url == listing.OAUTH_TOKEN_URL
+    assert kwargs["auth"] == ("test-app-id", "test-cert-id")
+    assert kwargs["data"]["grant_type"] == "refresh_token"
+    assert kwargs["data"]["refresh_token"] == "refresh"
+    assert kwargs["data"]["scope"] == listing.MEDIA_SCOPE
+
+
+def test_oauth_token_explains_a_refused_refresh_token(app, oauth, monkeypatch):
+    import requests
+
+    monkeypatch.setattr(
+        requests,
+        "post",
+        lambda url, **kw: FakeHTTPResponse(
+            400, {"error": "invalid_grant", "error_description": "the token is expired"}
+        ),
+    )
+    with pytest.raises(listing.OAuthError, match="the token is expired"):
+        listing.oauth_token()
+
+
+def test_upload_without_a_refresh_token_says_what_to_configure(app, monkeypatch):
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "")
+    monkeypatch.setattr(listing, "_oauth", {"token": None, "expires": None})
+
+    url, summary = listing.upload_picture(None, "front.jpg", "image/jpeg")
+
+    assert url is None
+    assert "OAUTH_REFRESH_TOKEN" in summary["errors"][0]
+
+
+def test_upload_picture_posts_to_the_media_api(app, oauth, monkeypatch):
+    import io
+
+    import requests
+
+    monkeypatch.setattr(listing, "oauth_token", lambda: "access")
+    sent = {}
+
+    def fake_post(url, **kwargs):
+        sent["url"] = url
+        sent.update(kwargs)
+        return FakeHTTPResponse(
+            201, {"imageUrl": "https://i.ebayimg.com/images/g/abc/s-l1600.jpg"}
+        )
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    fileobj = io.BytesIO(b"jpeg")
+
+    url, summary = listing.upload_picture(fileobj, "front.jpg", "image/jpeg")
+
+    assert url == "https://i.ebayimg.com/images/g/abc/s-l1600.jpg"
+    assert summary["errors"] == []
+    assert sent["url"] == listing.MEDIA_URL
+    assert sent["headers"] == {"Authorization": "Bearer access"}
+    assert sent["files"] == {"image": ("front.jpg", fileobj, "image/jpeg")}
+
+
+def test_upload_picture_falls_back_to_the_location_header(app, oauth, monkeypatch):
+    import requests
+
+    monkeypatch.setattr(listing, "oauth_token", lambda: "access")
+    location = "https://apim.ebay.com/commerce/media/v1_beta/image/abc"
+    monkeypatch.setattr(
+        requests,
+        "post",
+        lambda url, **kw: FakeHTTPResponse(201, None, {"Location": location}, text=""),
+    )
+    got = []
+
+    def fake_get(url, **kwargs):
+        got.append(url)
+        return FakeHTTPResponse(200, {"imageUrl": "https://i.ebayimg.com/x.jpg"})
+
+    monkeypatch.setattr(requests, "get", fake_get)
+
+    url, _ = listing.upload_picture(None, "front.jpg")
+
+    assert got == [location]
+    assert url == "https://i.ebayimg.com/x.jpg"
+
+
+def test_upload_picture_reports_ebay_errors(app, oauth, monkeypatch):
+    import requests
+
+    listing._oauth.update(token="stale", expires=datetime.datetime.max)
+    monkeypatch.setattr(
+        requests,
+        "post",
+        lambda url, **kw: FakeHTTPResponse(
+            401, {"errors": [{"errorId": 1001, "message": "Invalid access token"}]}
+        ),
+    )
+
+    url, summary = listing.upload_picture(None, "front.jpg")
+
+    assert url is None
+    assert summary["errors"] == ["Uploading front.jpg: Invalid access token"]
+    # A rejected token isn't reused for the next upload.
+    assert listing._oauth["token"] is None
+
+
+def test_call_reports_a_reply_ebaysdk_cant_read(app, monkeypatch):
+    """eBay answering with something other than Trading API XML."""
+
+    class Api:
+        response = FakeHTTPResponse(
+            404, None, text="<html>Not Found</html>", reason="Not Found"
+        )
+
+        def execute(self, verb, data):
+            raise AttributeError("'ResponseDataObject' object has no attribute 'Ack'")
+
+    monkeypatch.setattr(listing, "trading", lambda: Api())
+
+    resp, summary = listing._call("GetItem", {"ItemID": "1"})
+
+    assert resp is None
+    assert summary["errors"] == [
+        "GetItem failed: HTTP 404 Not Found: <html>Not Found</html> (AttributeError)"
+    ]

@@ -572,6 +572,23 @@ def summarize_response(resp):
     return {"errors": errors, "warnings": warnings, "fees": fees}
 
 
+def _empty_summary():
+    return {"errors": [], "warnings": [], "fees": []}
+
+
+def _http_error(response):
+    """A one-line description of an HTTP response eBay didn't answer properly."""
+    if response is None:
+        return "no response"
+    status = getattr(response, "status_code", "?")
+    reason = getattr(response, "reason", "") or ""
+    text = getattr(response, "text", "") or ""
+    if not isinstance(text, str):
+        text = ""
+    text = " ".join(text.split())[:300]
+    return ("HTTP " + str(status) + " " + reason + (": " + text if text else "")).strip()
+
+
 def _call(verb, data):
     """Run a Trading API call, returning (response dict or None, summary)."""
     from ebaysdk.exception import ConnectionError
@@ -583,10 +600,27 @@ def _call(verb, data):
         return resp, summarize_response(resp)
     except ConnectionError as e:
         logger.error(e)
-        resp = e.response.dict() if e.response is not None else {}
+        try:
+            resp = e.response.dict() if e.response is not None else {}
+        except Exception:
+            resp = {}
         summary = summarize_response(resp)
         if not summary["errors"]:
             summary["errors"].append(str(e))
+        return None, summary
+    except Exception as e:
+        # ebaysdk itself fails on a reply that isn't Trading API XML (an
+        # HTTP error page, a retired call), so say what eBay actually sent.
+        logger.exception(verb + " failed")
+        summary = _empty_summary()
+        summary["errors"].append(
+            verb
+            + " failed: "
+            + _http_error(getattr(api, "response", None))
+            + " ("
+            + type(e).__name__
+            + ")"
+        )
         return None, summary
 
 
@@ -677,31 +711,122 @@ def publish_draft(draft):
     return summary
 
 
-def upload_picture(fileobj, filename):
-    """
-    Upload one picture to eBay Picture Services. Returns (url, summary);
-    url is None if the upload failed. Unused uploads expire after 30 days.
-    """
-    from ebaysdk.exception import ConnectionError
+OAUTH_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
+MEDIA_URL = "https://apim.ebay.com/commerce/media/v1_beta/image/create_image_from_file"
+MEDIA_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory"
 
-    api = trading()
-    try:
-        response = api.execute(
-            "UploadSiteHostedPictures",
-            escape_request(
-                {"PictureName": filename, "PictureSet": "Supersize", "ExtensionInDays": 30}
-            ),
-            files={"file": (filename, fileobj)},
+# The current OAuth access token and when it stops working. Access tokens
+# last two hours, so each worker keeps one rather than asking per upload.
+_oauth = {"token": None, "expires": None}
+
+
+class OAuthError(Exception):
+    pass
+
+
+def oauth_token():
+    """
+    An OAuth user access token for eBay's REST APIs, minted from
+    EBAY_SETTINGS["OAUTH_REFRESH_TOKEN"]. The Trading API calls keep using
+    the Auth'n'Auth USER_TOKEN; REST APIs don't accept it.
+    """
+    import requests
+    from fbc import app
+
+    now = datetime.datetime.utcnow()
+    if _oauth["token"] and _oauth["expires"] > now:
+        return _oauth["token"]
+    ebayconfig = app.config["EBAY_SETTINGS"]
+    refresh_token = ebayconfig.get("OAUTH_REFRESH_TOKEN")
+    if not refresh_token:
+        raise OAuthError(
+            "Set EBAY_SETTINGS['OAUTH_REFRESH_TOKEN'] in config.py; eBay's"
+            " picture upload needs an OAuth token."
         )
-        resp = response.dict()
-        return resp["SiteHostedPictureDetails"]["FullURL"], summarize_response(resp)
-    except ConnectionError as e:
-        logger.error(e)
-        resp = e.response.dict() if e.response is not None else {}
-        summary = summarize_response(resp)
-        if not summary["errors"]:
-            summary["errors"].append(str(e))
+    r = requests.post(
+        OAUTH_TOKEN_URL,
+        auth=(ebayconfig["APP_ID"], ebayconfig["CERT_ID"]),
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "scope": MEDIA_SCOPE,
+        },
+        timeout=30,
+    )
+    if r.status_code != 200:
+        try:
+            body = r.json()
+            detail = body.get("error_description") or body.get("error") or str(body)
+        except ValueError:
+            detail = _http_error(r)
+        raise OAuthError("eBay refused the OAuth refresh token: " + detail)
+    body = r.json()
+    _oauth["token"] = body["access_token"]
+    # Renew a minute early so a token never expires mid-request.
+    _oauth["expires"] = now + datetime.timedelta(
+        seconds=int(body.get("expires_in", 7200)) - 60
+    )
+    return _oauth["token"]
+
+
+def _rest_errors(r):
+    """Error messages from an eBay REST API error response."""
+    try:
+        errors = r.json().get("errors") or []
+    except ValueError:
+        errors = []
+    messages = [e.get("longMessage") or e.get("message") or str(e) for e in errors]
+    return messages or [_http_error(r)]
+
+
+def upload_picture(fileobj, filename, content_type=None):
+    """
+    Upload one picture to eBay Picture Services through the Media API's
+    createImageFromFile (Trading's UploadSiteHostedPictures was retired on
+    2026-09-30). Returns (url, summary); url is None if the upload failed.
+    """
+    import requests
+
+    summary = _empty_summary()
+    try:
+        token = oauth_token()
+    except OAuthError as e:
+        summary["errors"].append(str(e))
         return None, summary
+    headers = {"Authorization": "Bearer " + token}
+    try:
+        r = requests.post(
+            MEDIA_URL,
+            headers=headers,
+            files={"image": (filename, fileobj, content_type or "application/octet-stream")},
+            timeout=120,
+        )
+    except requests.RequestException as e:
+        logger.error(e)
+        summary["errors"].append("Couldn't reach eBay to upload " + filename + ": " + str(e))
+        return None, summary
+    if r.status_code not in (200, 201):
+        if r.status_code == 401:
+            # A revoked token; fetch a new one next time.
+            _oauth["token"] = None
+        summary["errors"].extend(
+            "Uploading " + filename + ": " + m for m in _rest_errors(r)
+        )
+        return None, summary
+    try:
+        url = r.json().get("imageUrl")
+    except ValueError:
+        url = None
+    if not url and r.headers.get("Location"):
+        # The image's details live at the Location the create call returns.
+        image = requests.get(r.headers["Location"], headers=headers, timeout=30)
+        if image.status_code == 200:
+            url = image.json().get("imageUrl")
+    if not url:
+        summary["errors"].append(
+            "eBay accepted " + filename + " but didn't say where it is: " + _http_error(r)
+        )
+    return url, summary
 
 
 def seller_profiles():

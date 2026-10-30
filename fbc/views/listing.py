@@ -142,7 +142,7 @@ class EbayDraftModelView(CustomModelView):
             if len(urls) >= MAX_PICTURES:
                 flash("eBay allows at most 24 pictures.", "warning")
                 break
-            url, summary = upload_picture(f.stream, f.filename)
+            url, summary = upload_picture(f.stream, f.filename, f.mimetype)
             self._flash_summary(summary)
             if url:
                 urls.append(url)
