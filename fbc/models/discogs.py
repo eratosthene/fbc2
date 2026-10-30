@@ -111,7 +111,11 @@ class DiscogsRelease(Model):
         "discogs_instance_discogs_release",
         Model.metadata,
         Column("id", Integer, primary_key=True),
-        Column("instance_id", Integer, ForeignKey("discogs_instance.instance_id")),
+        Column(
+            "instance_id",
+            BigInteger,
+            ForeignKey("discogs_instance.instance_id", ondelete="CASCADE"),
+        ),
         Column("release_id", Integer, ForeignKey("discogs_release.release_id")),
         keep_existing=True,
     )
