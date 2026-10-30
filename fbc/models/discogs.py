@@ -227,11 +227,11 @@ class DiscogsRelease(Model):
         notes = json.loads(self.notes)
         for d in notes:
             if d["field_id"] == 1:
-                m = re.search(".*\((.*)\)", d["value"])
+                m = re.search(r".*\((.*)\)", d["value"])
                 if m:
                     grading = grading + m.group(1)
             elif d["field_id"] == 2:
-                m = re.search(".*\((.*)\)", d["value"])
+                m = re.search(r".*\((.*)\)", d["value"])
                 if m:
                     grading = grading + "/" + m.group(1)
         from fbc.models.inventory import Unit
