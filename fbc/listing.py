@@ -791,11 +791,72 @@ def _as_list(value):
     return [value]
 
 
+def _amount(value):
+    """The number in an ebaysdk amount ({"_currencyID": "USD", "value": "0.35"})."""
+    if not value:
+        return 0.0
+    if isinstance(value, dict):
+        value = value.get("value")
+    try:
+        return float(value or 0)
+    except ValueError:
+        return 0.0
+
+
+def _fee_label(name):
+    """ "InsertionFee" -> "Insertion fee"."""
+    words = re.findall(r"[A-Z][a-z]*|[a-z]+|\d+", name or "")
+    if not words:
+        return name or "Fee"
+    return " ".join([words[0]] + [w.lower() for w in words[1:]])
+
+
+def summarize_fees(fees):
+    """
+    (fees, total) from a response's Fees container. Each fee is net of any
+    PromotionalDiscount eBay reports, such as a free insertion. eBay's
+    "ListingFee" is normally the sum of the other fees, and then it's the
+    total rather than a fee of its own; if it isn't, it's listed like the
+    rest and the total is their sum. Only fees or discounts that aren't
+    zero are kept.
+    """
+    entries = []
+    for f in _as_list((fees or {}).get("Fee")):
+        amount = _amount(f.get("Fee"))
+        discount = _amount(f.get("PromotionalDiscount"))
+        entries.append(
+            {
+                "name": f.get("Name"),
+                "label": _fee_label(f.get("Name")),
+                "amount": amount,
+                "discount": discount,
+                "net": round(amount - discount, 2),
+            }
+        )
+    others = [e for e in entries if e["name"] != "ListingFee"]
+    listing_fee = next((e for e in entries if e["name"] == "ListingFee"), None)
+    if listing_fee and abs(listing_fee["amount"] - sum(e["amount"] for e in others)) < 0.005:
+        total = listing_fee
+    else:
+        others = entries
+        total = None
+    kept = [e for e in others if e["amount"] or e["discount"]]
+    if total is None and kept:
+        total = {
+            "amount": round(sum(e["amount"] for e in kept), 2),
+            "discount": round(sum(e["discount"] for e in kept), 2),
+            "net": round(sum(e["net"] for e in kept), 2),
+        }
+    if total is None or not (total["amount"] or total["discount"]):
+        return kept, None
+    return kept, {k: total[k] for k in ("amount", "discount", "net")}
+
+
 def summarize_response(resp):
     """
     Pull the parts of a Trading API response worth showing: errors and
-    warnings (both arrive in Errors, told apart by SeverityCode) and any
-    non-zero listing fees.
+    warnings (both arrive in Errors, told apart by SeverityCode) and the
+    listing fees (see summarize_fees).
     """
     errors = []
     warnings = []
@@ -805,13 +866,10 @@ def summarize_response(resp):
             warnings.append(text)
         else:
             errors.append(text)
-    fees = []
-    fee_list = (resp.get("Fees") or {}).get("Fee")
-    for f in _as_list(fee_list):
-        amount = float((f.get("Fee") or {}).get("value", 0) or 0)
-        if amount:
-            fees.append({"name": f.get("Name"), "amount": amount})
-    return {"errors": errors, "warnings": warnings, "fees": fees}
+    if resp.get("Fees"):
+        logger.info("eBay fees: " + json.dumps(resp["Fees"], default=str))
+    fees, total = summarize_fees(resp.get("Fees"))
+    return {"errors": errors, "warnings": warnings, "fees": fees, "fee_total": total}
 
 
 def _empty_summary():
@@ -910,8 +968,12 @@ def _listing_call(verb, draft):
 
 
 def verify_draft(draft):
-    """Have eBay check the listing without creating it."""
+    """
+    Have eBay check the listing without creating it. Its fees are only
+    estimates: eBay may leave out discounts such as free insertions.
+    """
     _, summary = _listing_call("VerifyAddFixedPriceItem", draft)
+    summary["source"] = "verify"
     return summary
 
 
@@ -950,6 +1012,7 @@ def publish_draft(draft):
     draft.unit.ebay_listing_id = item_id
     db.session.commit()
     logger.info("Published unit " + str(draft.unit_id) + " as " + item_id)
+    summary["source"] = "publish"
     return summary
 
 

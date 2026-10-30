@@ -1,4 +1,5 @@
 import io
+import json
 
 import pytest
 
@@ -276,3 +277,54 @@ def test_connect_page_says_when_connected(client, exchanged):
 
     html = client.get("/ebaydraftmodelview/oauth").get_data(as_text=True)
     assert "Connected 2026-10-29; sign in again before 2028-04-28." in html
+
+
+def _draft_with_result(result):
+    unit = _carnaval()
+    from fbc.listing import new_draft
+
+    draft = new_draft(unit)
+    draft.messages = json.dumps(result)
+    db.session.add(draft)
+    db.session.commit()
+    return draft
+
+
+def test_checked_fees_are_shown_as_an_estimate_with_discounts(client):
+    draft = _draft_with_result(
+        {
+            "errors": [],
+            "warnings": [],
+            "source": "verify",
+            "fees": [
+                {
+                    "name": "InsertionFee",
+                    "label": "Insertion fee",
+                    "amount": 0.35,
+                    "discount": 0.35,
+                    "net": 0.0,
+                }
+            ],
+            "fee_total": {"amount": 0.35, "discount": 0.35, "net": 0.0},
+        }
+    )
+    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(as_text=True)
+
+    assert "These are eBay&#39;s estimate." in html or "These are eBay's estimate." in html
+    assert "Insertion fee" in html
+    assert "&minus;$0.35" in html
+    assert "<th>Total</th>" in html
+
+
+def test_fees_saved_before_discounts_still_show(client):
+    draft = _draft_with_result(
+        {
+            "errors": [],
+            "warnings": [],
+            "fees": [{"name": "InsertionFee", "amount": 0.35}],
+        }
+    )
+    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(as_text=True)
+
+    assert "InsertionFee" in html
+    assert "$0.35" in html

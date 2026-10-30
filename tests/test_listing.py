@@ -282,7 +282,16 @@ def test_summarize_response_splits_errors_warnings_and_fees():
     assert summarize_response(resp) == {
         "errors": ["Bad specific."],
         "warnings": ["Heads up."],
-        "fees": [{"name": "InsertionFee", "amount": 0.35}],
+        "fees": [
+            {
+                "name": "InsertionFee",
+                "label": "Insertion fee",
+                "amount": 0.35,
+                "discount": 0.0,
+                "net": 0.35,
+            }
+        ],
+        "fee_total": {"amount": 0.35, "discount": 0.0, "net": 0.35},
     }
 
 
@@ -1290,3 +1299,65 @@ def test_more_than_three_lps_stay_lp(app):
     unit.discogs_release.formats = _vinyl(4)
 
     assert build_item_specifics(unit)["Type"] == ["LP"]
+
+
+
+def _fee(name, amount, discount=None):
+    fee = {"Name": name, "Fee": {"_currencyID": "USD", "value": str(amount)}}
+    if discount is not None:
+        fee["PromotionalDiscount"] = {"_currencyID": "USD", "value": str(discount)}
+    return fee
+
+
+def test_listing_fee_that_adds_up_the_others_is_the_total():
+    fees, total = listing.summarize_fees(
+        {"Fee": [_fee("InsertionFee", 0.35), _fee("BoldFee", 0.0), _fee("ListingFee", 0.35)]}
+    )
+
+    assert [f["name"] for f in fees] == ["InsertionFee"]
+    assert total == {"amount": 0.35, "discount": 0.0, "net": 0.35}
+
+
+def test_free_insertion_discount_is_subtracted():
+    fees, total = listing.summarize_fees(
+        {"Fee": [_fee("InsertionFee", 0.35, 0.35), _fee("ListingFee", 0.35, 0.35)]}
+    )
+
+    assert fees[0]["net"] == 0.0
+    assert fees[0]["discount"] == 0.35
+    assert total["net"] == 0.0
+
+
+def test_listing_fee_that_doesnt_add_up_is_listed_as_a_fee():
+    fees, total = listing.summarize_fees(
+        {"Fee": [_fee("InsertionFee", 0.35), _fee("ListingFee", 0.20)]}
+    )
+
+    assert [f["name"] for f in fees] == ["InsertionFee", "ListingFee"]
+    assert total == {"amount": 0.55, "discount": 0.0, "net": 0.55}
+
+
+def test_no_fees_means_no_total():
+    assert listing.summarize_fees({"Fee": [_fee("ListingFee", 0.0)]}) == ([], None)
+    assert listing.summarize_fees(None) == ([], None)
+
+
+def test_raw_fees_are_logged(caplog):
+    import logging
+
+    with caplog.at_level(logging.INFO):
+        summarize_response({"Fees": {"Fee": [_fee("InsertionFee", 0.35)]}})
+
+    assert 'eBay fees: {"Fee": [{"Name": "InsertionFee"' in caplog.text
+
+
+def test_verify_and_publish_say_where_their_fees_came_from(app, monkeypatch):
+    def fake_call(verb, data):
+        resp = {"ItemID": "1", "Fees": {"Fee": [_fee("InsertionFee", 0.35)]}}
+        return resp, summarize_response(resp)
+
+    monkeypatch.setattr(listing, "_call", fake_call)
+    draft = _draft(pictures=["https://i.ebayimg.com/a.jpg"])
+
+    assert listing.verify_draft(draft)["source"] == "verify"
+    assert publish_draft(draft)["source"] == "publish"
