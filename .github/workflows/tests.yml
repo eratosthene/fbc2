@@ -33,8 +33,12 @@ jobs:
       - name: Install dependencies from Pipfile.lock
         run: pipenv install --dev --deploy
 
+      # One line per test, in colour and unbuffered, so the step's log can be
+      # watched live while it runs.
       - name: Run tests
-        run: pipenv run pytest --junitxml=test-results/junit.xml
+        run: pipenv run pytest -v --color=yes --junitxml=test-results/junit.xml
+        env:
+          PYTHONUNBUFFERED: "1"
 
       # Posts a results comment on the PR (updated on each push) and adds the
       # results to this job's summary. Dependabot PRs and PRs from forks get a
