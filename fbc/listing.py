@@ -340,7 +340,9 @@ def build_item_specifics(unit, defaults=None):
     put("Sleeve Grading", grade_name(sleeve))
     put("Inlay Condition", grade_name(sleeve))
 
-    for name, values in (defaults if defaults is not None else DEFAULT_SPECIFICS).items():
+    for name, values in (
+        defaults if defaults is not None else DEFAULT_SPECIFICS
+    ).items():
         put(name, *values)
     return specifics
 
@@ -629,9 +631,7 @@ def template_from_item(item):
     shipping_type = shipping.get("ShippingType")
     options = []
     for option in _as_list(shipping.get("ShippingServiceOptions")):
-        o = {
-            k: to_request(option[k]) for k in SHIPPING_OPTION_FIELDS if k in option
-        }
+        o = {k: to_request(option[k]) for k in SHIPPING_OPTION_FIELDS if k in option}
         if shipping_type not in FLAT_SHIPPING_TYPES:
             for k in SHIPPING_COST_FIELDS:
                 o.pop(k, None)
@@ -729,7 +729,10 @@ def ensure_release_details(release):
         db.session.commit()
     except Exception as e:
         logger.warning(
-            "Couldn't fetch labels for release " + str(release.release_id) + ": " + str(e)
+            "Couldn't fetch labels for release "
+            + str(release.release_id)
+            + ": "
+            + str(e)
         )
 
 
@@ -754,12 +757,13 @@ def escape_request(data):
     return data
 
 
-def trading():
+def trading(compatibility=TRADING_VERSION):
     """
-    A Trading API connection for listing calls. Requests are escaped with
-    escape_request() before they're sent, so ebaysdk's partial escaping is
-    left off; they ask for a current API version rather than ebaysdk's
-    default.
+    A Trading API connection, signed in with the OAuth token from Connect
+    eBay (raises OAuthError if fbc isn't connected). Listing calls escape
+    their requests with escape_request() before they're sent, so ebaysdk's
+    partial escaping is left off; they ask for a current API version rather
+    than ebaysdk's default, which compatibility=None keeps.
     """
     from fbc import app
     from ebaysdk.trading import Connection as Trading
@@ -772,8 +776,8 @@ def trading():
         domain="api.ebay.com",
         certid=ebayconfig["CERT_ID"],
         devid=ebayconfig["DEV_ID"],
-        token=ebayconfig["USER_TOKEN"],
-        compatibility=TRADING_VERSION,
+        iaf_token=oauth_token(TRADING_SCOPE),
+        compatibility=compatibility,
     )
 
 
@@ -847,7 +851,10 @@ def summarize_fees(fees, discounted=False):
         )
     others = [e for e in entries if e["name"] != "ListingFee"]
     listing_fee = next((e for e in entries if e["name"] == "ListingFee"), None)
-    if listing_fee and abs(listing_fee["amount"] - sum(e["amount"] for e in others)) < 0.005:
+    if (
+        listing_fee
+        and abs(listing_fee["amount"] - sum(e["amount"] for e in others)) < 0.005
+    ):
         total = listing_fee
     else:
         others = entries
@@ -898,14 +905,21 @@ def _http_error(response):
     if not isinstance(text, str):
         text = ""
     text = " ".join(text.split())[:300]
-    return ("HTTP " + str(status) + " " + reason + (": " + text if text else "")).strip()
+    return (
+        "HTTP " + str(status) + " " + reason + (": " + text if text else "")
+    ).strip()
 
 
 def _call(verb, data):
     """Run a Trading API call, returning (response dict or None, summary)."""
     from ebaysdk.exception import ConnectionError
 
-    api = trading()
+    try:
+        api = trading()
+    except OAuthError as e:
+        summary = _empty_summary()
+        summary["errors"].append(str(e))
+        return None, summary
     try:
         response = api.execute(verb, escape_request(data))
         resp = response.dict()
@@ -1034,8 +1048,11 @@ MEDIA_URL = "https://apim.ebay.com/commerce/media/v1_beta/image/create_image_fro
 MEDIA_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory"
 # Reading an order's earnings (Ship This) through the Finances API.
 FINANCES_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.finances"
+# The Trading API (listings, orders, policies) takes a user token minted with
+# just the base scope.
+TRADING_SCOPE = "https://api.ebay.com/oauth/api_scope"
 # What Connect eBay asks the seller to allow.
-CONSENT_SCOPES = [MEDIA_SCOPE, FINANCES_SCOPE]
+CONSENT_SCOPES = [TRADING_SCOPE, MEDIA_SCOPE, FINANCES_SCOPE]
 
 # The current OAuth access token for each scope and when it stops working.
 # Access tokens last two hours, so each worker keeps them rather than asking
@@ -1088,8 +1105,9 @@ def _token_request(data):
 def consent_url(state):
     """
     The eBay sign-in page that asks the seller to let fbc manage their
-    pictures and read their order earnings. eBay then sends the browser to the RuName's "auth accepted"
-    URL with a one-time code for exchange_code().
+    listings and pictures and read their order earnings. eBay then sends the
+    browser to the RuName's "auth accepted" URL with a one-time code for
+    exchange_code().
     """
     from urllib.parse import urlencode
     from fbc import app
@@ -1177,10 +1195,10 @@ def saved_oauth_token():
 
 def oauth_token(scope=MEDIA_SCOPE):
     """
-    An OAuth user access token for `scope` of eBay's REST APIs, minted from
-    the refresh token Connect eBay saved (or
-    EBAY_SETTINGS["OAUTH_REFRESH_TOKEN"]). The Trading API calls keep using
-    the Auth'n'Auth USER_TOKEN; REST APIs don't accept it.
+    An OAuth user access token for `scope`, minted from the refresh token
+    Connect eBay saved (or EBAY_SETTINGS["OAUTH_REFRESH_TOKEN"]). Every eBay
+    call fbc makes uses one: the REST APIs and, through trading(), the
+    Trading API.
     """
     from fbc import app
 
@@ -1197,7 +1215,7 @@ def oauth_token(scope=MEDIA_SCOPE):
     if not refresh_token:
         raise OAuthError(
             "Connect fbc to eBay first (Sales > Connect eBay);"
-            " picture uploads and Ship This need it."
+            " everything fbc does on eBay needs it."
         )
     try:
         body = _token_request(
@@ -1245,12 +1263,16 @@ def upload_picture(fileobj, filename, content_type=None):
         r = requests.post(
             MEDIA_URL,
             headers=headers,
-            files={"image": (filename, fileobj, content_type or "application/octet-stream")},
+            files={
+                "image": (filename, fileobj, content_type or "application/octet-stream")
+            },
             timeout=120,
         )
     except requests.RequestException as e:
         logger.error(e)
-        summary["errors"].append("Couldn't reach eBay to upload " + filename + ": " + str(e))
+        summary["errors"].append(
+            "Couldn't reach eBay to upload " + filename + ": " + str(e)
+        )
         return None, summary
     if r.status_code not in (200, 201):
         if r.status_code == 401:
@@ -1271,7 +1293,10 @@ def upload_picture(fileobj, filename, content_type=None):
             url = image.json().get("imageUrl")
     if not url:
         summary["errors"].append(
-            "eBay accepted " + filename + " but didn't say where it is: " + _http_error(r)
+            "eBay accepted "
+            + filename
+            + " but didn't say where it is: "
+            + _http_error(r)
         )
     return url, summary
 
