@@ -647,3 +647,77 @@ def test_seller_profiles_reports_what_ebay_returned(monkeypatch):
 
 def test_trading_asks_for_a_current_api_version(app):
     assert listing.trading().config.get("compatibility") == listing.TRADING_VERSION
+
+
+def test_escape_request_escapes_text_and_attributes_but_not_tags():
+    assert listing.escape_request(
+        {
+            "Value": ["Stage & Screen", "<b>"],
+            "Cost": {"#text": "1 & 2", "@attrs": {"note": 'say "hi"'}},
+            "Quantity": 1,
+        }
+    ) == {
+        "Value": ["Stage &amp; Screen", "&lt;b&gt;"],
+        "Cost": {"#text": "1 &amp; 2", "@attrs": {"note": "say &quot;hi&quot;"}},
+        "Quantity": 1,
+    }
+
+
+def test_listing_request_is_well_formed_xml_with_special_characters(app, monkeypatch):
+    """
+    Build the real request ebaysdk would send for a draft full of
+    characters XML reserves, and check eBay could parse it.
+    """
+    import xml.etree.ElementTree as ET
+
+    from ebaysdk.connection import BaseConnection
+
+    sent = {}
+
+    class Sent(Exception):
+        pass
+
+    def capture(self):
+        sent["body"] = self.request.body
+        raise Sent()
+
+    monkeypatch.setattr(BaseConnection, "execute_request", capture)
+    draft = _draft(
+        pictures=["https://i.ebayimg.com/a.jpg?set=1&size=2"],
+        title='Simon & Garfunkel - "Bookends" <1968>',
+        description="<p>Tiny scuff & a seam split.</p>",
+    )
+    draft.item_specifics = "Genre: Stage & Screen | Rock\nArtist: Simon & Garfunkel"
+    template = listing.template_from_item(
+        {
+            "ShippingDetails": {
+                "ShippingType": "Flat",
+                "ShippingServiceOptions": {
+                    "ShippingService": "USPSMedia",
+                    "ShippingServiceCost": {"_currencyID": "USD", "value": "4.39"},
+                },
+            }
+        }
+    )
+    item = build_item(draft, {}, template)
+
+    with pytest.raises(Sent):
+        listing._call("VerifyAddFixedPriceItem", {"Item": item})
+
+    ns = {"e": "urn:ebay:apis:eBLBaseComponents"}
+    root = ET.fromstring(sent["body"])
+    sent_item = root.find("e:Item", ns)
+    assert sent_item.find("e:Title", ns).text == 'Simon & Garfunkel - "Bookends" <1968>'
+    assert sent_item.find("e:Description", ns).text == "<p>Tiny scuff & a seam split.</p>"
+    assert sent_item.find("e:PictureDetails/e:PictureURL", ns).text == (
+        "https://i.ebayimg.com/a.jpg?set=1&size=2"
+    )
+    values = [
+        v.text for v in sent_item.findall("e:ItemSpecifics/e:NameValueList/e:Value", ns)
+    ]
+    assert "Stage & Screen" in values
+    assert "Simon & Garfunkel" in values
+    cost = sent_item.find(
+        "e:ShippingDetails/e:ShippingServiceOptions/e:ShippingServiceCost", ns
+    )
+    assert (cost.text, cost.get("currencyID")) == ("4.39", "USD")

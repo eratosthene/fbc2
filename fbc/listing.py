@@ -17,6 +17,7 @@ import datetime
 import json
 import logging
 import re
+from xml.sax.saxutils import escape
 
 logger = logging.getLogger()
 
@@ -494,11 +495,29 @@ def ensure_release_details(release):
 TRADING_VERSION = "1451"
 
 
+def escape_request(data):
+    """
+    XML-escape every string in a request (element text and attribute values;
+    not tag names). Listing calls send user-entered text, and ebaysdk's own
+    escape_xml option only covers a string that is the whole content of an
+    element, so it misses the values in a list (item specifics, picture
+    URLs) and "#text" next to "@attrs".
+    """
+    if isinstance(data, dict):
+        return {k: escape_request(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [escape_request(v) for v in data]
+    if isinstance(data, str):
+        return escape(data, {'"': "&quot;"})
+    return data
+
+
 def trading():
     """
-    A Trading API connection for listing calls. Unlike the sync calls these
-    send user-entered text, so XML escaping is turned on, and they ask for a
-    current API version rather than ebaysdk's default.
+    A Trading API connection for listing calls. Requests are escaped with
+    escape_request() before they're sent, so ebaysdk's partial escaping is
+    left off; they ask for a current API version rather than ebaysdk's
+    default.
     """
     from fbc import app
     from ebaysdk.trading import Connection as Trading
@@ -512,7 +531,6 @@ def trading():
         certid=ebayconfig["CERT_ID"],
         devid=ebayconfig["DEV_ID"],
         token=ebayconfig["USER_TOKEN"],
-        escape_xml=True,
         compatibility=TRADING_VERSION,
     )
 
@@ -560,7 +578,7 @@ def _call(verb, data):
 
     api = trading()
     try:
-        response = api.execute(verb, data)
+        response = api.execute(verb, escape_request(data))
         resp = response.dict()
         return resp, summarize_response(resp)
     except ConnectionError as e:
@@ -670,7 +688,9 @@ def upload_picture(fileobj, filename):
     try:
         response = api.execute(
             "UploadSiteHostedPictures",
-            {"PictureName": filename, "PictureSet": "Supersize", "ExtensionInDays": 30},
+            escape_request(
+                {"PictureName": filename, "PictureSet": "Supersize", "ExtensionInDays": 30}
+            ),
             files={"file": (filename, fileobj)},
         )
         resp = response.dict()
