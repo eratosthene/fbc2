@@ -2,7 +2,16 @@ import logging
 from flask_appbuilder import Model
 from markupsafe import Markup
 from flask import url_for
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Text, BigInteger
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    ForeignKey,
+    Date,
+    DateTime,
+    Text,
+    BigInteger,
+)
 from sqlalchemy.orm import relationship
 import re
 import json
@@ -264,3 +273,20 @@ class DiscogsRelease(Model):
         if unit:
             ret = unit.purchase_lot.name
         return Markup(ret)
+
+
+class DiscogsOAuthToken(Model):
+    """
+    An OAuth access token and secret from Connect Discogs. Discogs's tokens
+    don't expire; the newest row is the one used.
+    """
+
+    __tablename__ = "discogs_oauth_token"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(Text, nullable=False)
+    secret = Column(Text, nullable=False)
+    username = Column(String(100))
+    created = Column(DateTime)
+
+    def __repr__(self):
+        return "DiscogsOAuthToken " + str(self.id)

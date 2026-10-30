@@ -190,14 +190,9 @@ def discogs_plan(unit):
 
 
 def _discogs():
-    import discogs_client
+    from fbc import discogs
 
-    from fbc import app
-
-    return discogs_client.Client(
-        app.config["DISCOGS_SETTINGS"]["USER_AGENT"],
-        user_token=app.config["DISCOGS_SETTINGS"]["USER_TOKEN"],
-    )
+    return discogs.client()
 
 
 def remove_from_discogs(unit):
