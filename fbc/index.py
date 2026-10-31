@@ -1,13 +1,14 @@
 import datetime
+import functools
 import logging
 from collections import Counter
 
 from ebaysdk.exception import ConnectionError
-from flask import flash, redirect, request
+from flask import jsonify, request, url_for
 from flask_appbuilder import IndexView
 from flask_appbuilder.views import expose
 
-from fbc import discogs
+from fbc import discogs, sync
 from fbc.listing import OAuthError, trading
 from fbc.util import add_ebay_listing
 from fbc.util import add_ebay_order
@@ -217,9 +218,39 @@ class MyIndexView(IndexView):
             box_totals=box_totals,
         )
 
+    def _start_sync(self, kind, title, fn, fallback_url):
+        """
+        Start fn as a background sync job (see fbc.sync). A request from the
+        Sync buttons' script gets the job as JSON, to show in a modal; any
+        other request gets a page that shows the job's log.
+        """
+        job_id = sync.start(kind, title, fn, request.referrer or fallback_url)
+        job_url = url_for("MyIndexView.syncjob", job_id=job_id)
+        best = request.accept_mimetypes.best_match(["text/html", "application/json"])
+        if best == "application/json":
+            return jsonify(id=job_id, url=job_url)
+        self.update_redirect()
+        return self.render_template(
+            "sync_job.html", appbuilder=self.appbuilder, job_url=job_url
+        )
+
+    @expose("/syncjob/<job_id>")
+    def syncjob(self, job_id):
+        job = sync.read(job_id, request.args.get("offset", 0, type=int))
+        if job is None:
+            return jsonify(error="No such sync."), 404
+        return jsonify(job)
+
     @expose("/syncdiscogs")
     def syncdiscogs(self):
-        self.update_redirect()
+        return self._start_sync(
+            "discogs",
+            "Discogs sync",
+            self.dosyncdiscogs,
+            "/discogsreleasemodelview/list/",
+        )
+
+    def dosyncdiscogs(self):
         from fbc import db
         from fbc.models.discogs import DiscogsRelease, DiscogsInstance, Folder
 
@@ -243,7 +274,7 @@ class MyIndexView(IndexView):
         logger.info("Total releases: " + str(len(releases)))
         logger.info("Total local releases: " + str(len(local_releases)))
         for item in releases:
-            logger.debug("Checking discogs: " + str(item))
+            logger.info("Checking discogs: " + str(item))
             discogs_instance = (
                 db.session.query(DiscogsInstance)
                 .filter_by(instance_id=item.instance_id)
@@ -255,20 +286,22 @@ class MyIndexView(IndexView):
 
         for item in local_instances:
             if not any(x.instance_id == item.instance_id for x in releases):
-                logger.debug(
+                logger.info(
                     "Local instance " + str(item.instance_id) + " should be removed"
                 )
                 forget_discogs_instance(item)
-
-        ref = request.referrer
-        if ref:
-            return redirect(ref)
-        else:
-            return redirect("/discogsreleasemodelview/list/")
+        logger.info("Discogs sync finished.")
 
     @expose("/syncebaylistings")
     def syncebaylistings(self):
-        self.update_redirect()
+        return self._start_sync(
+            "ebay-listings",
+            "eBay listings sync",
+            self.dosyncebaylistings,
+            "/ebaylistingmodelview/list/",
+        )
+
+    def dosyncebaylistings(self):
         from fbc import db
         from fbc.models.ebay import EbayListing
 
@@ -301,7 +334,7 @@ class MyIndexView(IndexView):
                 logging.info("Total pages: " + str(totalpages))
                 all_items.extend(resp["ActiveList"]["ItemArray"]["Item"])
             except OAuthError as e:
-                flash(str(e), "danger")
+                logger.error(str(e))
                 break
             except ConnectionError as e:
                 logging.error(e)
@@ -318,7 +351,7 @@ class MyIndexView(IndexView):
         logger.info("Total local listings: " + str(len(local_listings)))
         remote_item_ids = {item["ItemID"] for item in all_items}
         for item in all_items:
-            logger.debug("Checking ebay: " + str(item["ItemID"]))
+            logger.info("Checking ebay: " + str(item["ItemID"]))
             if (
                 not db.session.query(EbayListing)
                 .filter_by(item_id=item["ItemID"])
@@ -336,11 +369,7 @@ class MyIndexView(IndexView):
                 else:
                     logger.info("Adding " + str(item["ItemID"]))
                     add_ebay_listing(item)
-        ref = request.referrer
-        if ref:
-            return redirect(ref)
-        else:
-            return redirect("/ebaylistingmodelview/list/")
+        logger.info("eBay listings sync finished.")
 
     def doebaysync(self, doupdate, api, response):
         from fbc import db
@@ -353,7 +382,7 @@ class MyIndexView(IndexView):
         logger.info("Total orders: " + str(len(orders)))
         logger.info("Total local orders: " + str(len(local_orders)))
         for item in orders:
-            logger.debug("Checking ebay: " + str(item["OrderID"]))
+            logger.info("Checking ebay: " + str(item["OrderID"]))
             if (
                 not db.session.query(EbayOrder)
                 .filter_by(order_id=item["OrderID"])
@@ -365,17 +394,11 @@ class MyIndexView(IndexView):
                 logger.info("Updating " + str(item["OrderID"]))
                 add_ebay_order(item)
 
-    @expose("/syncebayorders")
-    def syncebayorders(self):
-        doupdate = request.args.get("doupdate")
-        self.update_redirect()
-        if doupdate == "True":
-            logger.info("Updating eBay orders...")
-        else:
-            logger.info("Adding new eBay orders...")
+    def dosyncebayorders(self, doupdate, days, message):
+        logger.info(message)
         try:
             currentTime = datetime.datetime.now() + datetime.timedelta(days=1)
-            startTime = currentTime + datetime.timedelta(days=-10)
+            startTime = currentTime + datetime.timedelta(days=-days)
             api = trading(compatibility=None)
 
             response = api.execute(
@@ -388,41 +411,36 @@ class MyIndexView(IndexView):
             )
             self.doebaysync(doupdate, api, response)
         except OAuthError as e:
-            flash(str(e), "danger")
+            logger.error(str(e))
+            return
         except ConnectionError as e:
             logging.error(e)
             logging.error(e.response.dict())
-        ref = request.referrer
-        if ref:
-            return redirect(ref)
+            return
+        logger.info("eBay orders sync finished.")
+
+    # The order syncs share a kind, so only one of them runs at a time.
+    @expose("/syncebayorders")
+    def syncebayorders(self):
+        doupdate = request.args.get("doupdate")
+        if doupdate == "True":
+            message = "Updating eBay orders..."
         else:
-            return redirect("/ebayordermodelview/list/")
+            message = "Adding new eBay orders..."
+        return self._start_sync(
+            "ebay-orders",
+            "eBay orders sync",
+            functools.partial(self.dosyncebayorders, doupdate, 10, message),
+            "/ebayordermodelview/list/",
+        )
 
     @expose("/syncebayordersdeep")
     def syncebayordersdeep(self):
-        self.update_redirect()
-        logger.info("Deep updating eBay orders...")
-        try:
-            currentTime = datetime.datetime.now() + datetime.timedelta(days=1)
-            startTime = currentTime + datetime.timedelta(days=-88)
-            api = trading(compatibility=None)
-
-            response = api.execute(
-                "GetOrders",
-                {
-                    "CreateTimeFrom": str(startTime)[0:19],
-                    "CreateTimeTo": str(currentTime)[0:19],
-                    "OrderStatus": "Completed",
-                },
-            )
-            self.doebaysync("False", api, response)
-        except OAuthError as e:
-            flash(str(e), "danger")
-        except ConnectionError as e:
-            logging.error(e)
-            logging.error(e.response.dict())
-        ref = request.referrer
-        if ref:
-            return redirect(ref)
-        else:
-            return redirect("/ebayordermodelview/list/")
+        return self._start_sync(
+            "ebay-orders",
+            "eBay orders deep sync",
+            functools.partial(
+                self.dosyncebayorders, "False", 88, "Deep updating eBay orders..."
+            ),
+            "/ebayordermodelview/list/",
+        )

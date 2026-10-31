@@ -267,16 +267,18 @@ def test_index_renders_with_no_sales(app):
 @pytest.mark.parametrize(
     "path", ["/syncebaylistings", "/syncebayorders", "/syncebayordersdeep"]
 )
-def test_ebay_sync_without_connect_ebay_says_what_to_do(app, monkeypatch, path):
+def test_ebay_sync_without_connect_ebay_says_what_to_do(
+    app, monkeypatch, inline_sync, path
+):
     from fbc import listing
 
     monkeypatch.setitem(app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "")
     monkeypatch.setattr(listing, "_oauth", {})
     client = app.test_client()
 
-    response = client.get(path)
+    response = client.get(path, headers={"Accept": "application/json"})
 
-    assert response.status_code == 302
-    with client.session_transaction() as session:
-        messages = [m for _, m in session.get("_flashes", [])]
-    assert any("Connect eBay" in m for m in messages)
+    assert response.status_code == 200
+    job = client.get(response.get_json()["url"]).get_json()
+    assert "Connect eBay" in job["log"]
+    assert job["errors"] == 1

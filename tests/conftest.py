@@ -79,3 +79,19 @@ def app_context():
             yield fbc.app
         finally:
             fbc.db.session.remove()
+
+
+@pytest.fixture(autouse=True)
+def sync_job_folder(tmp_path, monkeypatch):
+    """Keep each test's background sync jobs (fbc/sync.py) out of /tmp."""
+    folder = tmp_path / "sync-jobs"
+    monkeypatch.setitem(fbc.app.config, "SYNC_JOB_FOLDER", str(folder))
+    return folder
+
+
+@pytest.fixture
+def inline_sync(monkeypatch):
+    """Run background sync jobs in the test's own thread, before start() returns."""
+    from fbc import sync
+
+    monkeypatch.setattr(sync, "_spawn", lambda target: target())

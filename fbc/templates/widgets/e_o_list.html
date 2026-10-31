@@ -1,7 +1,11 @@
 {% extends 'appbuilder/general/widgets/list.html' %} {% block list_header %} {{
 super() }}
-<a href="/syncebayorders" class="btn btn-sm btn-primary">Sync New</a>&nbsp;
-<a href="/syncebayorders?doupdate=True" class="btn btn-sm btn-primary">Sync</a
+<a href="/syncebayorders" class="btn btn-sm btn-primary fbc-sync"
+  data-title="eBay orders sync">Sync New</a>&nbsp;
+<a href="/syncebayorders?doupdate=True" class="btn btn-sm btn-primary fbc-sync"
+  data-title="eBay orders sync">Sync</a
 >&nbsp;
-<a href="/syncebayordersdeep" class="btn btn-sm btn-primary">Deep Sync</a>
+<a href="/syncebayordersdeep" class="btn btn-sm btn-primary fbc-sync"
+  data-title="eBay orders deep sync">Deep Sync</a>
+{% include "sync/modal.html" %}
 {% endblock %}
