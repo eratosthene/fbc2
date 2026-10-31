@@ -16,7 +16,7 @@ fbcSync.watch(url) shows a job that's already started.
         <p id="fbc-sync-status">Starting&hellip;</p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-default" id="fbc-sync-close" disabled>
+        <button type="button" class="btn btn-default" id="fbc-sync-close">
           Close
         </button>
         <button type="button" class="btn btn-primary" id="fbc-sync-refresh" disabled>
@@ -29,13 +29,18 @@ fbcSync.watch(url) shows a job that's already started.
 <script {% if csp_nonce is defined %}nonce="{{ csp_nonce() }}"{% endif %}>
   window.fbcSync = (function ($) {
     var returnUrl = null;
+    // Counts the times the modal is opened or closed, so a poll for a sync
+    // that's no longer shown stops instead of adding to another sync's log.
+    var shown = 0;
 
     function show(title) {
       returnUrl = null;
+      shown += 1;
       $("#fbc-sync-title").text(title);
       $("#fbc-sync-log").text("");
       $("#fbc-sync-status").text("Starting…");
-      $("#fbc-sync-close, #fbc-sync-refresh").prop("disabled", true);
+      // Close works at any time; the sync carries on without the modal.
+      $("#fbc-sync-refresh").prop("disabled", true);
       // Out from inside the list widget, so nothing on the page covers it.
       $("#fbc-sync-modal").appendTo("body").modal("show");
     }
@@ -53,19 +58,24 @@ fbcSync.watch(url) shows a job that's already started.
     function finish(message, url) {
       returnUrl = url || window.location.href;
       $("#fbc-sync-status").text(message);
-      $("#fbc-sync-close").prop("disabled", false);
       $("#fbc-sync-refresh").prop("disabled", false).focus();
     }
 
-    function poll(url, offset) {
+    function poll(url, offset, showing) {
+      if (showing !== shown) {
+        return;
+      }
       $.ajax({ url: url, data: { offset: offset }, dataType: "json" })
         .done(function (job) {
+          if (showing !== shown) {
+            return;
+          }
           $("#fbc-sync-title").text(job.title);
           append(job.log);
           if (job.status === "running") {
             $("#fbc-sync-status").text("Running…");
             setTimeout(function () {
-              poll(url, job.offset);
+              poll(url, job.offset, showing);
             }, 1000);
           } else if (job.status === "done" && !job.errors) {
             finish("Finished.", job.return_url);
@@ -81,7 +91,7 @@ fbcSync.watch(url) shows a job that's already started.
           } else {
             // The server may just be busy; keep trying.
             setTimeout(function () {
-              poll(url, offset);
+              poll(url, offset, showing);
             }, 3000);
           }
         });
@@ -89,15 +99,16 @@ fbcSync.watch(url) shows a job that's already started.
 
     function watch(url, title) {
       show(title || "Sync");
-      poll(url, 0);
+      poll(url, 0, shown);
     }
 
     $(document).on("click", "a.fbc-sync", function (event) {
       event.preventDefault();
       show($(this).data("title") || $(this).text());
+      var showing = shown;
       $.ajax({ url: this.href, dataType: "json" })
         .done(function (job) {
-          poll(job.url, 0);
+          poll(job.url, 0, showing);
         })
         .fail(function (xhr) {
           finish("The sync didn't start (" + xhr.status + " " + xhr.statusText + ").");
@@ -105,6 +116,7 @@ fbcSync.watch(url) shows a job that's already started.
     });
 
     $(document).on("click", "#fbc-sync-close", function () {
+      shown += 1;
       $("#fbc-sync-modal").modal("hide");
     });
 

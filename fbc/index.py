@@ -281,7 +281,7 @@ class MyIndexView(IndexView):
 
         for item in local_instances:
             if not any(x.instance_id == item.instance_id for x in releases):
-                logger.debug(
+                logger.info(
                     "Local instance " + str(item.instance_id) + " should be removed"
                 )
                 forget_discogs_instance(item)
