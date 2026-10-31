@@ -105,6 +105,9 @@ class MyIndexView(IndexView):
         for u in units:
             # A unit whose box no longer exists counts as having no box.
             box = box_totals[u.storage_box_id if u.storage_box_id in box_ids else 0]
+            # A unit with no lot (or whose lot no longer exists) adds no
+            # capital, but its sales still count toward its box and the totals.
+            lot_total = lot_totals.get(u.purchase_lot_id)
             receipt = receipts.get(u.sales_receipt_id)
             if receipt:
                 num_units = units_per_receipt[u.sales_receipt_id]
@@ -112,11 +115,13 @@ class MyIndexView(IndexView):
                 c_net_sold = receipt.net_sold / num_units
                 box["gross"] += c_sold_price
                 box["net"] += c_net_sold
-                lot_totals[u.purchase_lot_id]["gross"] += c_sold_price
                 totals["gross"] += c_sold_price
-                lot_totals[u.purchase_lot_id]["net"] += c_net_sold
                 totals["net"] += c_net_sold
-            box["capital"] += lot_totals[u.purchase_lot_id]["perunit"]
+                if lot_total:
+                    lot_total["gross"] += c_sold_price
+                    lot_total["net"] += c_net_sold
+            if lot_total:
+                box["capital"] += lot_total["perunit"]
         for lot in lots:
             lot_totals[lot.id]["fees"] = round(
                 lot_totals[lot.id]["gross"] - lot_totals[lot.id]["net"], 2
