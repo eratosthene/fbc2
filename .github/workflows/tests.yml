@@ -40,9 +40,9 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
 
-      # Posts a results comment on the PR (updated on each push) and adds the
-      # results to this job's summary. Dependabot PRs and PRs from forks get a
-      # read-only token, so the results only show in the job log for those.
+      # Adds the results to this job's summary. Dependabot PRs and PRs from
+      # forks get a read-only token, so the results only show in the job log
+      # for those.
       - name: Publish test results
         if: >-
           !cancelled() && (
@@ -59,6 +59,25 @@ jobs:
           # build), where it has no logs to show. The pytest job's own status
           # already passes or fails the PR.
           check_run: false
+          # A new comment emails everyone on the PR, so the next step puts the
+          # results in the PR description instead.
+          comment_mode: "off"
+
+      - name: Add the results to the PR description
+        if: >-
+          !cancelled() &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const sha = context.payload.pull_request.head.sha.slice(0, 7);
+            const testResults = require("./.github/scripts/test-results.js");
+            const body = testResults("test-results/junit.xml", `Commit ${sha} · [workflow run](${runUrl})`);
+            const prSection = require("./.github/scripts/pr-section.js");
+            await prSection({ github, context, core }, "fbc2-test-results", body);
 
   # The Docker image installs from requirements.txt rather than Pipfile.lock,
   # so make sure the two haven't drifted apart.
