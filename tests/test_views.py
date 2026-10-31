@@ -1,13 +1,17 @@
+import datetime
+
 import pytest
 from werkzeug.datastructures import MultiDict
 
 import fbc
+from fbc.models.discogs import DiscogsRelease
 from fbc.models.ebay import EbayListing
-from fbc.models.inventory import Unit
+from fbc.models.inventory import PurchaseLot, Unit
 from fbc.views.discogs import ArtistModelView, DiscogsReleaseModelView, FolderModelView
 from fbc.views.inventory import (
     UNITS_WITHOUT_LISTING_FILTERS,
     UNITS_WITHOUT_MASTER_FILTERS,
+    PurchaseLotModelView,
     UnitModelReboxView,
     UnitModelView,
 )
@@ -16,7 +20,7 @@ from fbc.views.sales import EbayListingModelView, EbayOrderModelView
 
 def _view(view_class):
     for view in fbc.appbuilder.baseviews:
-        if isinstance(view, view_class):
+        if type(view) is view_class:
             return view
     raise AssertionError(f"{view_class.__name__} is not registered")
 
@@ -194,3 +198,43 @@ def test_unit_forms_save_a_blank_master_and_unticked_sold(view_class):
     fbc.db.session.add(unit)
     fbc.db.session.commit()
     assert (unit.discogs_master, unit.sold) == ("", False)
+
+
+def test_rebox_units_lists_the_columns_for_choosing_a_box(client):
+    _units(SomeUnit={})
+
+    units = _menu_list(client, "Units")
+    rebox = _menu_list(client, "Rebox Units")
+
+    assert "SomeUnit" in units and "SomeUnit" in rebox
+    assert "<th>Retail Price</th>" in units
+    assert "<th>Retail Price</th>" not in rebox
+    assert "<th>Genres</th>" in rebox
+    assert "<th>Genres</th>" not in units
+
+
+def test_releases_without_units_lists_only_releases_with_no_unit(client):
+    for release_id, title in [(1, "UnitedAlbum"), (2, "LoneAlbum")]:
+        fbc.db.session.add(
+            DiscogsRelease(release_id=release_id, title=title, year=2020, master_id=0)
+        )
+    lot = PurchaseLot(name="Lot", date=datetime.date(2020, 1, 1), price=1.0)
+    _units(SomeUnit={"discogs_release_id": 1, "purchase_lot": lot})
+
+    releases = _menu_list(client, "Releases")
+    without_units = _menu_list(client, "Releases w/out Units")
+
+    assert "UnitedAlbum" in releases and "LoneAlbum" in releases
+    assert "UnitedAlbum" not in without_units and "LoneAlbum" in without_units
+
+
+@pytest.mark.parametrize(
+    "view_class, related",
+    [
+        (PurchaseLotModelView, [UnitModelView]),
+        (ArtistModelView, [DiscogsReleaseModelView]),
+    ],
+)
+def test_related_views_leave_out_the_list_variants(view_class, related):
+    inner = _view(view_class).get_init_inner_views()
+    assert [type(view) for view in inner] == related

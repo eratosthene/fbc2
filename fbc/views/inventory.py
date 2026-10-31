@@ -1,7 +1,6 @@
 from fbc.util import CustomModelView
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.models.sqla.filters import FilterEqualFunction
 
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.util import CustomForm
@@ -33,7 +32,11 @@ UNIT_FORM_EXTRA_FIELDS = {
 }
 
 
-class UnitModelView(CustomModelView):
+# The Units views share everything but the columns they list. They subclass
+# this rather than UnitModelView because Flask-AppBuilder attaches related
+# views by isinstance, so a subclass of UnitModelView would also show up on
+# every page that lists UnitModelView as related.
+class UnitModelBaseView(CustomModelView):
     datamodel = SQLAInterface(Unit)
     list_columns = [
         "name",
@@ -88,40 +91,13 @@ class UnitModelView(CustomModelView):
         self.add_form = type("CustomForm", (CustomForm, self.add_form), {})
 
 
-class UnitModelNoDiscogsView(CustomModelView):
-    datamodel = SQLAInterface(Unit)
-    base_filters = [["discogs_release_id", FilterEqualFunction, lambda: None]]
-    list_columns = [
-        "name",
-        "unit_type",
-        "grading",
-        "pressing",
-        "fmt_retail_price",
-        "sold",
-        "purchase_lot",
-        "storage_box",
-        "link_column",
-    ]
-    label_columns = {"fmt_retail_price": "Retail Price", "link_column": "Links"}
-    search_columns = [
-        "name",
-        "unit_type",
-        "description",
-        "discogs_release",
-        "ebay_listing",
-        "purchase_lot",
-        "storage_box",
-        "grading",
-        "pressing",
-        "matrix",
-        "notes",
-        "retail_price",
-        "sold",
-    ]
+class UnitModelView(UnitModelBaseView):
+    pass
 
 
-class UnitModelReboxView(CustomModelView):
-    datamodel = SQLAInterface(Unit)
+class UnitModelReboxView(UnitModelBaseView):
+    """Units with the columns that help decide which box each belongs in."""
+
     list_columns = [
         "name",
         "unit_type",
@@ -130,43 +106,6 @@ class UnitModelReboxView(CustomModelView):
         "link_column",
     ]
     label_columns = {"link_column": "Links", "discogs_genre_column": "Genres"}
-    search_columns = [
-        "name",
-        "unit_type",
-        "description",
-        "discogs_release",
-        "ebay_listing",
-        "purchase_lot",
-        "storage_box",
-        "grading",
-        "pressing",
-        "matrix",
-        "notes",
-        "retail_price",
-        "sold",
-    ]
-    edit_columns = [
-        "name",
-        "unit_type",
-        "description",
-        "discogs_release",
-        "ebay_listing",
-        "purchase_lot",
-        "storage_box",
-        "grading",
-        "pressing",
-        "matrix",
-        "notes",
-        "retail_price",
-        "sold",
-    ]
-
-    add_form_extra_fields = UNIT_FORM_EXTRA_FIELDS
-    edit_form_extra_fields = UNIT_FORM_EXTRA_FIELDS
-
-    def _init_forms(self):
-        super(CustomModelView, self)._init_forms()
-        self.add_form = type("CustomForm", (CustomForm, self.add_form), {})
 
 
 class PurchaseLotModelView(CustomModelView):
