@@ -7,6 +7,7 @@ import fbc
 from fbc.models.discogs import DiscogsRelease
 from fbc.models.ebay import EbayListing
 from fbc.models.inventory import PurchaseLot, Unit
+from fbc.models.supplies import Supply
 from fbc.views.discogs import ArtistModelView, DiscogsReleaseModelView, FolderModelView
 from fbc.views.inventory import (
     UNITS_WITHOUT_LISTING_FILTERS,
@@ -209,6 +210,113 @@ def test_unit_forms_save_a_blank_master_and_unticked_sold(view_class):
     fbc.db.session.add(unit)
     fbc.db.session.commit()
     assert (unit.discogs_master, unit.sold) == ("", False)
+
+
+def _inner_sleeves():
+    sleeves = Supply(name='Vinyl Inner Sleeves, 12"', quantity=50, used_for="unit")
+    mailers = Supply(name="LP Mailers", quantity=10, used_for="shipping")
+    fbc.db.session.add_all([sleeves, mailers])
+    fbc.db.session.commit()
+    return sleeves, mailers
+
+
+def test_add_unit_offers_the_supplies_used_for_adding_a_unit(client):
+    sleeves, mailers = _inner_sleeves()
+
+    html = client.get("/unitmodelview/add").get_data(as_text=True)
+
+    assert "Supplies Used" in html
+    assert 'name="supplies_used-' + str(sleeves.id) + '"' in html
+    assert "Vinyl Inner Sleeves, 12&#34;" in html
+    assert "supplies_used-" + str(mailers.id) not in html
+
+
+def test_adding_a_unit_takes_its_supplies_out_of_stock(client):
+    sleeves, mailers = _inner_sleeves()
+
+    page = client.post(
+        "/unitmodelview/add",
+        data={
+            "name": "Some Unit",
+            "unit_type": '12" LP',
+            "supplies_used-" + str(sleeves.id): "2",
+        },
+    )
+
+    assert page.status_code == 302
+    fbc.db.session.expire_all()
+    assert fbc.db.session.query(Unit).one().name == "Some Unit"
+    assert (sleeves.quantity, mailers.quantity) == (48, 10)
+
+
+def test_adding_a_unit_needs_whole_supply_counts(client):
+    sleeves, mailers = _inner_sleeves()
+
+    page = client.post(
+        "/unitmodelview/add",
+        data={
+            "name": "Some Unit",
+            "unit_type": '12" LP',
+            "supplies_used-" + str(sleeves.id): "lots",
+        },
+    )
+
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "as a whole number" in html
+    assert 'value="lots"' in html
+    fbc.db.session.expire_all()
+    assert fbc.db.session.query(Unit).count() == 0
+    assert sleeves.quantity == 50
+
+
+def test_editing_a_unit_doesnt_take_supplies(client):
+    sleeves, mailers = _inner_sleeves()
+    _units(Old={})
+    unit = fbc.db.session.query(Unit).one()
+
+    html = client.get("/unitmodelview/edit/" + str(unit.id)).get_data(as_text=True)
+
+    assert "supplies_used" not in html
+
+
+def test_supply_form_saves_blank_choices_as_null(client):
+    client.post(
+        "/supplymodelview/add",
+        data={
+            "name": "Record Brushes",
+            "quantity": "3",
+            "min_quantity": "0",
+            "used_for": "",
+            "record_size": "",
+            "pack_size": "1",
+            "pack_used": "0",
+        },
+    )
+    client.post(
+        "/supplymodelview/add",
+        data={
+            "name": 'Vinyl Outer Sleeves, 7"',
+            "quantity": "100",
+            "min_quantity": "20",
+            "used_for": "shipping",
+            "record_size": '7"',
+            "per_units": "1",
+            "pack_size": "1",
+            "pack_used": "0",
+        },
+    )
+
+    supplies = fbc.db.session.query(Supply).order_by(Supply.id).all()
+    assert [
+        (s.name, s.used_for, s.record_size, s.per_units, s.min_quantity)
+        for s in supplies
+    ] == [
+        ("Record Brushes", None, None, None, 0),
+        ('Vinyl Outer Sleeves, 7"', "shipping", '7"', 1, 20),
+    ]
+    edit = client.get("/supplymodelview/edit/" + str(supplies[0].id))
+    assert edit.status_code == 200
 
 
 def test_rebox_units_lists_the_columns_for_choosing_a_box(client):

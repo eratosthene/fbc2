@@ -12,6 +12,7 @@ from fbc.models.discogs import DiscogsInstance, DiscogsRelease
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit
 from fbc.models.sales import SalesReceipt
+from fbc.models.supplies import Supply
 from fbc.util import forget_discogs_instance
 from test_listing import FakeHTTPResponse, _carnaval
 
@@ -389,3 +390,144 @@ def test_shipping_needs_a_net_sold(client, discogs):
     client.post("/ebayordermodelview/ship/" + order.order_id, data={"net_sold": "lots"})
 
     assert db.session.query(SalesReceipt).count() == 0
+
+
+def _shipping_supplies():
+    """The shipping supplies, as the migration sets up the usual ones."""
+    supplies = {
+        "mailers": Supply(
+            name="LP Mailers", quantity=10, used_for="shipping", per_units=5
+        ),
+        "sleeves 12": Supply(
+            name='Vinyl Outer Sleeves, 12"',
+            quantity=20,
+            used_for="shipping",
+            record_size='12"',
+            per_units=1,
+        ),
+        "sleeves 7": Supply(
+            name='Vinyl Outer Sleeves, 7"',
+            quantity=20,
+            used_for="shipping",
+            record_size='7"',
+            per_units=1,
+        ),
+        "labels": Supply(
+            name="Shipping Label Roll",
+            quantity=2,
+            used_for="shipping",
+            per_units=0,
+            pack_size=220,
+            pack_used=219,
+        ),
+        "tape": Supply(name="Packing Tape Rolls", quantity=3, used_for="shipping"),
+        "inner": Supply(name='Vinyl Inner Sleeves, 12"', quantity=50, used_for="unit"),
+    }
+    db.session.add_all(supplies.values())
+    db.session.commit()
+    return supplies
+
+
+def test_supplies_plan_is_a_normal_shipment_of_the_units(app):
+    order, unit = _order()
+    _shipping_supplies()
+
+    plan = [(s.name, n) for s, n in shipping.supplies_plan([unit])]
+
+    assert plan == [
+        ("LP Mailers", 1),
+        ("Packing Tape Rolls", 0),
+        ("Shipping Label Roll", 1),
+        ('Vinyl Outer Sleeves, 12"', 1),
+        ('Vinyl Outer Sleeves, 7"', 0),
+    ]
+
+
+@pytest.mark.parametrize(
+    "unit_type, formats, size",
+    [
+        ('12" LP', None, '12"'),
+        ('7" Single', None, '7"'),
+        ("LP", None, '12"'),
+        ('12" LP', '[{"name": "Vinyl", "descriptions": ["7\\"", "45 RPM"]}]', '7"'),
+    ],
+)
+def test_record_size(unit_type, formats, size):
+    release = DiscogsRelease(release_id=9, formats=formats) if formats else None
+    assert (
+        listing.record_size(Unit(unit_type=unit_type, discogs_release=release)) == size
+    )
+
+
+def test_ship_page_offers_the_shipping_supplies(client, finances):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+
+    html = client.get("/ebayordermodelview/ship/" + order.order_id).get_data(
+        as_text=True
+    )
+
+    mailers = supplies["mailers"]
+    assert 'name="supply-' + str(mailers.id) + '" value="1"' in html
+    assert 'name="supply-' + str(supplies["tape"].id) + '" value="0"' in html
+    assert "1 of 220 left on the one in use" in html
+    assert "supply-" + str(supplies["inner"].id) not in html
+
+
+def test_ship_page_says_when_no_supplies_are_used_for_shipping(client, finances):
+    order, unit = _order()
+
+    html = client.get("/ebayordermodelview/ship/" + order.order_id).get_data(
+        as_text=True
+    )
+
+    assert "No supplies are set as Used For shipping" in html
+
+
+def test_shipping_takes_the_supplies_used_out_of_stock(client, discogs):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+    ids = {k: str(s.id) for k, s in supplies.items()}
+
+    client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={
+            "net_sold": "16.50",
+            "supply-" + ids["mailers"]: "1",
+            "supply-" + ids["sleeves 12"]: "2",
+            "supply-" + ids["sleeves 7"]: "0",
+            "supply-" + ids["labels"]: "1",
+            "supply-" + ids["tape"]: "1",
+            # Not a shipping supply, so it's left alone.
+            "supply-" + ids["inner"]: "1",
+        },
+    )
+
+    db.session.expire_all()
+    assert db.session.query(SalesReceipt).count() == 1
+    stock = {k: (s.quantity, s.pack_used) for k, s in supplies.items()}
+    assert stock == {
+        "mailers": (9, 0),
+        "sleeves 12": (18, 0),
+        "sleeves 7": (20, 0),
+        "labels": (1, 0),
+        "tape": (2, 0),
+        "inner": (50, 0),
+    }
+
+
+@pytest.mark.parametrize("count", ["-1", "two", "1.5"])
+def test_shipping_needs_whole_supply_counts(client, discogs, count):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+
+    page = client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={"net_sold": "16.50", "supply-" + str(supplies["mailers"].id): count},
+    )
+
+    assert page.headers["Location"].endswith("/ship/" + order.order_id)
+    db.session.expire_all()
+    assert db.session.query(SalesReceipt).count() == 0
+    assert supplies["mailers"].quantity == 10
+    assert discogs.deleted == []
