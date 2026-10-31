@@ -160,6 +160,29 @@ def test_purchase_lot_returns_empty_when_no_matching_unit(app, db):
     assert str(release.purchase_lot()) == ""
 
 
+def test_purchase_lot_returns_lot_name_of_matching_unit(app, db):
+    from fbc.models.inventory import PurchaseLot, Unit
+
+    release = _make_release(release_id=100)
+    lot = PurchaseLot(name="Lot A", date=datetime.date(2024, 1, 1), price=10.0)
+    db.session.add_all(
+        [release, Unit(name="With Lot", discogs_release=release, purchase_lot=lot)]
+    )
+    db.session.commit()
+
+    assert str(release.purchase_lot()) == "Lot A"
+
+
+def test_purchase_lot_returns_empty_when_unit_has_no_lot(app, db):
+    from fbc.models.inventory import Unit
+
+    release = _make_release(release_id=100)
+    db.session.add_all([release, Unit(name="No Lot", discogs_release=release)])
+    db.session.commit()
+
+    assert str(release.purchase_lot()) == ""
+
+
 def _add_sold_unit(db, master, sold_price):
     from fbc.models.inventory import Unit
     from fbc.models.sales import SalesReceipt
