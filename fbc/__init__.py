@@ -1,6 +1,7 @@
 # ruff: noqa: E402
 import logging
 import os
+from urllib.parse import urlencode
 
 import click
 import sqlalchemy as sa
@@ -89,19 +90,24 @@ from fbc.views.inventory import (
     UnitModelView,
     PurchaseLotModelView,
     StorageBoxModelView,
-    UnitModelNoListingView,
-    UnitModelNoMasterView,
     UnitModelReboxView,
+    UNITS_WITHOUT_LISTING_FILTERS,
+    UNITS_WITHOUT_MASTER_FILTERS,
 )
 
 with app.app_context():
-    appbuilder.add_view(UnitModelView, "Units", category="Inventory")
-    appbuilder.add_view(
-        UnitModelNoListingView, "Units w/out Listings", category="Inventory"
+    units = appbuilder.add_view(UnitModelView, "Units", category="Inventory")
+    units_list = units.route_base + "/list/?"
+    appbuilder.add_link(
+        "Units w/out Listings",
+        href=units_list + urlencode(UNITS_WITHOUT_LISTING_FILTERS),
+        category="Inventory",
     )
     appbuilder.add_view(UnitModelReboxView, "Rebox Units", category="Inventory")
-    appbuilder.add_view(
-        UnitModelNoMasterView, "Units w/out Master", category="Inventory"
+    appbuilder.add_link(
+        "Units w/out Master",
+        href=units_list + urlencode(UNITS_WITHOUT_MASTER_FILTERS),
+        category="Inventory",
     )
     appbuilder.add_view(PurchaseLotModelView, "Purchase Lots", category="Inventory")
     appbuilder.add_view(StorageBoxModelView, "Storage Boxes", category="Inventory")
