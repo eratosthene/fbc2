@@ -2,6 +2,7 @@ exclude: |
   (?x)^(
       .*cache.*/.*|       # Exclude cache directories
       .*venv.*/.*|        # Exclude virtual environment directories
+      scripts/deprecated_.*/.*  # Kept for history only, never run again
   )$
 fail_fast: true
 default_language_version:
