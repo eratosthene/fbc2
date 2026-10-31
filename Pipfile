@@ -11,7 +11,7 @@ pymysql = "~=1.1"
 python3-discogs-client = "~=2.8"
 certifi = "*"
 ebaysdk = "~=2.2"
-gunicorn = "~=25.1"
+gunicorn = "~=26.2"
 flask-migrate = "~=4.1"
 
 [dev-packages]
