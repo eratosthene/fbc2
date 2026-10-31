@@ -1,0 +1,15 @@
+{% extends "appbuilder/base.html" %}
+{#
+Where a Sync link goes when its page's script didn't start the sync in a
+modal itself (say, the link was opened in a new tab).
+#}
+{% block content %}
+{% include "sync/modal.html" %}
+{% endblock %}
+{% block tail %}
+<script {% if csp_nonce is defined %}nonce="{{ csp_nonce() }}"{% endif %}>
+  $(function () {
+    fbcSync.watch({{ job_url|tojson }});
+  });
+</script>
+{% endblock %}
