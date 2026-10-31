@@ -269,7 +269,7 @@ class MyIndexView(IndexView):
         logger.info("Total releases: " + str(len(releases)))
         logger.info("Total local releases: " + str(len(local_releases)))
         for item in releases:
-            logger.debug("Checking discogs: " + str(item))
+            logger.info("Checking discogs: " + str(item))
             discogs_instance = (
                 db.session.query(DiscogsInstance)
                 .filter_by(instance_id=item.instance_id)
@@ -346,7 +346,7 @@ class MyIndexView(IndexView):
         logger.info("Total local listings: " + str(len(local_listings)))
         remote_item_ids = {item["ItemID"] for item in all_items}
         for item in all_items:
-            logger.debug("Checking ebay: " + str(item["ItemID"]))
+            logger.info("Checking ebay: " + str(item["ItemID"]))
             if (
                 not db.session.query(EbayListing)
                 .filter_by(item_id=item["ItemID"])
@@ -377,7 +377,7 @@ class MyIndexView(IndexView):
         logger.info("Total orders: " + str(len(orders)))
         logger.info("Total local orders: " + str(len(local_orders)))
         for item in orders:
-            logger.debug("Checking ebay: " + str(item["OrderID"]))
+            logger.info("Checking ebay: " + str(item["OrderID"]))
             if (
                 not db.session.query(EbayOrder)
                 .filter_by(order_id=item["OrderID"])

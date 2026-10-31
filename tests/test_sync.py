@@ -248,3 +248,5 @@ def test_list_pages_open_syncs_in_the_modal(app, path, widget):
 
     assert 'href="' + widget + '" class="btn btn-sm btn-primary fbc-sync"' in page
     assert 'id="fbc-sync-modal"' in page
+    assert 'id="fbc-sync-close"' in page
+    assert 'id="fbc-sync-refresh"' in page

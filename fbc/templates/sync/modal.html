@@ -16,8 +16,11 @@ fbcSync.watch(url) shows a job that's already started.
         <p id="fbc-sync-status">Starting&hellip;</p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-primary" id="fbc-sync-close" disabled>
+        <button type="button" class="btn btn-default" id="fbc-sync-close" disabled>
           Close
+        </button>
+        <button type="button" class="btn btn-primary" id="fbc-sync-refresh" disabled>
+          Close+Refresh
         </button>
       </div>
     </div>
@@ -32,7 +35,7 @@ fbcSync.watch(url) shows a job that's already started.
       $("#fbc-sync-title").text(title);
       $("#fbc-sync-log").text("");
       $("#fbc-sync-status").text("Starting…");
-      $("#fbc-sync-close").prop("disabled", true);
+      $("#fbc-sync-close, #fbc-sync-refresh").prop("disabled", true);
       // Out from inside the list widget, so nothing on the page covers it.
       $("#fbc-sync-modal").appendTo("body").modal("show");
     }
@@ -50,7 +53,8 @@ fbcSync.watch(url) shows a job that's already started.
     function finish(message, url) {
       returnUrl = url || window.location.href;
       $("#fbc-sync-status").text(message);
-      $("#fbc-sync-close").prop("disabled", false).focus();
+      $("#fbc-sync-close").prop("disabled", false);
+      $("#fbc-sync-refresh").prop("disabled", false).focus();
     }
 
     function poll(url, offset) {
@@ -101,6 +105,10 @@ fbcSync.watch(url) shows a job that's already started.
     });
 
     $(document).on("click", "#fbc-sync-close", function () {
+      $("#fbc-sync-modal").modal("hide");
+    });
+
+    $(document).on("click", "#fbc-sync-refresh", function () {
       window.location.href = returnUrl;
     });
 
