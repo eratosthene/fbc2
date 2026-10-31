@@ -87,6 +87,11 @@ IMG_UPLOAD_URL = "/static/uploads/"
 # Setup image size default is (300, 200, True)
 # IMG_SIZE = (300, 200, True)
 
+# Where the Discogs and eBay syncs keep their logs while they run in the
+# background. Every web server process must see the same folder. The default
+# is fbc-sync-jobs in the system temp folder.
+# SYNC_JOB_FOLDER = "/tmp/fbc-sync-jobs"
+
 # Theme configuration
 # these are located on static/appbuilder/css/themes
 # you can create your own and easily use them placing them on the same dir structure to override

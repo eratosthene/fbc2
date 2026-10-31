@@ -1,0 +1,109 @@
+{#
+The modal a sync's log is shown in while it runs (see fbc/sync.py). Links
+with class "fbc-sync" start their sync in it rather than going to their page;
+fbcSync.watch(url) shows a job that's already started.
+#}
+<div class="modal fade" id="fbc-sync-modal" tabindex="-1" role="dialog"
+  data-backdrop="static" data-keyboard="false">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title" id="fbc-sync-title">Sync</h4>
+      </div>
+      <div class="modal-body">
+        <pre id="fbc-sync-log"
+          style="height: 60vh; overflow-y: auto; white-space: pre-wrap"></pre>
+        <p id="fbc-sync-status">Starting&hellip;</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="fbc-sync-close" disabled>
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<script {% if csp_nonce is defined %}nonce="{{ csp_nonce() }}"{% endif %}>
+  window.fbcSync = (function ($) {
+    var returnUrl = null;
+
+    function show(title) {
+      returnUrl = null;
+      $("#fbc-sync-title").text(title);
+      $("#fbc-sync-log").text("");
+      $("#fbc-sync-status").text("Starting…");
+      $("#fbc-sync-close").prop("disabled", true);
+      // Out from inside the list widget, so nothing on the page covers it.
+      $("#fbc-sync-modal").appendTo("body").modal("show");
+    }
+
+    function append(text) {
+      var log = $("#fbc-sync-log");
+      var atBottom =
+        log[0].scrollHeight - log.scrollTop() - log.outerHeight() < 20;
+      log.append(document.createTextNode(text));
+      if (atBottom) {
+        log.scrollTop(log[0].scrollHeight);
+      }
+    }
+
+    function finish(message, url) {
+      returnUrl = url || window.location.href;
+      $("#fbc-sync-status").text(message);
+      $("#fbc-sync-close").prop("disabled", false).focus();
+    }
+
+    function poll(url, offset) {
+      $.ajax({ url: url, data: { offset: offset }, dataType: "json" })
+        .done(function (job) {
+          $("#fbc-sync-title").text(job.title);
+          append(job.log);
+          if (job.status === "running") {
+            $("#fbc-sync-status").text("Running…");
+            setTimeout(function () {
+              poll(url, job.offset);
+            }, 1000);
+          } else if (job.status === "done" && !job.errors) {
+            finish("Finished.", job.return_url);
+          } else if (job.status === "done") {
+            finish("Finished, with errors. See the log above.", job.return_url);
+          } else {
+            finish("Failed. See the log above.", job.return_url);
+          }
+        })
+        .fail(function (xhr) {
+          if (xhr.status === 404) {
+            finish("This sync can't be found.");
+          } else {
+            // The server may just be busy; keep trying.
+            setTimeout(function () {
+              poll(url, offset);
+            }, 3000);
+          }
+        });
+    }
+
+    function watch(url, title) {
+      show(title || "Sync");
+      poll(url, 0);
+    }
+
+    $(document).on("click", "a.fbc-sync", function (event) {
+      event.preventDefault();
+      show($(this).data("title") || $(this).text());
+      $.ajax({ url: this.href, dataType: "json" })
+        .done(function (job) {
+          poll(job.url, 0);
+        })
+        .fail(function (xhr) {
+          finish("The sync didn't start (" + xhr.status + " " + xhr.statusText + ").");
+        });
+    });
+
+    $(document).on("click", "#fbc-sync-close", function () {
+      window.location.href = returnUrl;
+    });
+
+    return { watch: watch };
+  })(jQuery);
+</script>
