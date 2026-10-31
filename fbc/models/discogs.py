@@ -282,7 +282,8 @@ class DiscogsRelease(Model):
 
         ret = ""
         unit = db.session.query(Unit).filter_by(discogs_release=self).first()
-        if unit:
+        # A unit with no lot (or whose lot no longer exists) shows an empty cell.
+        if unit and unit.purchase_lot:
             ret = unit.purchase_lot.name
         return Markup(ret)
 
