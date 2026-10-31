@@ -289,7 +289,7 @@ def test_index_asks_to_reorder_supplies_running_low(app):
         [
             Supply(name="LP Mailers", quantity=3, min_quantity=5),
             Supply(name="Packing Tape Rolls", quantity=0, min_quantity=0),
-            Supply(name="Shipping Label Rolls", quantity=4, min_quantity=1),
+            Supply(name="Shipping Label Roll", quantity=4, min_quantity=1),
         ]
     )
     db.session.commit()
@@ -300,7 +300,7 @@ def test_index_asks_to_reorder_supplies_running_low(app):
     assert "Time to reorder" in html
     assert "LP Mailers</a> (3 left)" in html
     assert "Packing Tape Rolls" not in html
-    assert "Shipping Label Rolls" not in html
+    assert "Shipping Label Roll" not in html
 
 
 def test_index_has_no_reorder_banner_when_supplies_are_stocked(app):

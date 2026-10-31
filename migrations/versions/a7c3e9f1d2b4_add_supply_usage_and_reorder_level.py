@@ -24,7 +24,7 @@ SUPPLIES = [
     ('Vinyl Outer Sleeves, 12"', "shipping", '12"', 1, 1),
     ('Vinyl Outer Sleeves, 10"', "shipping", '10"', 1, 1),
     ('Vinyl Outer Sleeves, 7"', "shipping", '7"', 1, 1),
-    ("Shipping Label Rolls", "shipping", None, 0, 220),
+    ("Shipping Label Roll", "shipping", None, 0, 220),
     ("Packing Tape Rolls", "shipping", None, None, 1),
     ('Vinyl Inner Sleeves, 12"', "unit", None, None, 1),
     ('Vinyl Inner Sleeves, 10"', "unit", None, None, 1),

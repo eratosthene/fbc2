@@ -63,7 +63,7 @@ def test_supplies_get_their_usage_from_their_names():
             [
                 "LP Mailers",
                 'Vinyl Outer Sleeves, 7"',
-                "Shipping Label Rolls",
+                "Shipping Label Roll",
                 "Packing Tape Rolls",
                 'Vinyl Inner Sleeves, 12"',
                 "Record Brushes",
@@ -82,7 +82,7 @@ def test_supplies_get_their_usage_from_their_names():
         assert [tuple(r) for r in rows] == [
             ("LP Mailers", "shipping", None, 5, 1, 0, 0),
             ('Vinyl Outer Sleeves, 7"', "shipping", '7"', 1, 1, 0, 0),
-            ("Shipping Label Rolls", "shipping", None, 0, 220, 0, 0),
+            ("Shipping Label Roll", "shipping", None, 0, 220, 0, 0),
             ("Packing Tape Rolls", "shipping", None, None, 1, 0, 0),
             ('Vinyl Inner Sleeves, 12"', "unit", None, None, 1, 0, 0),
             ("Record Brushes", None, None, None, 1, 0, 0),

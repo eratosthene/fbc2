@@ -309,7 +309,7 @@ def supply_counts(form, supplies, prefix="supply-"):
 
 
 def fmt_supplies(counts):
-    """{supply: count} as "1 LP Mailers, 1 Shipping Label Rolls"."""
+    """{supply: count} as "1 LP Mailers, 1 Shipping Label Roll"."""
     return ", ".join(str(n) + " " + s.name for s, n in counts.items())
 
 

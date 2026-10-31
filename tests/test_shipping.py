@@ -413,7 +413,7 @@ def _shipping_supplies():
             per_units=1,
         ),
         "labels": Supply(
-            name="Shipping Label Rolls",
+            name="Shipping Label Roll",
             quantity=2,
             used_for="shipping",
             per_units=0,
@@ -437,7 +437,7 @@ def test_supplies_plan_is_a_normal_shipment_of_the_units(app):
     assert plan == [
         ("LP Mailers", 1),
         ("Packing Tape Rolls", 0),
-        ("Shipping Label Rolls", 1),
+        ("Shipping Label Roll", 1),
         ('Vinyl Outer Sleeves, 12"', 1),
         ('Vinyl Outer Sleeves, 7"', 0),
     ]

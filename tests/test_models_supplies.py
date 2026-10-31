@@ -33,7 +33,7 @@ def test_supply_use_never_takes_quantity_below_zero():
 
 
 def test_supply_use_takes_a_roll_once_its_labels_run_out():
-    supply = Supply(name="Shipping Label Rolls", quantity=3, pack_size=220)
+    supply = Supply(name="Shipping Label Roll", quantity=3, pack_size=220)
     supply.pack_used = 218
     supply.use(1)
     assert (supply.quantity, supply.pack_used) == (3, 219)
