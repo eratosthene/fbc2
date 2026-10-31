@@ -44,7 +44,9 @@ def get_unit_releases():
     return releases
 
 
-class DiscogsReleaseModelView(CustomModelView):
+# See UnitModelBaseView for why the Releases views share a base class rather
+# than subclassing DiscogsReleaseModelView.
+class DiscogsReleaseModelBaseView(CustomModelView):
     datamodel = SQLAInterface(DiscogsRelease)
     base_order = ("date_added", "desc")
     list_widget = DiscogsReleaseListWidget
@@ -88,49 +90,14 @@ class DiscogsReleaseModelView(CustomModelView):
     ]
 
 
-class DiscogsReleaseModelNoUnitView(CustomModelView):
-    datamodel = SQLAInterface(DiscogsRelease)
+class DiscogsReleaseModelView(DiscogsReleaseModelBaseView):
+    pass
+
+
+class DiscogsReleaseModelNoUnitView(DiscogsReleaseModelBaseView):
+    """Releases that no Unit has been created from yet."""
+
     base_filters = [["release_id", FilterNotInFunction, get_unit_releases]]
-    base_order = ("date_added", "desc")
-    list_widget = DiscogsReleaseListWidget
-    related_views = [UnitModelView]
-    list_columns = [
-        "date_added",
-        "title",
-        "artists",
-        "year",
-        "master_year",
-        "genres",
-        "styles",
-        "purchase_lot",
-        "link_column",
-    ]
-    label_columns = {"link_column": "Links"}
-    add_columns = [
-        "release_id",
-        "title",
-        "artists",
-        "year",
-        "master_id",
-        "master_year",
-        "genres",
-        "styles",
-        "discogs_instances",
-        "released",
-        "folder",
-    ]
-    edit_columns = [
-        "title",
-        "artists",
-        "year",
-        "master_id",
-        "master_year",
-        "genres",
-        "styles",
-        "discogs_instances",
-        "released",
-        "folder",
-    ]
 
 
 class ArtistModelView(CustomModelView):

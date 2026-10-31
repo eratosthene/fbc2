@@ -335,14 +335,11 @@ class Unit(Model):
     def discogs_genre_column(self):
         ret = ""
         if self.discogs_release:
-            genres = self.discogs_release.genres
-            styles = self.discogs_release.styles
-            g = []
-            s = []
-            for a in genres:
-                g.append(str(a))
-            for a in styles:
-                s.append(str(a))
-            names = list(set(g).union(s))
-            ret = ", ".join(names)
+            ret = ", ".join(str(g) for g in self.discogs_release.genres)
+        return Markup(ret)
+
+    def discogs_style_column(self):
+        ret = ""
+        if self.discogs_release:
+            ret = ", ".join(str(s) for s in self.discogs_release.styles)
         return Markup(ret)
