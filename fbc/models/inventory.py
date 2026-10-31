@@ -11,6 +11,7 @@ from sqlalchemy import (
     Float,
     Boolean,
     Date,
+    false,
 )
 from sqlalchemy.orm import relationship
 from fbc.util import fpercent, fprice
@@ -191,7 +192,9 @@ class Unit(Model):
         index=True,
     )
     discogs_instance = relationship("DiscogsInstance")
-    discogs_master = Column(String(21), index=True)
+    discogs_master = Column(
+        String(21), nullable=False, default="", server_default="", index=True
+    )
     ebay_listing_id = Column(String(20), ForeignKey("ebay_listing.item_id"), index=True)
     ebay_listing = relationship("EbayListing")
     purchase_lot_id = Column(Integer, ForeignKey("purchase_lot.id"), index=True)
@@ -203,7 +206,9 @@ class Unit(Model):
     matrix = Column(String(100))
     notes = Column(String(100))
     retail_price = Column(Float, index=True)
-    sold = Column(Boolean, index=True)
+    sold = Column(
+        Boolean, nullable=False, default=False, server_default=false(), index=True
+    )
     sales_receipt_id = Column(Integer, ForeignKey("sales_receipt.id"), index=True)
     sales_receipt = relationship("SalesReceipt")
 
