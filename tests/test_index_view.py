@@ -151,6 +151,39 @@ def test_index_handles_units_without_storage_box(app):
     assert captured["box_totals"][0]["net"] == 27.0
 
 
+def test_index_handles_units_without_purchase_lot(app):
+    lot = _lot(name="Lot C", price=40.0)
+    box = _box(name="Box C")
+    _unit(lot, box=box, sold=False, name="Unsold, With Lot")
+    _unit(None, box=box, sold=False, name="Unsold, No Lot")
+    receipt = _receipt(sold_price=20.0, net_sold=18.0)
+    _unit(None, box=box, sold=True, sales_receipt=receipt, name="Sold, No Lot")
+
+    captured = {}
+
+    class CapturingIndexView(MyIndexView):
+        def render_template(self, template, **kwargs):
+            captured.update(kwargs)
+            return "ok"
+
+    with app.test_request_context("/"):
+        view = CapturingIndexView()
+        view.appbuilder = app.extensions["appbuilder"]
+        view.index()
+
+    # Only the unit in Lot C adds capital; the lot-less units add none.
+    assert captured["box_totals"][box.id]["capital"] == 40.0
+    assert captured["box_totals"][box.id]["gross"] == 20.0
+    assert captured["box_totals"][box.id]["net"] == 18.0
+    assert captured["totals"]["gross"] == 20.0
+    assert captured["totals"]["net"] == 18.0
+    assert captured["lot_totals"][lot.id]["gross"] == 0
+    assert captured["unit_total"] == 3
+
+    with app.test_client() as client:
+        assert client.get("/").status_code == 200
+
+
 def test_index_splits_a_multi_unit_receipt_across_its_units(app):
     lot_a = _lot(name="Lot A", price=30.0)
     lot_b = _lot(name="Lot B", price=30.0)
