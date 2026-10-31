@@ -211,7 +211,7 @@ def test_unit_link_column_empty_when_no_relations(app):
     assert str(unit.link_column()) == ""
 
 
-def test_unit_discogs_genre_column_merges_genres_and_styles(app, db):
+def test_unit_discogs_genre_and_style_columns_list_each_separately(app, db):
     from fbc.models.discogs import Genre, Style
 
     release = DiscogsRelease(
@@ -223,18 +223,18 @@ def test_unit_discogs_genre_column_merges_genres_and_styles(app, db):
         notes="[]",
     )
     release.genres = [Genre(name="Electronic")]
-    release.styles = [Style(name="House")]
+    release.styles = [Style(name="House"), Style(name="Disco")]
     db.session.add(release)
     db.session.commit()
     unit = Unit(name="Unit", discogs_release=release)
-    genre_column = str(unit.discogs_genre_column())
-    assert "Electronic" in genre_column
-    assert "House" in genre_column
+    assert str(unit.discogs_genre_column()) == "Electronic"
+    assert str(unit.discogs_style_column()) == "House, Disco"
 
 
-def test_unit_discogs_genre_column_empty_without_release(app):
+def test_unit_discogs_genre_and_style_columns_empty_without_release(app):
     unit = Unit(name="Unit")
     assert str(unit.discogs_genre_column()) == ""
+    assert str(unit.discogs_style_column()) == ""
 
 
 def _sold_unit(db, master, sold_price=None, ebay_order=None, listing_id=None):

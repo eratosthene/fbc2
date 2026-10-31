@@ -1,14 +1,19 @@
+import datetime
+
 import pytest
 from werkzeug.datastructures import MultiDict
 
 import fbc
+from fbc.models.discogs import DiscogsRelease
 from fbc.models.ebay import EbayListing
-from fbc.models.inventory import Unit
+from fbc.models.inventory import PurchaseLot, Unit
 from fbc.models.supplies import Supply
 from fbc.views.discogs import ArtistModelView, DiscogsReleaseModelView, FolderModelView
 from fbc.views.inventory import (
     UNITS_WITHOUT_LISTING_FILTERS,
     UNITS_WITHOUT_MASTER_FILTERS,
+    UNSOLD_UNITS_OVER_2_FILTERS,
+    PurchaseLotModelView,
     UnitModelReboxView,
     UnitModelView,
 )
@@ -17,7 +22,7 @@ from fbc.views.sales import EbayListingModelView, EbayOrderModelView
 
 def _view(view_class):
     for view in fbc.appbuilder.baseviews:
-        if isinstance(view, view_class):
+        if type(view) is view_class:
             return view
     raise AssertionError(f"{view_class.__name__} is not registered")
 
@@ -135,9 +140,10 @@ def _menu_list(client, name):
 
 
 @pytest.mark.parametrize(
-    "filters, expected",
+    "view_class, filters, expected",
     [
         (
+            UnitModelView,
             UNITS_WITHOUT_LISTING_FILTERS,
             {
                 "ebay_listing": "FilterRelationOneToManyEqual",
@@ -145,11 +151,20 @@ def _menu_list(client, name):
                 "retail_price": "FilterGreater",
             },
         ),
-        (UNITS_WITHOUT_MASTER_FILTERS, {"discogs_master": "FilterEqual"}),
+        (
+            UnitModelView,
+            UNITS_WITHOUT_MASTER_FILTERS,
+            {"discogs_master": "FilterEqual"},
+        ),
+        (
+            UnitModelReboxView,
+            UNSOLD_UNITS_OVER_2_FILTERS,
+            {"sold": "FilterNotEqual", "retail_price": "FilterGreater"},
+        ),
     ],
 )
-def test_units_without_presets_pick_the_intended_filters(filters, expected):
-    search_filters = _view(UnitModelView)._filters.get_search_filters()
+def test_menu_presets_pick_the_intended_filters(view_class, filters, expected):
+    search_filters = _view(view_class)._filters.get_search_filters()
     picked = {}
     for arg in filters:
         index, column = arg.removeprefix("_flt_").split("_", 1)
@@ -302,3 +317,58 @@ def test_supply_form_saves_blank_choices_as_null(client):
     ]
     edit = client.get("/supplymodelview/edit/" + str(supplies[0].id))
     assert edit.status_code == 200
+
+
+def test_rebox_units_lists_the_columns_for_choosing_a_box(client):
+    _units(SomeUnit={"sold": False, "retail_price": 9.99})
+
+    units = _menu_list(client, "Units")
+    rebox = _menu_list(client, "Rebox Units")
+
+    assert "SomeUnit" in units and "SomeUnit" in rebox
+    assert "<th>Retail Price</th>" in units
+    assert "<th>Retail Price</th>" not in rebox
+    for column in ("<th>Genres</th>", "<th>Styles</th>"):
+        assert column in rebox
+        assert column not in units
+
+
+def test_rebox_units_menu_lists_unsold_units_over_2(client):
+    _units(
+        WantedUnit={"sold": False, "retail_price": 9.99},
+        SoldUnit={"sold": True, "retail_price": 9.99},
+        CheapUnit={"sold": False, "retail_price": 2.0},
+    )
+
+    html = _menu_list(client, "Rebox Units")
+
+    assert "WantedUnit" in html
+    assert "SoldUnit" not in html
+    assert "CheapUnit" not in html
+
+
+def test_releases_without_units_lists_only_releases_with_no_unit(client):
+    for release_id, title in [(1, "UnitedAlbum"), (2, "LoneAlbum")]:
+        fbc.db.session.add(
+            DiscogsRelease(release_id=release_id, title=title, year=2020, master_id=0)
+        )
+    lot = PurchaseLot(name="Lot", date=datetime.date(2020, 1, 1), price=1.0)
+    _units(SomeUnit={"discogs_release_id": 1, "purchase_lot": lot})
+
+    releases = _menu_list(client, "Releases")
+    without_units = _menu_list(client, "Releases w/out Units")
+
+    assert "UnitedAlbum" in releases and "LoneAlbum" in releases
+    assert "UnitedAlbum" not in without_units and "LoneAlbum" in without_units
+
+
+@pytest.mark.parametrize(
+    "view_class, related",
+    [
+        (PurchaseLotModelView, [UnitModelView]),
+        (ArtistModelView, [DiscogsReleaseModelView]),
+    ],
+)
+def test_related_views_leave_out_the_list_variants(view_class, related):
+    inner = _view(view_class).get_init_inner_views()
+    assert [type(view) for view in inner] == related
