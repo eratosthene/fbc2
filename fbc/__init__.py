@@ -91,6 +91,7 @@ from fbc.views.inventory import (
     PurchaseLotModelView,
     StorageBoxModelView,
     UnitModelReboxView,
+    UNSOLD_UNITS_OVER_2_FILTERS,
     UNITS_WITHOUT_LISTING_FILTERS,
     UNITS_WITHOUT_MASTER_FILTERS,
 )
@@ -103,7 +104,12 @@ with app.app_context():
         href=units_list + urlencode(UNITS_WITHOUT_LISTING_FILTERS),
         category="Inventory",
     )
-    appbuilder.add_view(UnitModelReboxView, "Rebox Units", category="Inventory")
+    rebox = appbuilder.add_view_no_menu(UnitModelReboxView)
+    appbuilder.add_link(
+        "Rebox Units",
+        href=rebox.route_base + "/list/?" + urlencode(UNSOLD_UNITS_OVER_2_FILTERS),
+        category="Inventory",
+    )
     appbuilder.add_link(
         "Units w/out Master",
         href=units_list + urlencode(UNITS_WITHOUT_MASTER_FILTERS),

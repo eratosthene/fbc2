@@ -11,6 +11,7 @@ from fbc.views.discogs import ArtistModelView, DiscogsReleaseModelView, FolderMo
 from fbc.views.inventory import (
     UNITS_WITHOUT_LISTING_FILTERS,
     UNITS_WITHOUT_MASTER_FILTERS,
+    UNSOLD_UNITS_OVER_2_FILTERS,
     PurchaseLotModelView,
     UnitModelReboxView,
     UnitModelView,
@@ -138,9 +139,10 @@ def _menu_list(client, name):
 
 
 @pytest.mark.parametrize(
-    "filters, expected",
+    "view_class, filters, expected",
     [
         (
+            UnitModelView,
             UNITS_WITHOUT_LISTING_FILTERS,
             {
                 "ebay_listing": "FilterRelationOneToManyEqual",
@@ -148,11 +150,20 @@ def _menu_list(client, name):
                 "retail_price": "FilterGreater",
             },
         ),
-        (UNITS_WITHOUT_MASTER_FILTERS, {"discogs_master": "FilterEqual"}),
+        (
+            UnitModelView,
+            UNITS_WITHOUT_MASTER_FILTERS,
+            {"discogs_master": "FilterEqual"},
+        ),
+        (
+            UnitModelReboxView,
+            UNSOLD_UNITS_OVER_2_FILTERS,
+            {"sold": "FilterNotEqual", "retail_price": "FilterGreater"},
+        ),
     ],
 )
-def test_units_without_presets_pick_the_intended_filters(filters, expected):
-    search_filters = _view(UnitModelView)._filters.get_search_filters()
+def test_menu_presets_pick_the_intended_filters(view_class, filters, expected):
+    search_filters = _view(view_class)._filters.get_search_filters()
     picked = {}
     for arg in filters:
         index, column = arg.removeprefix("_flt_").split("_", 1)
@@ -201,7 +212,7 @@ def test_unit_forms_save_a_blank_master_and_unticked_sold(view_class):
 
 
 def test_rebox_units_lists_the_columns_for_choosing_a_box(client):
-    _units(SomeUnit={})
+    _units(SomeUnit={"sold": False, "retail_price": 9.99})
 
     units = _menu_list(client, "Units")
     rebox = _menu_list(client, "Rebox Units")
@@ -212,6 +223,20 @@ def test_rebox_units_lists_the_columns_for_choosing_a_box(client):
     for column in ("<th>Genres</th>", "<th>Styles</th>"):
         assert column in rebox
         assert column not in units
+
+
+def test_rebox_units_menu_lists_unsold_units_over_2(client):
+    _units(
+        WantedUnit={"sold": False, "retail_price": 9.99},
+        SoldUnit={"sold": True, "retail_price": 9.99},
+        CheapUnit={"sold": False, "retail_price": 2.0},
+    )
+
+    html = _menu_list(client, "Rebox Units")
+
+    assert "WantedUnit" in html
+    assert "SoldUnit" not in html
+    assert "CheapUnit" not in html
 
 
 def test_releases_without_units_lists_only_releases_with_no_unit(client):
