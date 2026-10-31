@@ -39,6 +39,26 @@ only handles orders of one Unit. Ship it by hand.</div>
     <input type="text" id="net_sold" name="net_sold" class="form-control" required
       value="{{ '%.2f'|format(earnings.net) if earnings.net is not none }}">
   </div>
+  <h4>Supplies used</h4>
+  {% if supplies %}
+  <p>Filled in for a normal shipment; change them for anything else. Count
+  single uses, like labels, not rolls.</p>
+  <table class="table table-bordered table-condensed" style="width: auto">
+    <tr><th>Supply</th><th>In stock</th><th>Used</th></tr>
+    {% for supply, count in supplies %}
+    <tr>
+      <td><label for="supply-{{ supply.id }}">{{ supply.name }}</label></td>
+      <td>{{ supply.fmt_quantity() }}</td>
+      <td><input type="number" min="0" step="1" id="supply-{{ supply.id }}"
+        name="supply-{{ supply.id }}" value="{{ count }}"
+        class="form-control input-sm" style="width: 6em"></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p>No supplies are set as Used For shipping, so none will be taken out of
+  stock. Set them on the <a href="{{ url_for('SupplyModelView.list') }}">Supply List</a>.</p>
+  {% endif %}
   {% if instance %}
   <div class="checkbox">
     <label>
@@ -49,7 +69,8 @@ only handles orders of one Unit. Ship it by hand.</div>
   {% elif discogs_problem %}
   <div class="alert alert-warning">{{ discogs_problem }}</div>
   {% endif %}
-  <p>Shipping records a Sales Receipt for Net Sold, marks the Unit sold with it{% if instance %}
+  <p>Shipping records a Sales Receipt for Net Sold, marks the Unit sold with it,
+  takes the supplies used out of stock{% if instance %}
   and removes only this Unit's copy from Discogs{% endif %}.</p>
   <button class="btn btn-primary" {% if earnings["items"] > 1 %}disabled{% endif %}>Ship</button>
   <a href="{{ url_for('EbayOrderModelView.list') }}" class="btn btn-default">Cancel</a>

@@ -6,7 +6,7 @@ from fbc import db
 from fbc.index import MyIndexView
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.models.sales import SalesReceipt
-from fbc.models.supplies import PurchaseOrder
+from fbc.models.supplies import PurchaseOrder, Supply
 
 
 def _lot(name="Lot 1", price=100.0):
@@ -282,3 +282,32 @@ def test_ebay_sync_without_connect_ebay_says_what_to_do(
     job = client.get(response.get_json()["url"]).get_json()
     assert "Connect eBay" in job["log"]
     assert job["errors"] == 1
+
+
+def test_index_asks_to_reorder_supplies_running_low(app):
+    db.session.add_all(
+        [
+            Supply(name="LP Mailers", quantity=3, min_quantity=5),
+            Supply(name="Packing Tape Rolls", quantity=0, min_quantity=0),
+            Supply(name="Shipping Label Rolls", quantity=4, min_quantity=1),
+        ]
+    )
+    db.session.commit()
+
+    with app.test_client() as client:
+        html = client.get("/").get_data(as_text=True)
+
+    assert "Time to reorder" in html
+    assert "LP Mailers</a> (3 left)" in html
+    assert "Packing Tape Rolls" not in html
+    assert "Shipping Label Rolls" not in html
+
+
+def test_index_has_no_reorder_banner_when_supplies_are_stocked(app):
+    db.session.add(Supply(name="LP Mailers", quantity=30, min_quantity=5))
+    db.session.commit()
+
+    with app.test_client() as client:
+        html = client.get("/").get_data(as_text=True)
+
+    assert "Time to reorder" not in html

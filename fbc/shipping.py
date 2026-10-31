@@ -2,8 +2,9 @@
 Ship This: finish off an eBay order once its shipping label is bought.
 
 It reads the order's earnings from eBay's Finances API, records a Sales
-Receipt for that amount, marks the order's Unit sold and removes that Unit's
-own instance of the release from the Discogs collection.
+Receipt for that amount, marks the order's Unit sold, takes the mailer,
+sleeves and label it used out of the Supply List and removes that Unit's own
+instance of the release from the Discogs collection.
 """
 
 import logging
@@ -271,10 +272,51 @@ def remove_from_discogs(unit):
     return message, "success"
 
 
-def ship_order(order, unit, net_sold):
+def supplies_plan(units):
     """
-    Record the Sales Receipt for `order` and mark `unit` sold with it.
-    Returns the receipt.
+    [(supply, count)] for every supply used for shipping: how many uses
+    shipping `units` together normally takes (see Supply.shipping_count).
+    """
+    from fbc.listing import record_size
+    from fbc.models.supplies import SHIPPING, Supply
+
+    sizes = [record_size(u) for u in units]
+    return [(s, s.shipping_count(sizes)) for s in Supply.used_for_list(SHIPPING)]
+
+
+def supply_counts(form, supplies, prefix="supply-"):
+    """
+    {supply: count} from the `prefix`<id> fields of `form` for each of
+    `supplies`, leaving out blanks and 0. Raises ValueError, with what to
+    fix, for anything but a whole number of 0 or more.
+    """
+    counts = {}
+    for supply in supplies:
+        value = (form.get(prefix + str(supply.id)) or "").strip()
+        if not value:
+            continue
+        try:
+            count = int(value)
+        except ValueError:
+            count = -1
+        if count < 0:
+            raise ValueError(
+                "Enter how many " + supply.name + " were used as a whole number."
+            )
+        if count:
+            counts[supply] = count
+    return counts
+
+
+def fmt_supplies(counts):
+    """{supply: count} as "1 LP Mailers, 1 Shipping Label Rolls"."""
+    return ", ".join(str(n) + " " + s.name for s, n in counts.items())
+
+
+def ship_order(order, unit, net_sold, supplies=None):
+    """
+    Record the Sales Receipt for `order`, mark `unit` sold with it and take
+    `supplies` ({supply: count}) out of stock. Returns the receipt.
     """
     from fbc import db
     from fbc.models.sales import SalesReceipt
@@ -289,6 +331,8 @@ def ship_order(order, unit, net_sold):
     db.session.flush()
     unit.sold = True
     unit.sales_receipt_id = receipt.id
+    for supply, count in (supplies or {}).items():
+        supply.use(count)
     db.session.commit()
     logger.info(
         "Shipped order "
@@ -297,5 +341,6 @@ def ship_order(order, unit, net_sold):
         + str(unit.id)
         + ", receipt "
         + str(receipt.id)
+        + (", used " + fmt_supplies(supplies) if supplies else "")
     )
     return receipt

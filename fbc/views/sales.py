@@ -9,11 +9,14 @@ from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.sales import SalesReceipt
 from fbc.shipping import (
     discogs_plan,
+    fmt_supplies,
     order_earnings,
     order_receipt,
     order_unit,
     remove_from_discogs,
     ship_order,
+    supplies_plan,
+    supply_counts,
 )
 from fbc.widgets import (
     DateTimeLocalField,
@@ -90,8 +93,9 @@ class EbayOrderModelView(CustomModelView):
     def ship(self, pk):
         """
         Ship This: once the label is bought on eBay, record the Sales Receipt
-        for the order's earnings, mark its Unit sold and remove the Unit's
-        instance from Discogs. GET shows what will happen; POST does it.
+        for the order's earnings, mark its Unit sold, take the supplies it
+        used out of stock and remove the Unit's instance from Discogs. GET
+        shows what will happen; POST does it.
         """
         order = self._order(pk)
         back = redirect(url_for("EbayOrderModelView.list"))
@@ -107,13 +111,20 @@ class EbayOrderModelView(CustomModelView):
             )
             return back
 
+        supplies = supplies_plan([unit])
         if request.method == "POST":
+            again = redirect(url_for("EbayOrderModelView.ship", pk=pk))
             try:
                 net_sold = float(request.form.get("net_sold", "").strip().lstrip("$"))
             except ValueError:
                 flash("Enter Net Sold as a number of dollars.", "danger")
-                return redirect(url_for("EbayOrderModelView.ship", pk=pk))
-            ship_order(order, unit, net_sold)
+                return again
+            try:
+                used = supply_counts(request.form, [s for s, _ in supplies])
+            except ValueError as e:
+                flash(str(e), "danger")
+                return again
+            ship_order(order, unit, net_sold, used)
             flash(
                 "Recorded a Sales Receipt for $"
                 + f"{net_sold:.2f}"
@@ -122,6 +133,8 @@ class EbayOrderModelView(CustomModelView):
                 + " sold.",
                 "success",
             )
+            if used:
+                flash("Took " + fmt_supplies(used) + " out of supplies.", "success")
             if request.form.get("remove_discogs"):
                 message, category = remove_from_discogs(unit)
                 flash(message, category)
@@ -137,4 +150,5 @@ class EbayOrderModelView(CustomModelView):
             earnings=earnings,
             instance=instance,
             discogs_problem=discogs_problem,
+            supplies=supplies,
         )

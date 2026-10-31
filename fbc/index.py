@@ -29,7 +29,7 @@ class MyIndexView(IndexView):
         from fbc import db
         from fbc.models.inventory import PurchaseLot, StorageBox, Unit
         from fbc.models.sales import SalesReceipt
-        from fbc.models.supplies import PurchaseOrder
+        from fbc.models.supplies import PurchaseOrder, Supply
 
         # Load just the columns the totals need, once, and do every count
         # from them in Python, rather than a COUNT query per lot, box and
@@ -216,6 +216,7 @@ class MyIndexView(IndexView):
             breakeven_per_unit=breakeven_per_unit,
             unit_total=unit_total,
             box_totals=box_totals,
+            low_supplies=Supply.low_list(),
         )
 
     def _start_sync(self, kind, title, fn, fallback_url):

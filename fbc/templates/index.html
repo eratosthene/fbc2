@@ -3,6 +3,14 @@
 {% block content %}
 <div class="container">
   <h1>Fire & Bones Collectibles</h1>
+  {% if low_supplies %}
+  <div class="alert alert-warning">
+    <strong>Time to reorder:</strong>
+    {% for supply in low_supplies %}<a
+      href="{{ url_for('SupplyModelView.show', pk=supply.id) }}"
+      >{{ supply.name }}</a> ({{ supply.quantity }} left){{ ", " if not loop.last }}{% endfor %}
+  </div>
+  {% endif %}
   <h2>Total units in stock: {{ stock_total }}</h2>
   {% call lib.accordion_tag("stockbypurchaselot","Stock Details (by purchase
   lot)", False) %}
