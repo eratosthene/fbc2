@@ -103,9 +103,14 @@ class UnitModelReboxView(UnitModelBaseView):
         "unit_type",
         "storage_box",
         "discogs_genre_column",
+        "discogs_style_column",
         "link_column",
     ]
-    label_columns = {"link_column": "Links", "discogs_genre_column": "Genres"}
+    label_columns = {
+        "link_column": "Links",
+        "discogs_genre_column": "Genres",
+        "discogs_style_column": "Styles",
+    }
 
 
 class PurchaseLotModelView(CustomModelView):

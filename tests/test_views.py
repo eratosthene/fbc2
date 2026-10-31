@@ -209,8 +209,9 @@ def test_rebox_units_lists_the_columns_for_choosing_a_box(client):
     assert "SomeUnit" in units and "SomeUnit" in rebox
     assert "<th>Retail Price</th>" in units
     assert "<th>Retail Price</th>" not in rebox
-    assert "<th>Genres</th>" in rebox
-    assert "<th>Genres</th>" not in units
+    for column in ("<th>Genres</th>", "<th>Styles</th>"):
+        assert column in rebox
+        assert column not in units
 
 
 def test_releases_without_units_lists_only_releases_with_no_unit(client):
