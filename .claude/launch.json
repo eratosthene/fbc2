@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fbc",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["FBC_DEV_MODE=1", "dev-scripts/run-local.sh"],
+      "port": 5556
+    }
+  ]
+}

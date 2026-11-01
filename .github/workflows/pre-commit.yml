@@ -30,8 +30,7 @@ jobs:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      # The pytest hooks are skipped because the Tests workflow runs the suite.
+      # Runs the commit-stage hooks only. The test suite's hook is a pre-push
+      # one, and the Tests workflow runs the suite on its own.
       - name: Run hooks on all files
         run: pre-commit run --all-files --show-diff-on-failure
-        env:
-          SKIP: pytest-collect,pytest-fast

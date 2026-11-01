@@ -1,6 +1,6 @@
 #!/bin/bash
 # Start the dev compose setup: the app from this checkout's code, against its
-# own MariaDB. See "Testing with Docker" in README.rst.
+# own MariaDB. See "Testing with Docker" in README.md.
 #
 #   dev-scripts/compose-up.sh [-d | --background]
 #
@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-see_readme='See "Testing with Docker" in README.rst.'
+see_readme='See "Testing with Docker" in README.md.'
 
 if [ ! -f config.py ]; then
     echo "config.py is missing; copy config.py.tpl to config.py and fill it in." >&2

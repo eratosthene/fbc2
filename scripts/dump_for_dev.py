@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Make a sanitized dump of the live database, for docker/compose.dev.yml. See
-"A copy of live data" in README.rst.
+"A copy of live data" in README.md.
 
   scripts/dump_for_dev.py [-o DIR] [--admin-user USER]
 
@@ -419,7 +419,7 @@ def run(args):
     os.replace(partial, final)
     size = os.path.getsize(final) / 1024 / 1024
     print(f"\n{final} ({size:.1f} MB)")
-    print("Copy it to docker/dev-db/ on the dev machine; see README.rst.")
+    print("Copy it to docker/dev-db/ on the dev machine; see README.md.")
 
 
 def copy(live, admin, database, scratch):
