@@ -41,6 +41,32 @@ def test_supply_use_takes_a_roll_once_its_labels_run_out():
     assert (supply.quantity, supply.pack_used) == (2, 1)
 
 
+def test_supply_use_leaves_none_in_use_once_the_last_one_runs_out():
+    supply = Supply(name="Shipping Label Roll", quantity=1, pack_size=220)
+    supply.pack_used = 219
+    supply.use(1)
+    assert (supply.quantity, supply.pack_used) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    "quantity, pack_size, pack_used, available",
+    [
+        (3, 1, 0, 3),
+        (2, 220, 219, 221),
+        (1, 220, 0, 220),
+        (0, 220, 0, 0),
+        (0, 220, 5, 0),
+    ],
+)
+def test_supply_available_counts_the_uses_left(
+    quantity, pack_size, pack_used, available
+):
+    supply = Supply(
+        name="S", quantity=quantity, pack_size=pack_size, pack_used=pack_used
+    )
+    assert supply.available() == available
+
+
 def test_supply_use_works_on_a_supply_not_yet_saved():
     # pack_size and pack_used only get their defaults once saved.
     supply = Supply(name="LP Mailers", quantity=2)
@@ -52,6 +78,18 @@ def test_supply_fmt_quantity_shows_whats_left_on_the_one_in_use():
     assert Supply(name="Mailers", quantity=5, pack_size=1).fmt_quantity() == "5"
     rolls = Supply(name="Labels", quantity=3, pack_size=220, pack_used=41)
     assert rolls.fmt_quantity() == "3 (179 of 220 left on the one in use)"
+    # With none left, none is in use.
+    assert Supply(name="Labels", quantity=0, pack_size=220).fmt_quantity() == "0"
+
+
+def test_supply_shows_its_choices_by_their_labels():
+    supply = Supply(name="S", used_for="shipping", record_size='7"')
+    assert (supply.fmt_used_for(), supply.fmt_record_size()) == (
+        "Shipping an order",
+        '7"',
+    )
+    supply = Supply(name="S")
+    assert (supply.fmt_used_for(), supply.fmt_record_size()) == ("Only by hand", "Any")
 
 
 @pytest.mark.parametrize(

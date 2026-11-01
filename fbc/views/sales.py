@@ -15,6 +15,7 @@ from fbc.shipping import (
     order_unit,
     remove_from_discogs,
     ship_order,
+    stock_problems,
     supplies_plan,
     supply_counts,
 )
@@ -112,33 +113,38 @@ class EbayOrderModelView(CustomModelView):
             return back
 
         supplies = supplies_plan([unit])
-        if request.method == "POST":
-            again = redirect(url_for("EbayOrderModelView.ship", pk=pk))
+        # A POST with anything wrong shows the page again with what was
+        # entered, so it doesn't all need typing in again.
+        values = request.form if request.method == "POST" else None
+        if values is not None:
+            problems = []
             try:
-                net_sold = float(request.form.get("net_sold", "").strip().lstrip("$"))
+                net_sold = float(values.get("net_sold", "").strip().lstrip("$"))
             except ValueError:
-                flash("Enter Net Sold as a number of dollars.", "danger")
-                return again
+                problems.append("Enter Net Sold as a number of dollars.")
             try:
-                used = supply_counts(request.form, [s for s, _ in supplies])
+                used = supply_counts(values, [s for s, _ in supplies])
+                problems.extend(stock_problems(used))
             except ValueError as e:
-                flash(str(e), "danger")
-                return again
-            ship_order(order, unit, net_sold, used)
-            flash(
-                "Recorded a Sales Receipt for $"
-                + f"{net_sold:.2f}"
-                + " and marked "
-                + unit.name
-                + " sold.",
-                "success",
-            )
-            if used:
-                flash("Took " + fmt_supplies(used) + " out of supplies.", "success")
-            if request.form.get("remove_discogs"):
-                message, category = remove_from_discogs(unit)
-                flash(message, category)
-            return back
+                problems.append(str(e))
+            if not problems:
+                ship_order(order, unit, net_sold, used)
+                flash(
+                    "Recorded a Sales Receipt for $"
+                    + f"{net_sold:.2f}"
+                    + " and marked "
+                    + unit.name
+                    + " sold.",
+                    "success",
+                )
+                if used:
+                    flash("Took " + fmt_supplies(used) + " out of supplies.", "success")
+                if values.get("remove_discogs"):
+                    message, category = remove_from_discogs(unit)
+                    flash(message, category)
+                return back
+            for problem in problems:
+                flash(problem, "danger")
 
         earnings = order_earnings(order.order_id)
         instance, discogs_problem = discogs_plan(unit)
@@ -151,4 +157,5 @@ class EbayOrderModelView(CustomModelView):
             instance=instance,
             discogs_problem=discogs_problem,
             supplies=supplies,
+            values=values,
         )

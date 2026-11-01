@@ -37,7 +37,7 @@ only handles orders of one Unit. Ship it by hand.</div>
   <div class="form-group" style="max-width: 200px">
     <label for="net_sold">Net Sold</label>
     <input type="text" id="net_sold" name="net_sold" class="form-control" required
-      value="{{ '%.2f'|format(earnings.net) if earnings.net is not none }}">
+      value="{% if values is not none %}{{ values.get('net_sold', '') }}{% elif earnings.net is not none %}{{ '%.2f'|format(earnings.net) }}{% endif %}">
   </div>
   <h4>Supplies used</h4>
   {% if supplies %}
@@ -48,9 +48,10 @@ only handles orders of one Unit. Ship it by hand.</div>
     {% for supply, count in supplies %}
     <tr>
       <td><label for="supply-{{ supply.id }}">{{ supply.name }}</label></td>
-      <td>{{ supply.fmt_quantity() }}</td>
+      <td>{{ supply.fmt_quantity() }}{% if count > supply.available() %}
+        <br><span class="text-danger">Not enough for this; check the Supply List.</span>{% endif %}</td>
       <td><input type="number" min="0" step="1" id="supply-{{ supply.id }}"
-        name="supply-{{ supply.id }}" value="{{ count }}"
+        name="supply-{{ supply.id }}" value="{{ values.get('supply-%d' % supply.id, count) if values is not none else count }}"
         class="form-control input-sm" style="width: 6em"></td>
     </tr>
     {% endfor %}
@@ -62,7 +63,8 @@ only handles orders of one Unit. Ship it by hand.</div>
   {% if instance %}
   <div class="checkbox">
     <label>
-      <input type="checkbox" name="remove_discogs" value="1" checked>
+      <input type="checkbox" name="remove_discogs" value="1"
+        {% if values is none or values.get('remove_discogs') %}checked{% endif %}>
       Remove {{ unit.discogs_release }} (instance {{ instance.instance_id }}) from the Discogs collection
     </label>
   </div>

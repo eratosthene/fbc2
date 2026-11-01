@@ -264,7 +264,7 @@ def remove_from_discogs(unit):
             + " (instance "
             + str(instance_id)
             + ") from Discogs: "
-            + str(e)
+            + str(e).rstrip(".")
             + ". Remove it by hand, then Sync Discogs.",
             "danger",
         )
@@ -309,6 +309,36 @@ def supply_counts(form, supplies, prefix="supply-"):
         if count:
             counts[supply] = count
     return counts
+
+
+def stock_problems(counts):
+    """
+    What to fix for each of `counts` ({supply: count}) that uses more than
+    the supply has left (see Supply.available), as messages; [] if none
+    does. Stock can't really run below 0, so a shortfall means the Supply
+    List is out of step with what's on hand.
+    """
+    problems = []
+    for supply, count in counts.items():
+        left = supply.available()
+        if count > left:
+            problems.append(
+                "There aren't enough "
+                + supply.name
+                + " in stock for this: it uses "
+                + str(count)
+                + ", and the Supply List has "
+                + str(left)
+                + " left. Count what's really on hand and correct its Quantity"
+                + (
+                    " and Used From The One In Use"
+                    if (supply.pack_size or 1) > 1
+                    else ""
+                )
+                + " on the Supply List, or change how many were used, then try"
+                " again."
+            )
+    return problems
 
 
 def fmt_supplies(counts):

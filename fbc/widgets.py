@@ -86,7 +86,7 @@ class SuppliesUsedField(Field):
 
     def process(self, formdata, data=unset_value, extra_filters=None):
         from fbc.models.supplies import Supply
-        from fbc.shipping import supply_counts
+        from fbc.shipping import stock_problems, supply_counts
 
         self.process_errors = []
         self.supplies = Supply.used_for_list(self.used_for)
@@ -102,6 +102,7 @@ class SuppliesUsedField(Field):
             self.data = supply_counts(formdata, self.supplies, self.name + "-")
         except ValueError as e:
             self.process_errors.append(str(e))
+        self.process_errors.extend(stock_problems(self.data))
 
 
 class DiscogsReleaseListWidget(ListWidget):

@@ -270,6 +270,26 @@ def test_adding_a_unit_needs_whole_supply_counts(client):
     assert sleeves.quantity == 50
 
 
+def test_adding_a_unit_is_blocked_when_a_supply_would_run_out(client):
+    sleeves, mailers = _inner_sleeves()
+
+    page = client.post(
+        "/unitmodelview/add",
+        data={
+            "name": "Some Unit",
+            "unit_type": '12" LP',
+            "supplies_used-" + str(sleeves.id): "51",
+        },
+    )
+
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "it uses 51, and the Supply List has 50 left" in html
+    fbc.db.session.expire_all()
+    assert fbc.db.session.query(Unit).count() == 0
+    assert sleeves.quantity == 50
+
+
 def test_editing_a_unit_doesnt_take_supplies(client):
     sleeves, mailers = _inner_sleeves()
     _units(Old={})
@@ -317,6 +337,57 @@ def test_supply_form_saves_blank_choices_as_null(client):
     ]
     edit = client.get("/supplymodelview/edit/" + str(supplies[0].id))
     assert edit.status_code == 200
+
+
+def _labels(client, **fields):
+    data = {
+        "name": "Shipping Label Roll",
+        "quantity": "2",
+        "min_quantity": "0",
+        "used_for": "shipping",
+        "record_size": "",
+        "per_units": "0",
+        "pack_size": "220",
+        "pack_used": "0",
+    }
+    data.update(fields)
+    return client.post("/supplymodelview/add", data=data)
+
+
+@pytest.mark.parametrize(
+    "fields, error",
+    [
+        ({"pack_used": "220"}, "Must be less than Uses Each"),
+        ({"quantity": "0", "pack_used": "5"}, "Must be 0 when Quantity is 0"),
+    ],
+)
+def test_supply_form_keeps_used_from_the_one_in_use_in_range(client, fields, error):
+    page = _labels(client, **fields)
+
+    assert error in page.get_data(as_text=True)
+    assert fbc.db.session.query(Supply).count() == 0
+
+
+def test_supply_list_shows_used_for_by_its_label(client):
+    _labels(client, pack_used="219")
+    client.post(
+        "/supplymodelview/add",
+        data={
+            "name": "Record Brushes",
+            "quantity": "3",
+            "min_quantity": "0",
+            "used_for": "",
+            "record_size": "",
+            "pack_size": "1",
+            "pack_used": "0",
+        },
+    )
+
+    html = client.get("/supplymodelview/list/").get_data(as_text=True)
+
+    assert "Shipping an order" in html and "Only by hand" in html
+    assert "2 (1 of 220 left on the one in use)" in html
+    assert ">shipping<" not in html and ">None<" not in html
 
 
 def test_rebox_units_lists_the_columns_for_choosing_a_box(client):

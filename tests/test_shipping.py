@@ -1,4 +1,5 @@
 import datetime
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -311,8 +312,7 @@ def test_remove_from_discogs_says_so_when_discogs_isnt_connected(app, monkeypatc
     message, category = shipping.remove_from_discogs(unit)
 
     assert category == "danger"
-    assert "Connect fbc to Discogs first" in message
-    assert "Remove it by hand" in message
+    assert "Connect fbc to Discogs first (Discogs > Connect Discogs). Remove" in message
     assert db.session.get(DiscogsInstance, 1002) is not None
 
 
@@ -553,6 +553,78 @@ def test_shipping_takes_the_supplies_used_out_of_stock(client, discogs):
     }
 
 
+def test_stock_problems_names_each_supply_short_of_what_its_used_for(app):
+    supplies = _shipping_supplies()
+
+    problems = shipping.stock_problems(
+        {supplies["mailers"]: 10, supplies["sleeves 12"]: 21, supplies["labels"]: 222}
+    )
+
+    assert len(problems) == 2
+    assert problems[0].startswith(
+        "There aren't enough Vinyl Outer Sleeves, 12\" in stock for this: it uses"
+        " 21, and the Supply List has 20 left."
+    )
+    # The label roll has the last label of one roll and all of another.
+    assert "it uses 222, and the Supply List has 221 left" in problems[1]
+    assert "Used From The One In Use" in problems[1]
+    assert "Used From The One In Use" not in problems[0]
+
+
+def test_ship_page_warns_when_a_supply_is_short(client, finances):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+    supplies["sleeves 12"].quantity = 0
+    db.session.commit()
+
+    html = client.get("/ebayordermodelview/ship/" + order.order_id).get_data(
+        as_text=True
+    )
+
+    assert html.count("Not enough for this") == 1
+
+
+def test_shipping_is_blocked_when_a_supply_would_run_out(client, discogs):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+    ids = {k: str(s.id) for k, s in supplies.items()}
+
+    page = client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={
+            "net_sold": "16.50",
+            "supply-" + ids["mailers"]: "1",
+            "supply-" + ids["sleeves 12"]: "21",
+        },
+    )
+
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "There aren&#39;t enough Vinyl Outer Sleeves, 12&#34; in stock" in html
+    assert 'name="supply-' + ids["sleeves 12"] + '" value="21"' in html
+    # Remove from Discogs was left unticked, and stays that way.
+    assert re.search(r'name="remove_discogs" value="1"\s*>', html)
+    db.session.expire_all()
+    assert db.session.query(SalesReceipt).count() == 0
+    assert (supplies["mailers"].quantity, supplies["sleeves 12"].quantity) == (10, 20)
+    assert discogs.deleted == []
+
+
+def test_shipping_can_use_up_the_last_of_a_supply(client, discogs):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+    ids = {k: str(s.id) for k, s in supplies.items()}
+
+    client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={"net_sold": "16.50", "supply-" + ids["labels"]: "221"},
+    )
+
+    db.session.expire_all()
+    assert db.session.query(SalesReceipt).count() == 1
+    assert (supplies["labels"].quantity, supplies["labels"].pack_used) == (0, 0)
+
+
 @pytest.mark.parametrize("count", ["-1", "two", "1.5"])
 def test_shipping_needs_whole_supply_counts(client, discogs, count):
     order, unit = _order()
@@ -563,7 +635,12 @@ def test_shipping_needs_whole_supply_counts(client, discogs, count):
         data={"net_sold": "16.50", "supply-" + str(supplies["mailers"].id): count},
     )
 
-    assert page.headers["Location"].endswith("/ship/" + order.order_id)
+    # The page comes back with what was entered, to fix and ship again.
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "Enter how many LP Mailers were used as a whole number." in html
+    assert 'value="16.50"' in html
+    assert 'name="supply-' + str(supplies["mailers"].id) + '" value="' + count in html
     db.session.expire_all()
     assert db.session.query(SalesReceipt).count() == 0
     assert supplies["mailers"].quantity == 10

@@ -2,16 +2,26 @@ from fbc.util import CustomModelView
 from flask_appbuilder.fieldwidgets import Select2Widget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from wtforms import SelectField
-from wtforms.validators import NumberRange
+from wtforms.validators import NumberRange, ValidationError
 
 from fbc.listing import SIZES
-from fbc.models.supplies import ADDING_UNIT, SHIPPING, PurchaseOrder, Supply
+from fbc.models.supplies import USED_FOR_LABELS, PurchaseOrder, Supply
 
-USED_FOR_CHOICES = [
-    ("", "Only by hand"),
-    (SHIPPING, "Shipping an order"),
-    (ADDING_UNIT, "Adding a Unit"),
-]
+USED_FOR_CHOICES = [(value or "", label) for value, label in USED_FOR_LABELS.items()]
+
+
+def pack_used_fits(form, field):
+    """Used From The One In Use has to be less than Uses Each, and 0 with none in stock."""
+    if field.data is None:
+        return
+    if form.pack_size.data and field.data >= form.pack_size.data:
+        raise ValidationError(
+            "Must be less than Uses Each: once all of one are used, Quantity goes"
+            " down by one instead."
+        )
+    if form.quantity.data == 0 and field.data:
+        raise ValidationError("Must be 0 when Quantity is 0, since none is in use.")
+
 
 # used_for and record_size are stored as NULL when left blank; coercing the
 # blank choice to None too keeps it the selected (and a valid) choice.
@@ -41,7 +51,7 @@ class SupplyModelView(CustomModelView):
         "name",
         "fmt_quantity",
         "min_quantity",
-        "used_for",
+        "fmt_used_for",
         "purchase_orders",
     ]
     add_columns = [
@@ -56,9 +66,21 @@ class SupplyModelView(CustomModelView):
         "purchase_orders",
     ]
     edit_columns = add_columns
-    show_columns = add_columns
+    show_columns = [
+        "name",
+        "fmt_quantity",
+        "min_quantity",
+        "fmt_used_for",
+        "fmt_record_size",
+        "per_units",
+        "pack_size",
+        "pack_used",
+        "purchase_orders",
+    ]
     label_columns = {
         "fmt_quantity": "Quantity",
+        "fmt_used_for": "Used For",
+        "fmt_record_size": "Record Size",
         "min_quantity": "Reorder At",
         "per_units": "One Per Units",
         "pack_size": "Uses Each",
@@ -81,7 +103,7 @@ class SupplyModelView(CustomModelView):
         "min_quantity": [NumberRange(min=0)],
         "per_units": [NumberRange(min=0)],
         "pack_size": [NumberRange(min=1)],
-        "pack_used": [NumberRange(min=0)],
+        "pack_used": [NumberRange(min=0), pack_used_fits],
     }
     add_form_extra_fields = SUPPLY_FORM_EXTRA_FIELDS
     edit_form_extra_fields = SUPPLY_FORM_EXTRA_FIELDS

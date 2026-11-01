@@ -8,6 +8,11 @@ from sqlalchemy.orm import relationship
 # Supply.used_for: where a supply is taken out of stock on its own.
 SHIPPING = "shipping"
 ADDING_UNIT = "unit"
+USED_FOR_LABELS = {
+    None: "Only by hand",
+    SHIPPING: "Shipping an order",
+    ADDING_UNIT: "Adding a Unit",
+}
 
 
 class PurchaseOrder(Model):
@@ -78,7 +83,7 @@ class Supply(Model):
     def fmt_quantity(self):
         """quantity, and what's left of the one in use when it holds several."""
         size = self.pack_size or 1
-        if size <= 1:
+        if size <= 1 or not self.quantity:
             return str(self.quantity)
         left = size - (self.pack_used or 0)
         return (
@@ -89,6 +94,22 @@ class Supply(Model):
             + str(size)
             + " left on the one in use)"
         )
+
+    def fmt_used_for(self):
+        return USED_FOR_LABELS.get(self.used_for, self.used_for)
+
+    def fmt_record_size(self):
+        return self.record_size or "Any"
+
+    def available(self):
+        """
+        How many uses are left in stock: all of quantity's, less those gone
+        from the one in use. None are when quantity is 0.
+        """
+        if not self.quantity or self.quantity < 0:
+            return 0
+        size = self.pack_size or 1
+        return max(0, self.quantity * size - (self.pack_used or 0))
 
     def is_low(self):
         """Whether it's time to reorder: quantity is down to min_quantity."""
@@ -112,12 +133,13 @@ class Supply(Model):
         """
         Take `count` uses out of stock: one of quantity for each, or, when
         one holds several (pack_size), one each time the one in use runs
-        out. quantity never goes below 0.
+        out. Check available() first: quantity never goes below 0, and once
+        it's 0 none is in use.
         """
         size = self.pack_size or 1
         used = (self.pack_used or 0) + count
         self.quantity = max(0, (self.quantity or 0) - used // size)
-        self.pack_used = used % size
+        self.pack_used = used % size if self.quantity else 0
 
     @staticmethod
     def used_for_list(used_for):
