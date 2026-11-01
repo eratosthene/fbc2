@@ -1,7 +1,18 @@
 # syntax=docker/dockerfile:1
+
+# Turn Pipfile.lock into a requirements file for pip, so the lock is the only
+# list of versions to keep up to date. Pipenv stays in this stage, out of the
+# image.
+FROM python:3.12-alpine AS requirements
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install pipenv
+WORKDIR /lock
+COPY ./Pipfile ./Pipfile.lock ./
+RUN pipenv requirements > requirements.txt
+
 FROM python:3.12-alpine
 
-COPY ./requirements.txt /app/requirements.txt
+COPY --from=requirements /lock/requirements.txt /app/requirements.txt
 
 # Install, build and remove the build dependencies in one layer so they don't
 # end up in the image. The cache mount keeps pip's downloads between builds.
