@@ -4,6 +4,6 @@
 .env
 dev-db/
 *.sql
-# Dev-only scripts that add fake records.
+# Dev-only scripts: running the app locally, and adding fake records.
 dev-scripts/
 .claude/

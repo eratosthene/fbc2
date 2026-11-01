@@ -2,7 +2,7 @@
 # reloading dev server, against a MariaDB like the live server's. See
 # "Testing with Docker" in README.rst.
 #
-#   docker compose -f docker-compose.dev.yml up --build
+#   dev-scripts/compose-up.sh   (docker compose -f docker-compose.dev.yml up --build)
 #
 # It needs FBC_DEV_DB_PASSWORD in .env, and uses config.py for everything but
 # the database. Both ports are on 127.0.0.1 only, since the database may hold
