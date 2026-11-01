@@ -19,6 +19,11 @@ SQLALCHEMY_DATABASE_URI = os.environ.get(
     "SQLALCHEMY_DATABASE_URI", 'mysql+pymysql://user:password@host/db'
 )
 SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+# Lets the scripts in dev-scripts/ add fake eBay and Discogs records to the
+# database, for testing without the real sites. Only ever set this in a dev
+# config.
+# ALLOW_FAKE_DATA = True
 # SQLALCHEMY_ECHO = True
 # SQLALCHEMY_DATABASE_URI = 'postgresql://root:password@localhost/myapp'
 

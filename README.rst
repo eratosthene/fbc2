@@ -69,3 +69,26 @@ The database is kept in the ``fbc2-dev_db`` volume between sessions. To start
 again from the dumps, remove it::
 
     docker compose -f docker-compose.dev.yml down -v
+
+Fake eBay and Discogs records
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The scripts in ``dev-scripts/`` add fake records in place of a sync from eBay
+or Discogs, to try things like Ship This and Add Unit without the real sites.
+They only run when ``config.py`` sets ``ALLOW_FAKE_DATA = True`` and the
+database is on this machine or in ``docker-compose.dev.yml``, and they aren't
+in the Docker image. Run them from the repo root with ``pipenv run python``,
+or in the app container::
+
+    docker compose -f docker-compose.dev.yml exec app python dev-scripts/fake_ebay.py orders 5
+
+- ``fake_ebay.py orders N``: orders that each offer Ship This, with a listing
+  and an unsold Unit of a fake Discogs release.
+- ``fake_ebay.py listings N``: listings with an unsold Unit and no order.
+- ``fake_discogs.py releases N``: releases in the collection with no Units,
+  each with an Add Unit link.
+- ``clear_fake.py``: removes every fake record, along with the Units, Sales
+  Receipts and drafts made from them.
+
+Each takes ``--help``. With eBay and Discogs not connected, Ship This can't
+look up the order's earnings, so enter Net Sold yourself.
