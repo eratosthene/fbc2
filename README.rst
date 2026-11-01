@@ -36,7 +36,8 @@ and needs an admin user to sign in with::
 
     flask --app fbc fab create-admin
 
-Both run in the app's container too (``docker compose exec fbc flask ...``).
+Both run in the app's container too
+(``sudo docker compose -f docker/compose.yml exec fbc flask ...``).
 The container runs ``setup-db`` itself each time it starts.
 
 Running on the live server
@@ -44,10 +45,13 @@ Running on the live server
 
 The live server runs the app's Docker image with gunicorn, on port 20000.
 Build the image there, since it's built for the machine that builds it, and
-then start it::
+then start it, both from the repo root::
 
-    ./build.sh
-    sudo docker compose up -d
+    docker/build.sh
+    sudo docker compose -f docker/compose.yml up -d
+
+The Docker files are all in ``docker/``. The build context is still the repo
+root, since the image copies ``config.py``, ``fbc/`` and ``migrations/``.
 
 The image has ``config.py`` built into it, so a change to it needs a
 rebuild too.
@@ -87,11 +91,12 @@ Development
 Testing with Docker
 -------------------
 
-``docker-compose.dev.yml`` runs the app from this checkout's code, with
+``docker/compose.dev.yml`` runs the app from this checkout's code, with
 Flask's reloading dev server, against its own MariaDB 10.11 like the live
 server's. It works the same on a Mac as on Linux; the image it builds is for
 the machine it runs on, so build the live server's image there with
-``build.sh``.
+``docker/build.sh``. Its ``.env`` and ``dev-db/`` are in ``docker/``, next to
+it, since Compose reads ``.env`` from the compose file's folder.
 
 - Copy ``config.py.tpl`` to ``config.py`` if there isn't one. The app uses it
   for everything but the database.
@@ -104,22 +109,22 @@ the machine it runs on, so build the live server's image there with
   Shipping & Returns and Connect eBay/Discogs are turned off. Ship This
   records the Sales Receipt as usual, but takes Net Sold from you and only
   removes the Discogs copy from fbc. To reach the real sites on purpose, put
-  ``FBC_DEV_MODE=0`` in ``.env`` (and leave ``DEV_MODE`` out of
+  ``FBC_DEV_MODE=0`` in ``docker/.env`` (and leave ``DEV_MODE`` out of
   ``config.py``, or set it to ``False``).
 
-- Put a password for the database in ``.env``::
+- Put a password for the database in ``docker/.env``::
 
-    echo "FBC_DEV_DB_PASSWORD=$(openssl rand -hex 16)" > .env
+    echo "FBC_DEV_DB_PASSWORD=$(openssl rand -hex 16)" > docker/.env
 
   To use the database from ``flask`` on this machine as well, point
   ``config.py``'s ``SQLALCHEMY_DATABASE_URI`` at
   ``mysql+pymysql://fbc:<that password>@127.0.0.1:3307/fbc``.
 
-- Optionally, put ``.sql`` dumps (``mysqldump`` output) in ``dev-db/``. They
-  are loaded the first time the database starts. Without one the app builds
-  an empty database, and needs an admin user::
+- Optionally, put ``.sql`` dumps (``mysqldump`` output) in ``docker/dev-db/``.
+  They are loaded the first time the database starts. Without one the app
+  builds an empty database, and needs an admin user::
 
-    docker compose -f docker-compose.dev.yml exec app flask fab create-admin
+    docker compose -f docker/compose.dev.yml exec app flask fab create-admin
 
 - Start it, then open http://127.0.0.1:5555::
 
@@ -131,7 +136,7 @@ the machine it runs on, so build the live server's image there with
 The database is kept in the ``fbc2-dev_db`` volume between sessions. To start
 again from the dumps, remove it::
 
-    docker compose -f docker-compose.dev.yml down -v
+    docker compose -f docker/compose.dev.yml down -v
 
 Fake eBay and Discogs records
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -139,11 +144,11 @@ Fake eBay and Discogs records
 The ``fake_*.py`` scripts in ``dev-scripts/`` add fake records in place of a sync from eBay
 or Discogs, to try things like Ship This and Add Unit without the real sites.
 They only run when ``config.py`` sets ``ALLOW_FAKE_DATA = True`` and the
-database is on this machine or in ``docker-compose.dev.yml``, and they aren't
+database is on this machine or in ``docker/compose.dev.yml``, and they aren't
 in the Docker image. Run them from the repo root with ``pipenv run python``,
 or in the app container::
 
-    docker compose -f docker-compose.dev.yml exec app python dev-scripts/fake_ebay.py orders 5
+    docker compose -f docker/compose.dev.yml exec app python dev-scripts/fake_ebay.py orders 5
 
 - ``fake_ebay.py orders N``: orders that each offer Ship This, with a listing
   and an unsold Unit of a fake Discogs release.

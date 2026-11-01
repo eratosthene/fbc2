@@ -34,6 +34,7 @@ jobs:
         with:
           # A path context, so the config.py copied above is included.
           context: .
+          file: docker/Dockerfile
           push: false
           load: true
           tags: fbc2:ci

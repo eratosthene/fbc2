@@ -1,0 +1,13 @@
+# BuildKit reads this in place of a .dockerignore at the root of the build
+# context (the repo root), because it sits next to docker/Dockerfile.
+**/__pycache__
+**/*.pyc
+# Local-only files that hold credentials or copies of live data. The root
+# ones are where they were before the Docker files moved to docker/.
+**/.env
+docker/dev-db/
+dev-db/
+*.sql
+# Dev-only scripts: running the app locally, and adding fake records.
+dev-scripts/
+.claude/

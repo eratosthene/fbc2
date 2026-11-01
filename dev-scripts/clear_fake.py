@@ -4,9 +4,9 @@ with what testing made from them: Units added from fake releases, Sales
 Receipts for fake orders (Ship This or Add SR) and drafts for fake Units.
 Supplies Ship This or Add Unit took out of stock aren't put back.
 
-Run from the repo root, on this machine or in docker-compose.dev.yml's app:
+Run from the repo root, on this machine or in docker/compose.dev.yml's app:
   pipenv run python dev-scripts/clear_fake.py
-  docker compose -f docker-compose.dev.yml exec app python dev-scripts/clear_fake.py
+  docker compose -f docker/compose.dev.yml exec app python dev-scripts/clear_fake.py
 """
 
 import argparse

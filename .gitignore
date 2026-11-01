@@ -68,7 +68,9 @@ instance/
 # Local app config (contains real DB/eBay/Discogs credentials); copy from config.py.tpl
 config.py
 
-# Database dumps for docker-compose.dev.yml to load (may be copies of live data)
+# Database dumps for docker/compose.dev.yml to load (may be copies of live data);
+# /dev-db/ is where they were before the Docker files moved to docker/.
+/docker/dev-db/
 /dev-db/
 
 # Scrapy stuff:

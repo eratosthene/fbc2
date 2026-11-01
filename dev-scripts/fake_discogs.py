@@ -10,9 +10,9 @@ from Discogs.
 They go in a "Fake Releases" folder. --size picks the record size. Remove
 everything fake with clear_fake.py.
 
-Run from the repo root, on this machine or in docker-compose.dev.yml's app:
+Run from the repo root, on this machine or in docker/compose.dev.yml's app:
   pipenv run python dev-scripts/fake_discogs.py releases 5
-  docker compose -f docker-compose.dev.yml exec app python dev-scripts/fake_discogs.py releases 5
+  docker compose -f docker/compose.dev.yml exec app python dev-scripts/fake_discogs.py releases 5
 """
 
 import argparse

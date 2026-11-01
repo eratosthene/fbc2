@@ -1,0 +1,14 @@
+# The live server's container. Run from the repo root, after docker/build.sh:
+#
+#   sudo docker compose -f docker/compose.yml up -d
+name: fbc2
+
+services:
+  fbc:
+    image: fbc2:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "20000:20000"

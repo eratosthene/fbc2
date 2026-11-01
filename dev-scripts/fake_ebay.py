@@ -11,9 +11,9 @@ Add fake eBay records to a dev database, in place of a sync from eBay.
 should only offer Add SR). --size picks the record size, which decides the
 outer sleeve Ship This suggests. Remove everything fake with clear_fake.py.
 
-Run from the repo root, on this machine or in docker-compose.dev.yml's app:
+Run from the repo root, on this machine or in docker/compose.dev.yml's app:
   pipenv run python dev-scripts/fake_ebay.py orders 5
-  docker compose -f docker-compose.dev.yml exec app python dev-scripts/fake_ebay.py orders 5
+  docker compose -f docker/compose.dev.yml exec app python dev-scripts/fake_ebay.py orders 5
 """
 
 import argparse

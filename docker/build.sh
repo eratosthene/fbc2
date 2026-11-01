@@ -1,9 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-cd "$(dirname "$0")"
+# The build context is the repo root, where config.py, fbc/ and migrations/ are.
+cd "$(dirname "$0")/.."
 
-# Build with BuildKit via the buildx plugin; the legacy builder is deprecated.
+# Build with BuildKit via the buildx plugin; the legacy builder is deprecated,
+# and doesn't read docker/Dockerfile.dockerignore.
 if ! sudo docker buildx version >/dev/null 2>&1; then
     echo "The docker buildx plugin is not installed. Install it, then re-run this script:" >&2
     echo "  Debian/Ubuntu (Docker's apt repo):  sudo apt install docker-buildx-plugin" >&2
@@ -17,4 +19,4 @@ if [ ! -f config.py ]; then
     exit 1
 fi
 
-sudo docker buildx build --load -t fbc2:latest .
+sudo docker buildx build --load -f docker/Dockerfile -t fbc2:latest .
