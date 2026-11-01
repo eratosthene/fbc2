@@ -165,7 +165,8 @@ so ``flask setup-db`` brings it up to date when the app starts.
    asks for its password; leave it empty for a user that signs in with
    ``unix_socket``, and run the script with ``sudo``. ``-o`` picks the folder
    to write to. It needs Python 3 and the MariaDB client (``mariadb`` and
-   ``mariadb-dump``), but not the app's packages.
+   ``mariadb-dump``, or MariaDB's ``mysql`` and ``mysqldump`` where it only
+   has those names), but not the app's packages.
 
    Before finishing, it checks the dump for rows of the emptied tables and
    for any of the live tokens, password hashes, API keys and user emails, and
