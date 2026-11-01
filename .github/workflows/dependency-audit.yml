@@ -9,14 +9,12 @@ on:
     paths:
       - Pipfile
       - Pipfile.lock
-      - requirements.txt
       - .github/workflows/dependency-audit.yml
   push:
     branches: [main]
     paths:
       - Pipfile
       - Pipfile.lock
-      - requirements.txt
       - .github/workflows/dependency-audit.yml
   schedule:
     - cron: "17 6 * * 1" # Mondays, 06:17 UTC

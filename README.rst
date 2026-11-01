@@ -64,11 +64,6 @@ Development
 
     pre-commit install
 
-- After changing ``Pipfile.lock``, regenerate the ``requirements.txt`` the
-  Docker image installs from (CI checks the two match)::
-
-    pipenv requirements > requirements.txt
-
 - To run the app on this machine, with Flask's reloading dev server and the
   database in ``config.py``, then open http://127.0.0.1:5556::
 

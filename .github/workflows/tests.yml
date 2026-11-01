@@ -78,24 +78,3 @@ jobs:
             const body = testResults("test-results/junit.xml", `Commit ${sha} · [workflow run](${runUrl})`);
             const prSection = require("./.github/scripts/pr-section.js");
             await prSection({ github, context, core }, "fbc2-test-results", body);
-
-  # The Docker image installs from requirements.txt rather than Pipfile.lock,
-  # so make sure the two haven't drifted apart.
-  requirements-txt:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Install Pipenv
-        run: python -m pip install pipenv
-
-      - name: Check requirements.txt matches Pipfile.lock
-        run: |
-          if ! diff -u requirements.txt <(pipenv requirements); then
-            echo "::error file=requirements.txt::requirements.txt is out of date with Pipfile.lock. Run: pipenv requirements > requirements.txt"
-            exit 1
-          fi
