@@ -3,6 +3,7 @@ import secrets
 from flask import flash, redirect, request, session, url_for
 from flask_appbuilder import BaseView, expose, has_access
 
+from fbc import devmode
 from fbc.discogs import (
     DiscogsAuthError,
     authorize_url,
@@ -36,8 +37,19 @@ class ConnectEbayView(BaseView):
         Connect eBay: sign in on eBay, then come back with the one-time code
         eBay hands the browser. The code arrives here directly if the
         RuName's auth accepted URL points at this page, or can be pasted in
-        (the whole address eBay ends on) if it doesn't.
+        (the whole address eBay ends on) if it doesn't. Dev mode only shows
+        what's saved.
         """
+        if devmode.on():
+            if request.method == "POST" or request.args:
+                return redirect(url_for("ConnectEbayView.connect"))
+            return self.render_template(
+                "connect_ebay.html",
+                title="Connect eBay",
+                sign_in=None,
+                saved=saved_oauth_token(),
+                dev_mode_message=devmode.message("connecting to eBay"),
+            )
         text = request.form.get("address") if request.method == "POST" else None
         if text is None and request.args.get("code"):
             text = request.query_string.decode()
@@ -92,8 +104,20 @@ class ConnectDiscogsView(BaseView):
         """
         Connect Discogs: Discogs sends the browser back here with a verifier
         after the owner allows fbc in. If it can't reach this page, the
-        address it ends on can be pasted in instead.
+        address it ends on can be pasted in instead. Dev mode only shows
+        what's saved.
         """
+        if devmode.on():
+            if request.method == "POST" or request.args:
+                return redirect(url_for("ConnectDiscogsView.connect"))
+            return self.render_template(
+                "connect_discogs.html",
+                title="Connect Discogs",
+                configured=False,
+                pending=False,
+                saved=saved_discogs_token(),
+                dev_mode_message=devmode.message("connecting to Discogs"),
+            )
         if request.args.get("denied"):
             session.pop("discogs_oauth_request", None)
             flash("Discogs sign-in was cancelled.", "warning")
@@ -141,6 +165,8 @@ class ConnectDiscogsView(BaseView):
     @has_access
     def start(self):
         """Get a request token from Discogs and send the browser to sign in."""
+        if devmode.on():
+            return redirect(url_for("ConnectDiscogsView.connect"))
         try:
             token, secret, url = authorize_url(
                 url_for("ConnectDiscogsView.connect", _external=True)

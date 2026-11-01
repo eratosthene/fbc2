@@ -65,7 +65,8 @@ only handles orders of one Unit. Ship it by hand.</div>
     <label>
       <input type="checkbox" name="remove_discogs" value="1"
         {% if values is none or values.get('remove_discogs') %}checked{% endif %}>
-      Remove {{ unit.discogs_release }} (instance {{ instance.instance_id }}) from the Discogs collection
+      Remove {{ unit.discogs_release }} (instance {{ instance.instance_id }}) from the Discogs collection{% if dev_mode %}
+      (Dev Mode: from fbc only){% endif %}
     </label>
   </div>
   {% elif discogs_problem %}

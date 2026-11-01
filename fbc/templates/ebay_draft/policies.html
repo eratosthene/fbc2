@@ -7,6 +7,9 @@ business policies or, if the account doesn't use them, by copying them from
 an existing listing. Set one or the other in <code>EBAY_SETTINGS["LISTING"]</code>
 in config.py.</p>
 
+{% if dev_mode_message %}
+<div class="alert alert-warning">{{ dev_mode_message }}</div>
+{% else %}
 {% if item_id %}
 <h4>Listing <a href="https://www.ebay.com/itm/{{ item_id }}">{{ item_id }}</a>
 {% if item_id == template_id %}<small>the configured <code>TEMPLATE_ITEM_ID</code></small>{% endif %}</h4>
@@ -58,5 +61,6 @@ so this account sets shipping and returns on each listing. The full response is 
   {% endfor %}
 </table>
 {% endfor %}
+{% endif %}
 {% endif %}
 {% endblock %}

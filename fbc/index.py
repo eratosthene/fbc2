@@ -8,7 +8,7 @@ from flask import jsonify, request, url_for
 from flask_appbuilder import IndexView
 from flask_appbuilder.views import expose
 
-from fbc import discogs, sync
+from fbc import devmode, discogs, sync
 from fbc.listing import OAuthError, trading
 from fbc.util import add_ebay_listing
 from fbc.util import add_ebay_order
@@ -223,8 +223,11 @@ class MyIndexView(IndexView):
         """
         Start fn as a background sync job (see fbc.sync). A request from the
         Sync buttons' script gets the job as JSON, to show in a modal; any
-        other request gets a page that shows the job's log.
+        other request gets a page that shows the job's log. In dev mode
+        the job only logs that syncing is off.
         """
+        if devmode.on():
+            fn = devmode.skip_sync
         job_id = sync.start(kind, title, fn, request.referrer or fallback_url)
         job_url = url_for("MyIndexView.syncjob", job_id=job_id)
         best = request.accept_mimetypes.best_match(["text/html", "application/json"])

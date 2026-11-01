@@ -44,8 +44,18 @@ the machine it runs on, so build the live server's image there with
 ``build.sh``.
 
 - Copy ``config.py.tpl`` to ``config.py`` if there isn't one. The app uses it
-  for everything but the database; leave the eBay and Discogs keys blank
-  unless you mean to reach the real sites.
+  for everything but the database.
+
+- The app runs in dev mode here, with a banner on every page saying so. It
+  doesn't use the eBay and Discogs keys in ``config.py`` or the tokens saved
+  in the database, so a copy of live data can't reach the live accounts.
+  Syncs log "Dev Mode is turned on, external syncing disabled" and finish
+  without doing anything, and picture uploads, Check with eBay, Publish,
+  Shipping & Returns and Connect eBay/Discogs are turned off. Ship This
+  records the Sales Receipt as usual, but takes Net Sold from you and only
+  removes the Discogs copy from fbc. To reach the real sites on purpose, put
+  ``FBC_DEV_MODE=0`` in ``.env`` (and leave ``DEV_MODE`` out of
+  ``config.py``, or set it to ``False``).
 
 - Put a password for the database in ``.env``::
 

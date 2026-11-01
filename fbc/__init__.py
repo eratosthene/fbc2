@@ -12,6 +12,7 @@ from flask import send_from_directory
 from flask_appbuilder import AppBuilder, Model
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate, stamp, upgrade
+from fbc import devmode
 from fbc.index import MyIndexView
 
 logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s")
@@ -19,6 +20,10 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 app = Flask(__name__)
 app.config.from_object("config")
+# Before anything reads the eBay and Discogs settings (see fbc/devmode.py).
+devmode.init_app(app)
+# Flask-AppBuilder's page layout, with the Dev Mode banner added.
+app.config.setdefault("FAB_BASE_TEMPLATE", "layout.html")
 # Flask-AppBuilder's Model is the models' base class, so passing it here puts
 # its metadata (ours and the ab_* tables) on db.
 db = SQLAlchemy(app, model_class=Model)

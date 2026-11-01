@@ -7,6 +7,7 @@ from flask_appbuilder.models.sqla.interface import SQLAInterface
 from markupsafe import Markup
 from wtforms import TextAreaField
 
+from fbc import devmode
 from fbc.listing import (
     check_ready,
     describe_template,
@@ -147,6 +148,9 @@ class EbayDraftModelView(CustomModelView):
         from fbc import db
 
         draft = self._draft(pk)
+        if devmode.on():
+            flash(devmode.message("picture uploads"), "warning")
+            return self._back(draft)
         urls = draft.picture_list()
         for f in request.files.getlist("pictures"):
             if not f.filename:
@@ -188,6 +192,9 @@ class EbayDraftModelView(CustomModelView):
         from fbc import db
 
         draft = self._draft(pk)
+        if devmode.on():
+            flash(devmode.message("checking listings with eBay"), "warning")
+            return self._back(draft)
         summary = verify_draft(draft)
         draft.messages = json.dumps(summary)
         db.session.commit()
@@ -204,6 +211,9 @@ class EbayDraftModelView(CustomModelView):
         draft = self._draft(pk)
         if draft.status == "published":
             flash("This draft is already published.", "warning")
+            return self._back(draft)
+        if devmode.on():
+            flash(devmode.message("publishing to eBay"), "warning")
             return self._back(draft)
         summary = publish_draft(draft)
         draft.messages = json.dumps(summary)
@@ -232,6 +242,12 @@ class EbayDraftModelView(CustomModelView):
         from fbc import db
         from fbc.models.ebay import EbayListing
 
+        if devmode.on():
+            return self.render_template(
+                "ebay_draft/policies.html",
+                title="Shipping & Returns",
+                dev_mode_message=devmode.message("eBay lookups"),
+            )
         profiles, summary, details = seller_profiles()
         self._flash_summary(summary)
         template_id = listing_settings().get("TEMPLATE_ITEM_ID")

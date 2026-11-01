@@ -7,6 +7,9 @@ details and remove sold copies. Discogs needs your permission once; the token
 it gives fbc doesn't expire, but you can take it back under Settings &gt;
 Applications on Discogs.</p>
 
+{% if dev_mode_message %}
+<div class="alert alert-warning">{{ dev_mode_message }}</div>
+{% endif %}
 {% if saved %}
 <div class="alert alert-success">
   Connected{% if saved.username %} as {{ saved.username }}{% endif %} {{ saved.created.strftime("%Y-%m-%d") if saved.created }}.

@@ -19,6 +19,8 @@ import logging
 import re
 from xml.sax.saxutils import escape
 
+from fbc import devmode
+
 logger = logging.getLogger()
 
 # Vinyl Records (Music > Vinyl Records) on ebay.com.
@@ -1098,6 +1100,7 @@ def _token_request(data):
     import requests
     from fbc import app
 
+    devmode.check(OAuthError, "eBay")
     ebayconfig = app.config["EBAY_SETTINGS"]
     r = requests.post(
         OAUTH_TOKEN_URL,
@@ -1215,6 +1218,9 @@ def oauth_token(scope=MEDIA_SCOPE):
     """
     from fbc import app
 
+    # Before the cache: a token minted before dev mode was turned on would
+    # still work.
+    devmode.check(OAuthError, "eBay")
     now = datetime.datetime.utcnow()
     cached = _oauth.get(scope)
     if cached and cached["expires"] > now:
