@@ -175,18 +175,47 @@ so `flask setup-db` brings it up to date when the app starts.
 1. On the live server, from the repo root:
 
    ```bash
-   scripts/dump_for_dev.py --admin-user root
+   scripts/dump_for_dev.py --admin-user fbc_dump
    ```
 
    It copies the database in `config.py`'s `SQLALCHEMY_DATABASE_URI` into
    a scratch database (`fbc_dev_scrub`) on the same server, scrubs the copy,
    dumps it to `fbc-dev-<date>.sql.gz` and drops it. The fbc user can't
    create databases, so `--admin-user` names a MariaDB user that can, and
-   asks for its password; leave it empty for a user that signs in with
-   `unix_socket`, and run the script with `sudo`. `-o` picks the folder
-   to write to. It needs Python 3 and the MariaDB client (`mariadb` and
-   `mariadb-dump`, or MariaDB's `mysql` and `mysqldump` where it only
-   has those names), but not the app's packages.
+   asks for its password. `-o` picks the folder to write to. It needs
+   Python 3 and the MariaDB client (`mariadb` and `mariadb-dump`, or
+   MariaDB's `mysql` and `mysqldump` where it only has those names), but not
+   the app's packages.
+
+   The first time, make the `fbc_dump` user it signs in as. It can do
+   anything to the scratch database and nothing else, so it can't read or
+   change the live one. As root on the live server (`mysql -u root -p`):
+
+   ```sql
+   CREATE USER 'fbc_dump'@'<address>' IDENTIFIED BY '<password>';
+   GRANT ALL PRIVILEGES ON `fbc_dev_scrub`.* TO 'fbc_dump'@'<address>';
+   ```
+
+   `<address>` is where MariaDB sees the script connect from: the server's
+   own address, when `SQLALCHEMY_DATABASE_URI` connects to it, or
+   `localhost` when it uses the socket. If it's wrong, the script says
+   "Access denied for user 'fbc_dump'@'…'", with the address to use.
+
+   The live server's password policy wants mixed case, digits and a symbol,
+   which `openssl rand -hex` doesn't give. This makes a password with all
+   of them, using only symbols that need no quoting in the SQL above:
+
+   ```bash
+   python3 -c 'import secrets, string
+   symbols = "-_.+"
+   chars = string.ascii_letters + string.digits + symbols
+   while True:
+       p = "".join(secrets.choice(chars) for _ in range(24))
+       if (any(c.islower() for c in p) and any(c.isupper() for c in p)
+               and sum(c.isdigit() for c in p) >= 2 and any(c in symbols for c in p)):
+           print(p)
+           break'
+   ```
 
    Before finishing, it checks the dump for rows of the emptied tables and
    for any of the live tokens, password hashes, API keys and user emails, and

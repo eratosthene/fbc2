@@ -65,8 +65,9 @@ jobs:
       - name: Use config.py.tpl as config.py
         run: cp config.py.tpl config.py
 
-      # A user like the live one, which can't create databases, and a row in
-      # every table the dump has to empty.
+      # A user like the live one, which can't create databases, the dump-only
+      # user README.md sets up, and a row in every table the dump has to
+      # empty.
       - name: Set up and seed the database
         run: |
           $MYSQL -e "ALTER DATABASE fbc $CHARSET"
@@ -77,6 +78,8 @@ jobs:
           CREATE USER 'fbc'@'%' IDENTIFIED BY 'fbc';
           GRANT SELECT, INSERT, UPDATE, DELETE, SHOW VIEW, TRIGGER, LOCK TABLES
               ON fbc.* TO 'fbc'@'%';
+          CREATE USER 'fbc_dump'@'%' IDENTIFIED BY 'fbc_dump';
+          GRANT ALL PRIVILEGES ON `fbc_dev_scrub`.* TO 'fbc_dump'@'%';
           INSERT INTO ebay_oauth_token (refresh_token)
               VALUES ('v^1.1#i^1#ci-ebay-refresh-token');
           INSERT INTO discogs_oauth_token (token, secret)
@@ -116,7 +119,7 @@ jobs:
         env:
           SQLALCHEMY_DATABASE_URI: mysql+pymysql://fbc:fbc@127.0.0.1/fbc
         run: |
-          echo root | python scripts/dump_for_dev.py -o dumps --admin-user root
+          echo fbc_dump | python scripts/dump_for_dev.py -o dumps --admin-user fbc_dump
           ls -l dumps
           test -z "$($MYSQL -N -e "SHOW DATABASES LIKE 'fbc_dev_scrub'")"
 
