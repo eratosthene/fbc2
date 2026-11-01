@@ -45,3 +45,50 @@ def test_null_unit_discogs_master_and_sold_become_blank_and_not_null():
                 conn.execute(
                     sa.text(f"INSERT INTO unit (id, {column}) VALUES (4, NULL)")
                 )
+
+
+def test_supplies_get_their_usage_from_their_names():
+    migration = _migration("a7c3e9f1d2b4_add_supply_usage_and_reorder_level")
+    engine = sa.create_engine("sqlite://")
+    supply = sa.Table(
+        "supply",
+        sa.MetaData(),
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("name", sa.String(100), nullable=False),
+        sa.Column("quantity", sa.Integer, nullable=False),
+    )
+    with engine.begin() as conn:
+        supply.create(conn)
+        for i, name in enumerate(
+            [
+                "LP Mailers",
+                'Vinyl Outer Sleeves, 7"',
+                "Shipping Label Roll",
+                "Packing Tape Rolls",
+                'Vinyl Inner Sleeves, 12"',
+                "Record Brushes",
+            ]
+        ):
+            conn.execute(supply.insert().values(id=i, name=name, quantity=10))
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.upgrade()
+
+        rows = conn.execute(
+            sa.text(
+                "SELECT name, used_for, record_size, per_units, pack_size,"
+                " pack_used, min_quantity FROM supply ORDER BY id"
+            )
+        )
+        assert [tuple(r) for r in rows] == [
+            ("LP Mailers", "shipping", None, 5, 1, 0, 0),
+            ('Vinyl Outer Sleeves, 7"', "shipping", '7"', 1, 1, 0, 0),
+            ("Shipping Label Roll", "shipping", None, 0, 220, 0, 0),
+            ("Packing Tape Rolls", "shipping", None, None, 1, 0, 0),
+            ('Vinyl Inner Sleeves, 12"', "unit", None, None, 1, 0, 0),
+            ("Record Brushes", None, None, None, 1, 0, 0),
+        ]
+
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.downgrade()
+        columns = {c["name"] for c in sa.inspect(conn).get_columns("supply")}
+        assert columns == {"id", "name", "quantity"}

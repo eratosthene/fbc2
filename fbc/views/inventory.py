@@ -3,7 +3,9 @@ from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
+from fbc.models.supplies import ADDING_UNIT
 from fbc.util import CustomForm
+from fbc.widgets import SuppliesUsedField
 from wtforms import BooleanField, StringField
 from wtforms.validators import Length, Optional
 
@@ -30,6 +32,20 @@ UNIT_FORM_EXTRA_FIELDS = {
     ),
     "sold": BooleanField("Sold", default=False),
 }
+
+
+# Adding a Unit can take supplies out of stock, like an inner sleeve to
+# replace a missing one; editing it again can't, so it isn't counted twice.
+UNIT_ADD_FORM_EXTRA_FIELDS = dict(
+    UNIT_FORM_EXTRA_FIELDS,
+    supplies_used=SuppliesUsedField(
+        "Supplies Used",
+        used_for=ADDING_UNIT,
+        description="Anything this Unit needed from the Supply List, such as"
+        " an inner sleeve to replace a missing one. Saving the Unit takes them"
+        " out of stock.",
+    ),
+)
 
 
 # The Units views share everything but the columns they list. They subclass
@@ -83,12 +99,22 @@ class UnitModelBaseView(CustomModelView):
         "sold",
         "sales_receipt",
     ]
-    add_form_extra_fields = UNIT_FORM_EXTRA_FIELDS
+    add_form_extra_fields = UNIT_ADD_FORM_EXTRA_FIELDS
     edit_form_extra_fields = UNIT_FORM_EXTRA_FIELDS
+
+    def _init_properties(self):
+        super()._init_properties()
+        self.add_columns = self.add_columns + ["supplies_used"]
 
     def _init_forms(self):
         super(CustomModelView, self)._init_forms()
         self.add_form = type("CustomForm", (CustomForm, self.add_form), {})
+
+    def pre_add(self, item):
+        # The form left {supply: count} on the Unit; the supplies are saved
+        # along with it.
+        for supply, count in getattr(item, "supplies_used", {}).items():
+            supply.use(count)
 
 
 class UnitModelView(UnitModelBaseView):

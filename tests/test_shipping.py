@@ -1,4 +1,5 @@
 import datetime
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -8,10 +9,12 @@ import fbc
 from fbc import db
 from fbc import listing
 from fbc import shipping
+from fbc.discogs import DiscogsAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsRelease
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit
 from fbc.models.sales import SalesReceipt
+from fbc.models.supplies import Supply
 from fbc.util import forget_discogs_instance
 from test_listing import FakeHTTPResponse, _carnaval
 
@@ -298,6 +301,21 @@ def test_remove_from_discogs_keeps_fbc_as_is_when_discogs_fails(app, discogs):
     assert db.session.get(DiscogsInstance, 1002) is not None
 
 
+def _not_connected():
+    raise DiscogsAuthError("Connect fbc to Discogs first (Discogs > Connect Discogs).")
+
+
+def test_remove_from_discogs_says_so_when_discogs_isnt_connected(app, monkeypatch):
+    order, unit = _order()
+    monkeypatch.setattr(shipping, "_discogs", _not_connected)
+
+    message, category = shipping.remove_from_discogs(unit)
+
+    assert category == "danger"
+    assert "Connect fbc to Discogs first (Discogs > Connect Discogs). Remove" in message
+    assert db.session.get(DiscogsInstance, 1002) is not None
+
+
 def test_forgetting_the_last_instance_removes_the_release(app):
     order, unit = _order()
     release = unit.discogs_release
@@ -372,6 +390,26 @@ def test_shipping_records_the_receipt_marks_sold_and_removes_from_discogs(
     assert db.session.query(SalesReceipt).count() == 1
 
 
+def test_shipping_without_discogs_connected_still_records_the_receipt(
+    client, monkeypatch
+):
+    order, unit = _order()
+    monkeypatch.setattr(shipping, "_discogs", _not_connected)
+
+    page = client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={"net_sold": "16.50", "remove_discogs": "1"},
+    )
+
+    assert page.status_code == 302
+    db.session.expire_all()
+    receipt = db.session.query(SalesReceipt).one()
+    assert db.session.get(Unit, unit.id).sales_receipt_id == receipt.id
+    assert db.session.get(DiscogsInstance, 1002) is not None
+    listed = client.get(page.headers["Location"]).get_data(as_text=True)
+    assert "Connect fbc to Discogs first" in listed
+
+
 def test_shipping_can_leave_discogs_alone(client, discogs):
     order, unit = _order()
 
@@ -389,3 +427,221 @@ def test_shipping_needs_a_net_sold(client, discogs):
     client.post("/ebayordermodelview/ship/" + order.order_id, data={"net_sold": "lots"})
 
     assert db.session.query(SalesReceipt).count() == 0
+
+
+def _shipping_supplies():
+    """The shipping supplies, as the migration sets up the usual ones."""
+    supplies = {
+        "mailers": Supply(
+            name="LP Mailers", quantity=10, used_for="shipping", per_units=5
+        ),
+        "sleeves 12": Supply(
+            name='Vinyl Outer Sleeves, 12"',
+            quantity=20,
+            used_for="shipping",
+            record_size='12"',
+            per_units=1,
+        ),
+        "sleeves 7": Supply(
+            name='Vinyl Outer Sleeves, 7"',
+            quantity=20,
+            used_for="shipping",
+            record_size='7"',
+            per_units=1,
+        ),
+        "labels": Supply(
+            name="Shipping Label Roll",
+            quantity=2,
+            used_for="shipping",
+            per_units=0,
+            pack_size=220,
+            pack_used=219,
+        ),
+        "tape": Supply(name="Packing Tape Rolls", quantity=3, used_for="shipping"),
+        "inner": Supply(name='Vinyl Inner Sleeves, 12"', quantity=50, used_for="unit"),
+    }
+    db.session.add_all(supplies.values())
+    db.session.commit()
+    return supplies
+
+
+def test_supplies_plan_is_a_normal_shipment_of_the_units(app):
+    order, unit = _order()
+    _shipping_supplies()
+
+    plan = [(s.name, n) for s, n in shipping.supplies_plan([unit])]
+
+    assert plan == [
+        ("LP Mailers", 1),
+        ("Packing Tape Rolls", 0),
+        ("Shipping Label Roll", 1),
+        ('Vinyl Outer Sleeves, 12"', 1),
+        ('Vinyl Outer Sleeves, 7"', 0),
+    ]
+
+
+@pytest.mark.parametrize(
+    "unit_type, formats, size",
+    [
+        ('12" LP', None, '12"'),
+        ('7" Single', None, '7"'),
+        ("LP", None, '12"'),
+        ('12" LP', '[{"name": "Vinyl", "descriptions": ["7\\"", "45 RPM"]}]', '7"'),
+    ],
+)
+def test_record_size(unit_type, formats, size):
+    release = DiscogsRelease(release_id=9, formats=formats) if formats else None
+    assert (
+        listing.record_size(Unit(unit_type=unit_type, discogs_release=release)) == size
+    )
+
+
+def test_ship_page_offers_the_shipping_supplies(client, finances):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+
+    html = client.get("/ebayordermodelview/ship/" + order.order_id).get_data(
+        as_text=True
+    )
+
+    mailers = supplies["mailers"]
+    assert 'name="supply-' + str(mailers.id) + '" value="1"' in html
+    assert 'name="supply-' + str(supplies["tape"].id) + '" value="0"' in html
+    assert "1 of 220 left on the one in use" in html
+    assert "supply-" + str(supplies["inner"].id) not in html
+
+
+def test_ship_page_says_when_no_supplies_are_used_for_shipping(client, finances):
+    order, unit = _order()
+
+    html = client.get("/ebayordermodelview/ship/" + order.order_id).get_data(
+        as_text=True
+    )
+
+    assert "No supplies are set as Used For shipping" in html
+
+
+def test_shipping_takes_the_supplies_used_out_of_stock(client, discogs):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+    ids = {k: str(s.id) for k, s in supplies.items()}
+
+    client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={
+            "net_sold": "16.50",
+            "supply-" + ids["mailers"]: "1",
+            "supply-" + ids["sleeves 12"]: "2",
+            "supply-" + ids["sleeves 7"]: "0",
+            "supply-" + ids["labels"]: "1",
+            "supply-" + ids["tape"]: "1",
+            # Not a shipping supply, so it's left alone.
+            "supply-" + ids["inner"]: "1",
+        },
+    )
+
+    db.session.expire_all()
+    assert db.session.query(SalesReceipt).count() == 1
+    stock = {k: (s.quantity, s.pack_used) for k, s in supplies.items()}
+    assert stock == {
+        "mailers": (9, 0),
+        "sleeves 12": (18, 0),
+        "sleeves 7": (20, 0),
+        "labels": (1, 0),
+        "tape": (2, 0),
+        "inner": (50, 0),
+    }
+
+
+def test_stock_problems_names_each_supply_short_of_what_its_used_for(app):
+    supplies = _shipping_supplies()
+
+    problems = shipping.stock_problems(
+        {supplies["mailers"]: 10, supplies["sleeves 12"]: 21, supplies["labels"]: 222}
+    )
+
+    assert len(problems) == 2
+    assert problems[0].startswith(
+        "There aren't enough Vinyl Outer Sleeves, 12\" in stock for this: it uses"
+        " 21, and the Supply List has 20 left."
+    )
+    # The label roll has the last label of one roll and all of another.
+    assert "it uses 222, and the Supply List has 221 left" in problems[1]
+    assert "Used From The One In Use" in problems[1]
+    assert "Used From The One In Use" not in problems[0]
+
+
+def test_ship_page_warns_when_a_supply_is_short(client, finances):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+    supplies["sleeves 12"].quantity = 0
+    db.session.commit()
+
+    html = client.get("/ebayordermodelview/ship/" + order.order_id).get_data(
+        as_text=True
+    )
+
+    assert html.count("Not enough for this") == 1
+
+
+def test_shipping_is_blocked_when_a_supply_would_run_out(client, discogs):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+    ids = {k: str(s.id) for k, s in supplies.items()}
+
+    page = client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={
+            "net_sold": "16.50",
+            "supply-" + ids["mailers"]: "1",
+            "supply-" + ids["sleeves 12"]: "21",
+        },
+    )
+
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "There aren&#39;t enough Vinyl Outer Sleeves, 12&#34; in stock" in html
+    assert 'name="supply-' + ids["sleeves 12"] + '" value="21"' in html
+    # Remove from Discogs was left unticked, and stays that way.
+    assert re.search(r'name="remove_discogs" value="1"\s*>', html)
+    db.session.expire_all()
+    assert db.session.query(SalesReceipt).count() == 0
+    assert (supplies["mailers"].quantity, supplies["sleeves 12"].quantity) == (10, 20)
+    assert discogs.deleted == []
+
+
+def test_shipping_can_use_up_the_last_of_a_supply(client, discogs):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+    ids = {k: str(s.id) for k, s in supplies.items()}
+
+    client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={"net_sold": "16.50", "supply-" + ids["labels"]: "221"},
+    )
+
+    db.session.expire_all()
+    assert db.session.query(SalesReceipt).count() == 1
+    assert (supplies["labels"].quantity, supplies["labels"].pack_used) == (0, 0)
+
+
+@pytest.mark.parametrize("count", ["-1", "two", "1.5"])
+def test_shipping_needs_whole_supply_counts(client, discogs, count):
+    order, unit = _order()
+    supplies = _shipping_supplies()
+
+    page = client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={"net_sold": "16.50", "supply-" + str(supplies["mailers"].id): count},
+    )
+
+    # The page comes back with what was entered, to fix and ship again.
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "Enter how many LP Mailers were used as a whole number." in html
+    assert 'value="16.50"' in html
+    assert 'name="supply-' + str(supplies["mailers"].id) + '" value="' + count in html
+    db.session.expire_all()
+    assert db.session.query(SalesReceipt).count() == 0
+    assert supplies["mailers"].quantity == 10
+    assert discogs.deleted == []

@@ -265,6 +265,22 @@ def parse_type(unit_type):
     return list(dict.fromkeys(found))
 
 
+def record_size(unit):
+    """
+    `unit`'s record size, one of SIZES: from Discogs' format descriptions,
+    else its Unit Type, as a listing's Record Size is, else 12".
+    """
+    descriptions, _ = _format_descriptions(unit.discogs_release)
+    unit_type = unit.unit_type or ""
+    for size in SIZES:
+        if size in descriptions:
+            return size
+    for size in SIZES:
+        if unit_type.startswith(size):
+            return size
+    return '12"'
+
+
 def decade(year):
     if not year:
         return None

@@ -2,8 +2,9 @@
 Ship This: finish off an eBay order once its shipping label is bought.
 
 It reads the order's earnings from eBay's Finances API, records a Sales
-Receipt for that amount, marks the order's Unit sold and removes that Unit's
-own instance of the release from the Discogs collection.
+Receipt for that amount, marks the order's Unit sold, takes the mailer,
+sleeves and label it used out of the Supply List and removes that Unit's own
+instance of the release from the Discogs collection.
 """
 
 import logging
@@ -206,6 +207,7 @@ def remove_from_discogs(unit):
     """
     from discogs_client.exceptions import DiscogsAPIError, HTTPError
 
+    from fbc.discogs import DiscogsAuthError
     from fbc.util import forget_discogs_instance
 
     instance, problem = discogs_plan(unit)
@@ -252,7 +254,9 @@ def remove_from_discogs(unit):
                 + str(instance_id)
                 + ") was already gone from Discogs; removed it from fbc too."
             )
-    except (DiscogsAPIError, OSError) as e:
+    # DiscogsAuthError: fbc isn't connected to Discogs, which is only found
+    # out once the receipt is saved, so it's reported like any other failure.
+    except (DiscogsAPIError, DiscogsAuthError, OSError) as e:
         logger.error(e)
         return (
             "Couldn't remove "
@@ -260,7 +264,7 @@ def remove_from_discogs(unit):
             + " (instance "
             + str(instance_id)
             + ") from Discogs: "
-            + str(e)
+            + str(e).rstrip(".")
             + ". Remove it by hand, then Sync Discogs.",
             "danger",
         )
@@ -271,10 +275,81 @@ def remove_from_discogs(unit):
     return message, "success"
 
 
-def ship_order(order, unit, net_sold):
+def supplies_plan(units):
     """
-    Record the Sales Receipt for `order` and mark `unit` sold with it.
-    Returns the receipt.
+    [(supply, count)] for every supply used for shipping: how many uses
+    shipping `units` together normally takes (see Supply.shipping_count).
+    """
+    from fbc.listing import record_size
+    from fbc.models.supplies import SHIPPING, Supply
+
+    sizes = [record_size(u) for u in units]
+    return [(s, s.shipping_count(sizes)) for s in Supply.used_for_list(SHIPPING)]
+
+
+def supply_counts(form, supplies, prefix="supply-"):
+    """
+    {supply: count} from the `prefix`<id> fields of `form` for each of
+    `supplies`, leaving out blanks and 0. Raises ValueError, with what to
+    fix, for anything but a whole number of 0 or more.
+    """
+    counts = {}
+    for supply in supplies:
+        value = (form.get(prefix + str(supply.id)) or "").strip()
+        if not value:
+            continue
+        try:
+            count = int(value)
+        except ValueError:
+            count = -1
+        if count < 0:
+            raise ValueError(
+                "Enter how many " + supply.name + " were used as a whole number."
+            )
+        if count:
+            counts[supply] = count
+    return counts
+
+
+def stock_problems(counts):
+    """
+    What to fix for each of `counts` ({supply: count}) that uses more than
+    the supply has left (see Supply.available), as messages; [] if none
+    does. Stock can't really run below 0, so a shortfall means the Supply
+    List is out of step with what's on hand.
+    """
+    problems = []
+    for supply, count in counts.items():
+        left = supply.available()
+        if count > left:
+            problems.append(
+                "There aren't enough "
+                + supply.name
+                + " in stock for this: it uses "
+                + str(count)
+                + ", and the Supply List has "
+                + str(left)
+                + " left. Count what's really on hand and correct its Quantity"
+                + (
+                    " and Used From The One In Use"
+                    if (supply.pack_size or 1) > 1
+                    else ""
+                )
+                + " on the Supply List, or change how many were used, then try"
+                " again."
+            )
+    return problems
+
+
+def fmt_supplies(counts):
+    """{supply: count} as "1 LP Mailers, 1 Shipping Label Roll"."""
+    return ", ".join(str(n) + " " + s.name for s, n in counts.items())
+
+
+def ship_order(order, unit, net_sold, supplies=None):
+    """
+    Record the Sales Receipt for `order`, mark `unit` sold with it and take
+    `supplies` ({supply: count}) out of stock. Returns the receipt.
     """
     from fbc import db
     from fbc.models.sales import SalesReceipt
@@ -289,6 +364,8 @@ def ship_order(order, unit, net_sold):
     db.session.flush()
     unit.sold = True
     unit.sales_receipt_id = receipt.id
+    for supply, count in (supplies or {}).items():
+        supply.use(count)
     db.session.commit()
     logger.info(
         "Shipped order "
@@ -297,5 +374,6 @@ def ship_order(order, unit, net_sold):
         + str(unit.id)
         + ", receipt "
         + str(receipt.id)
+        + (", used " + fmt_supplies(supplies) if supplies else "")
     )
     return receipt
