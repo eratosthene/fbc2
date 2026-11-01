@@ -22,6 +22,7 @@ the older mysql and mysqldump names), not the app's packages.
 
 import argparse
 import ast
+import contextlib
 import datetime
 import getpass
 import gzip
@@ -33,6 +34,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import types
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -79,9 +81,72 @@ DROP TEMPORARY TABLE buyer_alias;
 """
 BUYER_ALIAS = "^buyer-[0-9]+$"
 
+# Where each table (or Flask-AppBuilder's id sequences) starts in a dump.
+TABLE_START = re.compile(rb"^CREATE (?:TABLE|SEQUENCE) `((?:[^`]|``)+)`")
+
 
 class Failed(Exception):
     pass
+
+
+def duration(seconds):
+    minutes, seconds = divmod(round(seconds), 60)
+    return f"{minutes}m {seconds:02d}s" if minutes else f"{seconds}s"
+
+
+@contextlib.contextmanager
+def step(message):
+    print(f"{message} ...")
+    start = time.monotonic()
+    yield
+    print(f"  done in {duration(time.monotonic() - start)}")
+
+
+class Progress:
+    """How far through a dump a step is: the table it's on, out of how
+    many, and the MB so far. On a terminal it's one line, redrawn every
+    half second; otherwise, as in a log, a line per table."""
+
+    def __init__(self, total, out=sys.stdout):
+        self.total = total
+        self.out = out
+        self.tty = out.isatty()
+        self.count = 0
+        self.table = ""
+        self.size = 0
+        # Not drawn until it's been going half a second, so quick steps
+        # stay quiet.
+        self.shown = time.monotonic()
+        self.width = 0
+
+    def line(self, line):
+        self.size += len(line)
+        match = TABLE_START.match(line)
+        if match:
+            self.count += 1
+            self.table = match.group(1).replace(b"``", b"`").decode()
+            if not self.tty:
+                self.show()
+        if self.tty and time.monotonic() - self.shown >= 0.5:
+            self.show()
+
+    def show(self):
+        self.shown = time.monotonic()
+        text = (
+            f"  table {self.count} of {self.total}: {self.table}, "
+            f"{self.size / 1024 / 1024:.1f} MB"
+        )
+        if self.tty:
+            self.out.write("\r" + text.ljust(self.width))
+            self.out.flush()
+            self.width = len(text)
+        else:
+            self.out.write(text + "\n")
+
+    def finish(self):
+        if self.tty and self.width:
+            self.out.write("\r" + " " * self.width + "\r")
+            self.out.flush()
 
 
 class _StubModule(types.ModuleType):
@@ -239,7 +304,7 @@ class Client:
             raise Failed(f"{self.mariadb} failed: {result.stderr.strip()}")
         return [line.split("\t") for line in result.stdout.splitlines()]
 
-    def dump(self, database, stdout):
+    def dump(self, database, stdout, stderr):
         return subprocess.Popen(
             [
                 self.mariadb_dump,
@@ -253,7 +318,7 @@ class Client:
                 database,
             ],
             stdout=stdout,
-            stderr=subprocess.PIPE,
+            stderr=stderr,
         )
 
 
@@ -303,7 +368,7 @@ def dump_escaped(value):
     return value
 
 
-def check_dump(path, emptied, secrets):
+def check_dump(path, emptied, secrets, progress=None):
     """Problems with the gzipped dump: rows for an emptied table, or a live
     secret. mariadb-dump escapes newlines inside values, so a value is
     always on one line."""
@@ -318,6 +383,8 @@ def check_dump(path, emptied, secrets):
     problems = set()
     with gzip.open(path, "rb") as f:
         for line in f:
+            if progress:
+                progress.line(line)
             match = inserts.match(line) if emptied else None
             if match:
                 problems.add(f"it has rows for {match.group(1).decode()}")
@@ -349,20 +416,22 @@ def run(args):
     partial = os.path.join(args.output, f".fbc-dev-{date}.sql.gz.part")
 
     os.makedirs(args.output, exist_ok=True)
+    began = time.monotonic()
     with tempfile.TemporaryDirectory() as tmp:
         live = Client(option_file(tmp, "live.cnf", live_options), *tools)
         admin = Client(option_file(tmp, "admin.cnf", admin_options), *tools)
 
-        existing = tables(live, database)
-        if not existing:
-            raise Failed(f"The {database} database has no tables, or isn't there.")
-        emptied = [t for t in EMPTIED_TABLES if t in existing]
-        secrets = secret_values(live, database, existing)
-        charset, collation = live.query(
-            "SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME "
-            "FROM information_schema.SCHEMATA "
-            f"WHERE SCHEMA_NAME = {quote_string(database)}"
-        )[0]
+        with step(f"Reading {database}'s tables and the values to check for"):
+            existing = tables(live, database)
+            if not existing:
+                raise Failed(f"The {database} database has no tables, or isn't there.")
+            emptied = [t for t in EMPTIED_TABLES if t in existing]
+            secrets = secret_values(live, database, existing)
+            charset, collation = live.query(
+                "SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME "
+                "FROM information_schema.SCHEMATA "
+                f"WHERE SCHEMA_NAME = {quote_string(database)}"
+            )[0]
 
         if admin.query(
             "SELECT 1 FROM information_schema.SCHEMATA "
@@ -374,7 +443,6 @@ def run(args):
                 f"then drop it: DROP DATABASE {quote_name(scratch)};"
             )
 
-        print(f"Copying {database} to {scratch} ...")
         try:
             admin.query(
                 f"CREATE DATABASE {quote_name(scratch)} "
@@ -388,67 +456,100 @@ def run(args):
                 "database; pass --admin-user with one that can."
             ) from None
         try:
-            copy(live, admin, database, scratch)
+            with step(f"Copying {database} to {scratch}"):
+                copy(live, admin, database, scratch, Progress(len(existing)))
 
-            print("Scrubbing the copy ...")
-            scrub = ["SET FOREIGN_KEY_CHECKS = 0;"]
-            scrub += [f"DELETE FROM {quote_name(t)};" for t in emptied]
-            scrub.append("SET FOREIGN_KEY_CHECKS = 1;")
-            if "ebay_order" in existing:
-                scrub.append(SCRUB_BUYERS)
-            admin.query("\n".join(scrub), scratch)
-            if "ebay_order" in existing:
-                (left,) = admin.query(
-                    "SELECT COUNT(*) FROM ebay_order WHERE buyer <> '' "
-                    f"AND buyer NOT REGEXP {quote_string(BUYER_ALIAS)}",
-                    scratch,
-                )[0]
-                if left != "0":
-                    raise Failed(f"{left} eBay orders still have a buyer's username.")
+            with step("Scrubbing the copy"):
+                scrub = ["SET FOREIGN_KEY_CHECKS = 0;"]
+                scrub += [f"DELETE FROM {quote_name(t)};" for t in emptied]
+                scrub.append("SET FOREIGN_KEY_CHECKS = 1;")
+                if "ebay_order" in existing:
+                    scrub.append(SCRUB_BUYERS)
+                admin.query("\n".join(scrub), scratch)
+                if "ebay_order" in existing:
+                    (left,) = admin.query(
+                        "SELECT COUNT(*) FROM ebay_order WHERE buyer <> '' "
+                        f"AND buyer NOT REGEXP {quote_string(BUYER_ALIAS)}",
+                        scratch,
+                    )[0]
+                    if left != "0":
+                        raise Failed(
+                            f"{left} eBay orders still have a buyer's username."
+                        )
 
-            print(f"Dumping it to {final} ...")
-            write_dump(admin, scratch, partial)
+            with step(f"Dumping it to {final}"):
+                write_dump(admin, scratch, partial, Progress(len(existing)))
         finally:
             admin.query(f"DROP DATABASE IF EXISTS {quote_name(scratch)}")
 
-    print("Checking the dump ...")
-    problems = check_dump(partial, emptied, secrets)
+    with step("Checking the dump"):
+        progress = Progress(len(existing))
+        problems = check_dump(partial, emptied, secrets, progress)
+        progress.finish()
     if problems:
         os.remove(partial)
         raise Failed("The dump was deleted, since " + "; ".join(problems) + ".")
     os.replace(partial, final)
     size = os.path.getsize(final) / 1024 / 1024
-    print(f"\n{final} ({size:.1f} MB)")
+    print(f"\n{final} ({size:.1f} MB), in {duration(time.monotonic() - began)}")
     print("Copy it to docker/dev-db/ on the dev machine; see README.md.")
 
 
-def copy(live, admin, database, scratch):
-    dump = live.dump(database, subprocess.PIPE)
-    load = subprocess.run(
-        [admin.mariadb, admin.defaults, scratch],
-        stdin=dump.stdout,
-        capture_output=True,
-    )
-    dump.stdout.close()
-    dump_err = dump.stderr.read().decode().strip()
-    if dump.wait():
-        raise Failed(f"mariadb-dump of {database} failed: {dump_err}")
-    if load.returncode:
-        raise Failed(f"Loading {scratch} failed: {load.stderr.decode().strip()}")
+def copy(live, admin, database, scratch, progress):
+    """Pipes a dump of the live database into the scratch one, through here
+    so progress can show where it's got to."""
+    # stderr goes to files, so a lot of warnings can't fill a pipe and stall.
+    with tempfile.TemporaryFile() as dump_err, tempfile.TemporaryFile() as load_err:
+        dump = live.dump(database, subprocess.PIPE, dump_err)
+        load = subprocess.Popen(
+            [admin.mariadb, admin.defaults, scratch],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=load_err,
+        )
+        try:
+            for line in dump.stdout:
+                progress.line(line)
+                load.stdin.write(line)
+        except BrokenPipeError:
+            # The load stopped; its error is reported below.
+            pass
+        finally:
+            progress.finish()
+            dump.stdout.close()
+            with contextlib.suppress(BrokenPipeError):
+                load.stdin.close()
+        # Waiting for the load first, as a dump cut off by a failed load
+        # fails too, and the load's error says why.
+        if load.wait():
+            raise Failed(f"Loading {scratch} failed: {error_text(load_err)}")
+        if dump.wait():
+            raise Failed(f"mariadb-dump of {database} failed: {error_text(dump_err)}")
 
 
-def write_dump(client, database, path):
+def write_dump(client, database, path, progress):
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        with os.fdopen(fd, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb") as out:
-            dump = client.dump(database, subprocess.PIPE)
-            shutil.copyfileobj(dump.stdout, out)
-            err = dump.stderr.read().decode().strip()
+        with tempfile.TemporaryFile() as err, os.fdopen(fd, "wb") as raw:
+            out = gzip.GzipFile(fileobj=raw, mode="wb")
+            dump = client.dump(database, subprocess.PIPE, err)
+            try:
+                for line in dump.stdout:
+                    progress.line(line)
+                    out.write(line)
+            finally:
+                progress.finish()
+                out.close()
             if dump.wait():
-                raise Failed(f"mariadb-dump of {database} failed: {err}")
+                raise Failed(f"mariadb-dump of {database} failed: {error_text(err)}")
     except BaseException:
         os.remove(path)
         raise
+
+
+def error_text(f):
+    f.seek(0)
+    return f.read().decode(errors="replace").strip()
 
 
 def main():

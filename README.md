@@ -180,7 +180,9 @@ so `flask setup-db` brings it up to date when the app starts.
 
    It copies the database in `config.py`'s `SQLALCHEMY_DATABASE_URI` into
    a scratch database (`fbc_dev_scrub`) on the same server, scrubs the copy,
-   dumps it to `fbc-dev-<date>.sql.gz` and drops it. The fbc user can't
+   dumps it to `fbc-dev-<date>.sql.gz` and drops it. Each step says how long
+   it took, and the long ones show which table they're on and how many MB
+   they've done so far. The fbc user can't
    create databases, so `--admin-user` names a MariaDB user that can, and
    asks for its password. `-o` picks the folder to write to. It needs
    Python 3 and the MariaDB client (`mariadb` and `mariadb-dump`, or
