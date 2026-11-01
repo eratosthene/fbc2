@@ -16,8 +16,8 @@ Before finishing it checks the dump for rows of the emptied tables and for
 any of the live tokens, password hashes, API keys and user emails, and
 deletes it if it finds one.
 
-It only needs Python 3 and the MariaDB client (mariadb, mariadb-dump), not
-the app's packages.
+It only needs Python 3 and the MariaDB client (mariadb and mariadb-dump, or
+the older mysql and mysqldump names), not the app's packages.
 """
 
 import argparse
@@ -171,26 +171,47 @@ def quote_string(value):
     return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
-class Client:
-    """Runs mariadb and mariadb-dump as one user."""
+def find_tool(*names):
+    """The first of the names that's MariaDB's client. Some installs only
+    have the mysql names for it; MySQL's own tools under those names don't
+    count, as its mysqldump doesn't work the same with MariaDB."""
+    for name in names:
+        path = shutil.which(name)
+        if not path:
+            continue
+        version = subprocess.run(
+            [path, "--version"], capture_output=True, text=True
+        ).stdout
+        if "MariaDB" in version:
+            return path
+    raise Failed(
+        f"MariaDB's {' or '.join(names)} isn't installed; it comes with the "
+        "MariaDB client."
+    )
 
-    def __init__(self, defaults_file):
+
+class Client:
+    """Runs MariaDB's client and dump tool as one user."""
+
+    def __init__(self, defaults_file, mariadb, mariadb_dump):
         self.defaults = f"--defaults-extra-file={defaults_file}"
+        self.mariadb = mariadb
+        self.mariadb_dump = mariadb_dump
 
     def query(self, sql, database=None):
         """Rows of the last statement, tab-separated, as lists of strings."""
-        cmd = ["mariadb", self.defaults, "--batch", "--skip-column-names"]
+        cmd = [self.mariadb, self.defaults, "--batch", "--skip-column-names"]
         if database:
             cmd.append(database)
         result = subprocess.run(cmd, input=sql, capture_output=True, text=True)
         if result.returncode:
-            raise Failed(f"mariadb failed: {result.stderr.strip()}")
+            raise Failed(f"{self.mariadb} failed: {result.stderr.strip()}")
         return [line.split("\t") for line in result.stdout.splitlines()]
 
     def dump(self, database, stdout):
         return subprocess.Popen(
             [
-                "mariadb-dump",
+                self.mariadb_dump,
                 self.defaults,
                 # A consistent snapshot, without locking the live app's tables.
                 "--single-transaction",
@@ -276,9 +297,7 @@ def check_dump(path, emptied, secrets):
 
 
 def run(args):
-    for tool in ("mariadb", "mariadb-dump"):
-        if not shutil.which(tool):
-            raise Failed(f"{tool} isn't installed; it comes with the MariaDB client.")
+    tools = (find_tool("mariadb", "mysql"), find_tool("mariadb-dump", "mysqldump"))
 
     database, live_options = parse_uri(database_uri())
     admin_options = dict(live_options)
@@ -300,8 +319,8 @@ def run(args):
 
     os.makedirs(args.output, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
-        live = Client(option_file(tmp, "live.cnf", live_options))
-        admin = Client(option_file(tmp, "admin.cnf", admin_options))
+        live = Client(option_file(tmp, "live.cnf", live_options), *tools)
+        admin = Client(option_file(tmp, "admin.cnf", admin_options), *tools)
 
         existing = tables(live, database)
         if not existing:
@@ -375,7 +394,7 @@ def run(args):
 def copy(live, admin, database, scratch):
     dump = live.dump(database, subprocess.PIPE)
     load = subprocess.run(
-        ["mariadb", admin.defaults, scratch],
+        [admin.mariadb, admin.defaults, scratch],
         stdin=dump.stdout,
         capture_output=True,
     )

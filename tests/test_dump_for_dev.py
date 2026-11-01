@@ -52,6 +52,35 @@ def test_option_file(tmp_path):
         assert f.read() == '[client]\nuser="fbc"\npassword="a\\\\b"c"\n'
 
 
+def _tools(tmp_path, monkeypatch, **versions):
+    """Fake client tools on PATH, each printing its --version line."""
+    for name, version in versions.items():
+        tool = tmp_path / name.replace("_", "-")
+        tool.write_text(f"#!/bin/sh\necho '{version}'\n")
+        tool.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+
+MARIADB_MYSQL = "mysql  Ver 15.1 Distrib 10.11.11-MariaDB, for Linux (x86_64)"
+MYSQL_MYSQL = "mysql  Ver 9.4.0 for macos15.4 on arm64 (Homebrew)"
+
+
+def test_find_tool_prefers_the_mariadb_name(tmp_path, monkeypatch):
+    _tools(tmp_path, monkeypatch, mariadb=MARIADB_MYSQL, mysql=MARIADB_MYSQL)
+    assert dump_for_dev.find_tool("mariadb", "mysql") == str(tmp_path / "mariadb")
+
+
+def test_find_tool_takes_mariadbs_mysql_name(tmp_path, monkeypatch):
+    _tools(tmp_path, monkeypatch, mysql=MARIADB_MYSQL)
+    assert dump_for_dev.find_tool("mariadb", "mysql") == str(tmp_path / "mysql")
+
+
+def test_find_tool_refuses_mysqls_own(tmp_path, monkeypatch):
+    _tools(tmp_path, monkeypatch, mysql=MYSQL_MYSQL)
+    with pytest.raises(dump_for_dev.Failed, match="MariaDB's mariadb or mysql"):
+        dump_for_dev.find_tool("mariadb", "mysql")
+
+
 def test_database_uri_without_the_apps_packages(tmp_path, monkeypatch):
     monkeypatch.delenv("SQLALCHEMY_DATABASE_URI", raising=False)
     (tmp_path / "config.py").write_text(
