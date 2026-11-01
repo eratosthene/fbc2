@@ -1,2 +1,7 @@
 **/__pycache__
 **/*.pyc
+# Local-only files that hold credentials or copies of live data.
+.env
+dev-db/
+*.sql
+.claude/

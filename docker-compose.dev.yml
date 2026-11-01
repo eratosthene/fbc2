@@ -1,0 +1,56 @@
+# A local testing session: the app, run from this checkout's code by Flask's
+# reloading dev server, against a MariaDB like the live server's. See
+# "Testing with Docker" in README.rst.
+#
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# It needs FBC_DEV_DB_PASSWORD in .env, and uses config.py for everything but
+# the database. Both ports are on 127.0.0.1 only, since the database may hold
+# a copy of live data.
+name: fbc2-dev
+
+services:
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: fbc
+      MARIADB_USER: fbc
+      MARIADB_PASSWORD: ${FBC_DEV_DB_PASSWORD:?Set FBC_DEV_DB_PASSWORD in .env}
+      MARIADB_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - db:/var/lib/mysql
+      # Any .sql dumps here are loaded the first time, into an empty volume.
+      - ./dev-db:/docker-entrypoint-initdb.d:ro
+    # 3307 so it doesn't clash with a MariaDB or MySQL already on 3306, and
+    # so `flask run` on this machine can use it too.
+    ports:
+      - "127.0.0.1:3307:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      # Loading a dump the first time can take a few minutes.
+      start_period: 10m
+
+  app:
+    build: .
+    image: fbc2:dev
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # config.py uses this in place of its own SQLALCHEMY_DATABASE_URI.
+      SQLALCHEMY_DATABASE_URI: mysql+pymysql://fbc:${FBC_DEV_DB_PASSWORD}@db/fbc
+    # Mounted rather than baked in, so edits show up without a rebuild. The
+    # entrypoint still runs `flask setup-db` first, as on the live server.
+    volumes:
+      - ./config.py:/app/config.py:ro
+      - ./fbc:/app/fbc
+      - ./migrations:/app/migrations
+    command: ["flask", "run", "--debug", "--host", "0.0.0.0", "--port", "5555"]
+    ports:
+      - "127.0.0.1:5555:5555"
+
+volumes:
+  db:

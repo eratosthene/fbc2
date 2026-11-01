@@ -13,7 +13,11 @@ SECRET_KEY = "1234567890"
 
 # The SQLAlchemy connection string.
 # SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
-SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://user:password@host/db'
+# docker-compose.dev.yml sets SQLALCHEMY_DATABASE_URI in the environment
+# to point at its own database; otherwise this one is used.
+SQLALCHEMY_DATABASE_URI = os.environ.get(
+    "SQLALCHEMY_DATABASE_URI", 'mysql+pymysql://user:password@host/db'
+)
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 # SQLALCHEMY_ECHO = True
 # SQLALCHEMY_DATABASE_URI = 'postgresql://root:password@localhost/myapp'
