@@ -73,6 +73,11 @@ config.py
 /docker/dev-db/
 /dev-db/
 
+# Claude Code: the worktrees it makes for each session, and personal settings.
+# .claude/settings.json, launch.json and hooks/ are shared and committed.
+/.claude/worktrees/
+/.claude/settings.local.json
+
 # Scrapy stuff:
 .scrapy
 
