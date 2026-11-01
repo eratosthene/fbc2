@@ -1,7 +1,7 @@
 name: Migrations
 
 # Runs the migrations against MariaDB 10.11, as on the live server and in
-# docker-compose.dev.yml, when a PR adds one, and
+# docker/compose.dev.yml, when a PR adds one, and
 # checks the database they produce matches the models. New databases are
 # built from the models by `flask setup-db` rather than by the migrations, so
 # this is what catches a migration and a model change that don't agree.

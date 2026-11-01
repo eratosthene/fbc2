@@ -2,11 +2,12 @@
 # reloading dev server, against a MariaDB like the live server's. See
 # "Testing with Docker" in README.rst.
 #
-#   dev-scripts/compose-up.sh   (docker compose -f docker-compose.dev.yml up --build)
+#   dev-scripts/compose-up.sh   (docker compose -f docker/compose.dev.yml up --build)
 #
-# It needs FBC_DEV_DB_PASSWORD in .env, and uses config.py for everything but
-# the database. Both ports are on 127.0.0.1 only, since the database may hold
-# a copy of live data.
+# It needs FBC_DEV_DB_PASSWORD in docker/.env, next to this file, and uses
+# config.py for everything but the database. Paths here are relative to this
+# file's folder, docker/. Both ports are on 127.0.0.1 only, since the
+# database may hold a copy of live data.
 name: fbc2-dev
 
 services:
@@ -20,11 +21,12 @@ services:
     environment:
       MARIADB_DATABASE: fbc
       MARIADB_USER: fbc
-      MARIADB_PASSWORD: ${FBC_DEV_DB_PASSWORD:?Set FBC_DEV_DB_PASSWORD in .env}
+      MARIADB_PASSWORD: ${FBC_DEV_DB_PASSWORD:?Set FBC_DEV_DB_PASSWORD in docker/.env}
       MARIADB_RANDOM_ROOT_PASSWORD: "yes"
     volumes:
       - db:/var/lib/mysql
-      # Any .sql dumps here are loaded the first time, into an empty volume.
+      # Any .sql dumps in docker/dev-db are loaded the first time, into an
+      # empty volume.
       - ./dev-db:/docker-entrypoint-initdb.d:ro
     # 3307 so it doesn't clash with a MariaDB or MySQL already on 3306, and
     # so `flask run` on this machine can use it too.
@@ -39,7 +41,9 @@ services:
       start_period: 10m
 
   app:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     image: fbc2:dev
     depends_on:
       db:
@@ -48,16 +52,16 @@ services:
       # config.py uses this in place of its own SQLALCHEMY_DATABASE_URI.
       SQLALCHEMY_DATABASE_URI: mysql+pymysql://fbc:${FBC_DEV_DB_PASSWORD}@db/fbc
       # Dev mode (see fbc/devmode.py), so a copy of live data can't reach the
-      # live eBay and Discogs accounts. FBC_DEV_MODE=0 in .env turns it off,
-      # unless config.py sets DEV_MODE = True.
+      # live eBay and Discogs accounts. FBC_DEV_MODE=0 in docker/.env turns it
+      # off, unless config.py sets DEV_MODE = True.
       FBC_DEV_MODE: ${FBC_DEV_MODE:-1}
     # Mounted rather than baked in, so edits show up without a rebuild. The
     # entrypoint still runs `flask setup-db` first, as on the live server.
     volumes:
-      - ./config.py:/app/config.py:ro
-      - ./fbc:/app/fbc
-      - ./migrations:/app/migrations
-      - ./dev-scripts:/app/dev-scripts:ro
+      - ../config.py:/app/config.py:ro
+      - ../fbc:/app/fbc
+      - ../migrations:/app/migrations
+      - ../dev-scripts:/app/dev-scripts:ro
     command: ["flask", "run", "--debug", "--host", "0.0.0.0", "--port", "5555"]
     ports:
       - "127.0.0.1:5555:5555"

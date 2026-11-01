@@ -3,7 +3,7 @@ Dev mode, for running fbc against a copy of the live database without
 reaching the live eBay and Discogs accounts.
 
 It's on when config.py sets DEV_MODE = True or the environment has
-FBC_DEV_MODE=1 (docker-compose.dev.yml sets it); neither can turn the other
+FBC_DEV_MODE=1 (docker/compose.dev.yml sets it); neither can turn the other
 off. In dev mode:
 
 - the eBay and Discogs keys in config.py are treated as empty;

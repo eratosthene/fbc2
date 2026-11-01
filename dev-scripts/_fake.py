@@ -34,7 +34,7 @@ FAKE_ORDER_PREFIX = "99-"
 FAKE_NOTE = "Fake record from dev-scripts"
 
 # The hosts a dev database is reached at: this machine, or the db service in
-# docker-compose.dev.yml.
+# docker/compose.dev.yml.
 DEV_HOSTS = {None, "localhost", "127.0.0.1", "::1", "db"}
 
 SIZES = {
@@ -69,7 +69,7 @@ def setup():
     """
     Load the app and push an app context, after checking the database is a
     dev one: config.py must set ALLOW_FAKE_DATA = True and point at a
-    database on this machine or in docker-compose.dev.yml. Exits otherwise.
+    database on this machine or in docker/compose.dev.yml. Exits otherwise.
 
     The check reads config.py itself, before the app is imported, because
     importing the app already connects to the database and sets up its
@@ -88,7 +88,7 @@ def setup():
         sys.exit(
             "Refusing to add fake records: the database is on "
             + str(url.host)
-            + ", which isn't this machine or docker-compose.dev.yml's db."
+            + ", which isn't this machine or docker/compose.dev.yml's db."
         )
     # fbc logs every route it registers at DEBUG as it's imported; keep the
     # output to the script's own.

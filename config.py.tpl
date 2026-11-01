@@ -13,7 +13,7 @@ SECRET_KEY = "1234567890"
 
 # The SQLAlchemy connection string.
 # SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
-# docker-compose.dev.yml sets SQLALCHEMY_DATABASE_URI in the environment
+# docker/compose.dev.yml sets SQLALCHEMY_DATABASE_URI in the environment
 # to point at its own database; otherwise this one is used.
 SQLALCHEMY_DATABASE_URI = os.environ.get(
     "SQLALCHEMY_DATABASE_URI", 'mysql+pymysql://user:password@host/db'
@@ -28,7 +28,7 @@ SQLALCHEMY_TRACK_MODIFICATIONS = False
 # Dev mode keeps the app away from the live eBay and Discogs accounts: their
 # keys here and the tokens saved in the database go unused, syncs do nothing,
 # and picture uploads, publishing and Connect eBay/Discogs are turned off.
-# FBC_DEV_MODE=1 in the environment also turns it on (docker-compose.dev.yml
+# FBC_DEV_MODE=1 in the environment also turns it on (docker/compose.dev.yml
 # sets it); either one is enough, and neither turns the other off.
 DEV_MODE = False
 # SQLALCHEMY_ECHO = True

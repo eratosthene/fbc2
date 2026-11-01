@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY ./config.py /app
 COPY ./fbc /app/fbc
 COPY ./migrations /app/migrations
-COPY --chmod=755 ./docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY --chmod=755 ./docker/docker-entrypoint.sh /app/docker-entrypoint.sh
 
 ENV STATIC_PATH=/usr/local/lib/python3.12/site-packages/flask_appbuilder/static
 ENV LOG_LEVEL=info
