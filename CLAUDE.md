@@ -3,7 +3,7 @@
 A Flask-AppBuilder app on MariaDB that keeps a record shop's stock and sales
 in step with Discogs and eBay. One person runs it and works on it; most
 changes start from a GitHub issue and arrive as a PR from a `claude/` branch
-in its own worktree. `README.rst` is the user-facing guide; this file is what
+in its own worktree. `README.md` is the user-facing guide; this file is what
 it doesn't say.
 
 ## Commands
@@ -69,7 +69,8 @@ it doesn't say.
 - Docs, comments, UI text and PR descriptions are plain English, short
   sentences, in the app's own names: Units, Purchase Lots, Storage Boxes,
   eBay Drafts, Ship This, Sales Receipts. Comments say why, not what.
-- When behaviour or setup changes, update `README.rst` in the same PR.
+- When behaviour or setup changes, update `README.md` in the same PR. Docs
+  are Markdown, with commands in fenced `bash` blocks.
 - PR descriptions follow this shape: `Closes #N.`, a one-line summary, then
   sections as needed: How it works, Differences from the issue, and Testing,
   which says what was run, against what, and what *wasn't* run. CI writes its
