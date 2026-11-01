@@ -21,6 +21,7 @@ the older mysql and mysqldump names), not the app's packages.
 """
 
 import argparse
+import ast
 import datetime
 import getpass
 import gzip
@@ -92,9 +93,16 @@ class _StubModule(types.ModuleType):
 
 class _StubFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
     """Stands in for the modules config.py imports (flask_appbuilder) when
-    they aren't installed, as on the live server outside the app's image."""
+    they aren't installed, as on the live server outside the app's image.
+    Only those: an installed package may try a module that isn't there on
+    purpose (dateutil tries winreg), and needs that import to fail."""
+
+    def __init__(self, names):
+        self.names = names
 
     def find_spec(self, name, path, target=None):
+        if name not in self.names:
+            return None
         return importlib.util.spec_from_loader(name, self, is_package=True)
 
     def create_module(self, spec):
@@ -104,19 +112,37 @@ class _StubFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         pass
 
 
+def imported_modules(source):
+    """The modules some Python source imports, and their parent packages."""
+    modules = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            modules += [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            modules.append(node.module)
+    names = set()
+    for module in modules:
+        parts = module.split(".")
+        names.update(".".join(parts[:i]) for i in range(1, len(parts) + 1))
+    return names
+
+
 def database_uri(repo=REPO):
     """config.py's SQLALCHEMY_DATABASE_URI, which also honours the variable
     of that name in the environment."""
     path = os.path.join(repo, "config.py")
     if not os.path.exists(path):
         raise Failed(f"There's no config.py in {os.path.abspath(repo)}.")
+    with open(path) as f:
+        finder = _StubFinder(imported_modules(f.read()))
     spec = importlib.util.spec_from_file_location("config", path)
     config = importlib.util.module_from_spec(spec)
-    finder = _StubFinder()
     # Last, so installed modules are used when there are any.
     sys.meta_path.append(finder)
     try:
         spec.loader.exec_module(config)
+    except Exception as e:
+        raise Failed(f"Couldn't read config.py: {type(e).__name__}: {e}") from e
     finally:
         sys.meta_path.remove(finder)
         for name, module in list(sys.modules.items()):
