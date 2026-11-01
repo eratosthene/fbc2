@@ -22,6 +22,7 @@ def test_parse_uri():
         "password": "p@ss/w0rd",
         "host": "db.example",
         "port": "3307",
+        "ssl": "0",
     }
 
 
@@ -34,7 +35,15 @@ def test_parse_uri_socket_and_no_password():
         "user": "fbc",
         "host": "localhost",
         "socket": "/run/mysqld/mysqld.sock",
+        "ssl": "0",
     }
+
+
+def test_parse_uri_keeps_tls_when_the_app_uses_it():
+    _, options = dump_for_dev.parse_uri(
+        "mysql+pymysql://fbc:pw@db.example/fbc?ssl_ca=/etc/ssl/ca.pem"
+    )
+    assert "ssl" not in options
 
 
 @pytest.mark.parametrize("uri", ["sqlite:///app.db", "mysql+pymysql://fbc:pw@host/"])

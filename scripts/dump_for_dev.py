@@ -169,9 +169,14 @@ def parse_uri(uri):
         options["host"] = parts.hostname
     if parts.port:
         options["port"] = str(parts.port)
-    socket = parse_qs(parts.query).get("unix_socket")
-    if socket:
-        options["socket"] = socket[0]
+    query = parse_qs(parts.query)
+    if query.get("unix_socket"):
+        options["socket"] = query["unix_socket"][0]
+    # Connect as the app does. PyMySQL only uses TLS when the URI has ssl_*
+    # settings, but MariaDB's client from 11.4 insists on it by default, and
+    # can't connect to a server that has none (as the live 10.11 doesn't).
+    if not any(key.startswith("ssl") for key in query):
+        options["ssl"] = "0"
     return database, options
 
 
