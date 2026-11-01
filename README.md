@@ -67,8 +67,8 @@ rebuild too.
   pipenv install --dev
   ```
 
-- Install the git hooks, once per clone. They run Ruff, the filesystem checks
-  and the test suite on every commit:
+- Install the git hooks, once per clone. They run Ruff, mdformat and the
+  file checks on every commit, and the test suite before every push:
 
   ```bash
   pre-commit install

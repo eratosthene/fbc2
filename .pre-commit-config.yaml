@@ -7,14 +7,17 @@ exclude: |
 fail_fast: true
 default_language_version:
   python: python3.12
+# The quick checks run on each commit, the test suite on each push.
 default_install_hook_types:
   - pre-commit
-  - commit-msg
+  - pre-push
+# Hooks that don't name a stage run on commit only, not again on push.
+default_stages: [pre-commit]
 repos:
   #
-  # Based on: https://gatlenculp.github.io/gatlens-opinionated-template/precommit/
+  # Based on: https://gatlen.me/gatlens-opinionated-template/pre-commit/
   # Trimmed down to the tooling this repo (a Flask/SQLAlchemy app, no JS,
-  # Markdown, SQL files, notebooks, or Makefile) actually needs.
+  # SQL files, notebooks, or Makefile) actually needs.
   #
   # ---------------------------------------------------------------------------- #
   #                              🔄 Pre-Commit Hooks                             #
@@ -47,6 +50,26 @@ repos:
   #   hooks:
   #     - id: pyright
   #       name: "🐍 python · Check types"
+
+  ### Data & Config Validation ###
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.31.0
+    hooks:
+      - id: check-github-workflows
+        name: "🐙 github-actions · Validate gh workflow files"
+        args: ["--verbose"]
+
+  ### Markdown ###
+  - repo: https://github.com/hukkin/mdformat
+    rev: 0.7.21
+    hooks:
+      - id: mdformat
+        name: "📝 markdown · Format markdown"
+        # Numbers lists 1, 2, 3 rather than 1, 1, 1, so they read as steps
+        # in the file as well as on GitHub.
+        args: ["--number"]
+        additional_dependencies:
+          - mdformat-gfm
 
   # ---------------------------- 📁 Filesystem Tools --------------------------- #
 
@@ -86,6 +109,7 @@ repos:
   # --------------------------- ✍️ Git Commit Quality -------------------------- #
 
   ### Commit Message Standards ###
+  # Turning this on needs commit-msg back in default_install_hook_types.
 #  - repo: https://github.com/commitizen-tools/commitizen
 #    rev: v4.1.0
 #    hooks:
@@ -95,24 +119,20 @@ repos:
 #        additional_dependencies: [cz-conventional-gitmoji]
 
   # ---------------------------------------------------------------------------- #
-  #                             🧪 Fast Tests (Local)                            #
+  #                              🧪 Tests (Local)                                #
   # ---------------------------------------------------------------------------- #
-  # These run inside the project's Pipenv environment (`pipenv install --dev`),
-  # so they work without first running `pipenv shell`. CI skips them because
-  # the Tests workflow runs the suite on its own.
+  # The whole suite takes about 40 seconds, so it runs before each push rather
+  # than each commit. It runs inside the project's Pipenv environment
+  # (`pipenv install --dev`), so it works without first running `pipenv shell`.
+  # CI's `pre-commit run` only runs the commit stage; the Tests workflow runs
+  # the suite on its own.
   - repo: local
     hooks:
-      - id: pytest-collect
-        name: "🧪 test · Validate test formatting"
-        entry: pipenv run pytest tests --collect-only -q
-        language: system
-        types: [python]
-        pass_filenames: false
-        always_run: true
-      - id: pytest-fast
+      - id: pytest
         name: "🧪 test · Run unit tests"
         entry: pipenv run pytest tests -q
         language: system
         types: [python]
         pass_filenames: false
         always_run: true
+        stages: [pre-push]

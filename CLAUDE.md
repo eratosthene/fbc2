@@ -9,10 +9,10 @@ it doesn't say.
 ## Commands
 
 - Tests: `pipenv run pytest` (add `-q` or a path to narrow it).
-- Format and lint: Ruff, through pre-commit (`ruff-format`, then `ruff --fix`).
-  Ruff isn't in the Pipfile; pre-commit pins it. Commits run Ruff, the
-  filesystem checks and the whole test suite, so a failing test blocks the
-  commit.
+- Format and lint: Ruff for Python (`ruff-format`, then `ruff --fix`) and
+  mdformat for Markdown, both through pre-commit, which pins them; neither is
+  in the Pipfile. Commits run those and the file checks. The test suite runs
+  before each push, not each commit, so run it yourself before committing.
 - New migration: `pipenv run flask --app fbc db migrate -m "..."`, then read
   it over: autogenerate misses data changes and renames.
 - Run the app: `dev-scripts/run-local.sh` (127.0.0.1:5556, needs
