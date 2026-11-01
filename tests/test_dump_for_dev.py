@@ -22,6 +22,7 @@ def test_parse_uri():
         "password": "p@ss/w0rd",
         "host": "db.example",
         "port": "3307",
+        "ssl": "0",
     }
 
 
@@ -34,7 +35,15 @@ def test_parse_uri_socket_and_no_password():
         "user": "fbc",
         "host": "localhost",
         "socket": "/run/mysqld/mysqld.sock",
+        "ssl": "0",
     }
+
+
+def test_parse_uri_keeps_tls_when_the_app_uses_it():
+    _, options = dump_for_dev.parse_uri(
+        "mysql+pymysql://fbc:pw@db.example/fbc?ssl_ca=/etc/ssl/ca.pem"
+    )
+    assert "ssl" not in options
 
 
 @pytest.mark.parametrize("uri", ["sqlite:///app.db", "mysql+pymysql://fbc:pw@host/"])
@@ -98,6 +107,56 @@ def test_database_uri_without_the_apps_packages(tmp_path, monkeypatch):
 
     monkeypatch.setenv("SQLALCHEMY_DATABASE_URI", "mysql://other@host/db")
     assert dump_for_dev.database_uri(str(tmp_path)) == "mysql://other@host/db"
+
+
+def test_database_uri_leaves_other_missing_modules_missing(tmp_path, monkeypatch):
+    """An installed package's imports that fail on purpose still fail, as
+    dateutil's `import winreg` does off Windows."""
+    monkeypatch.delenv("SQLALCHEMY_DATABASE_URI", raising=False)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    (tmp_path / "installed_pkg.py").write_text(
+        "try:\n"
+        "    import windows_only_module\n"
+        "except ImportError:\n"
+        "    windows_only_module = None\n"
+        "ON_WINDOWS = windows_only_module is not None\n"
+    )
+    (tmp_path / "config.py").write_text(
+        "import installed_pkg\n"
+        "from not_installed.security.manager import AUTH_DB\n"
+        "assert not installed_pkg.ON_WINDOWS\n"
+        "SQLALCHEMY_DATABASE_URI = 'mysql://fbc@localhost/fbc'\n"
+    )
+    try:
+        assert dump_for_dev.database_uri(str(tmp_path)) == "mysql://fbc@localhost/fbc"
+    finally:
+        sys.modules.pop("installed_pkg", None)
+
+
+def test_database_uri_reports_a_broken_config(tmp_path):
+    (tmp_path / "config.py").write_text("SQLALCHEMY_DATABASE_URI = undefined_name\n")
+    with pytest.raises(dump_for_dev.Failed, match="Couldn't read config.py: NameError"):
+        dump_for_dev.database_uri(str(tmp_path))
+
+
+def test_imported_modules():
+    source = (
+        "import os, a.b.c\n"
+        "from flask_appbuilder.security.manager import AUTH_DB\n"
+        "from . import relative\n"
+        "def f():\n"
+        "    import inside\n"
+    )
+    assert dump_for_dev.imported_modules(source) == {
+        "os",
+        "a",
+        "a.b",
+        "a.b.c",
+        "flask_appbuilder",
+        "flask_appbuilder.security",
+        "flask_appbuilder.security.manager",
+        "inside",
+    }
 
 
 def test_database_uri_without_config(tmp_path):
