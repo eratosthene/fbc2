@@ -120,9 +120,10 @@ it, since Compose reads ``.env`` from the compose file's folder.
   ``config.py``'s ``SQLALCHEMY_DATABASE_URI`` at
   ``mysql+pymysql://fbc:<that password>@127.0.0.1:3307/fbc``.
 
-- Optionally, put ``.sql`` dumps (``mysqldump`` output) in ``docker/dev-db/``.
-  They are loaded the first time the database starts. Without one the app
-  builds an empty database, and needs an admin user::
+- Optionally, put dumps (``.sql`` or ``.sql.gz``) in ``docker/dev-db/``, such
+  as a copy of live data (below). They are loaded the first time the database
+  starts. Without one the app builds an empty database, and needs an admin
+  user::
 
     docker compose -f docker/compose.dev.yml exec app flask fab create-admin
 
@@ -137,6 +138,59 @@ The database is kept in the ``fbc2-dev_db`` volume between sessions. To start
 again from the dumps, remove it::
 
     docker compose -f docker/compose.dev.yml down -v
+
+A copy of live data
+~~~~~~~~~~~~~~~~~~~
+
+``scripts/dump_for_dev.py`` makes a dump of the live database to load here,
+with what's sensitive taken out:
+
+- The eBay and Discogs tokens, Flask-AppBuilder's API keys and pending
+  sign-ups, and the app's users (``ab_user``, ``ab_user_role`` and
+  ``ab_user_group``) have their tables but no rows.
+- Buyers' eBay usernames on eBay orders become ``buyer-1``, ``buyer-2`` and so
+  on, each buyer keeping the same one.
+
+Everything else is kept, roles and permissions and ``alembic_version`` too,
+so ``flask setup-db`` brings it up to date when the app starts.
+
+1. On the live server, from the repo root::
+
+     scripts/dump_for_dev.py --admin-user root
+
+   It copies the database in ``config.py``'s ``SQLALCHEMY_DATABASE_URI`` into
+   a scratch database (``fbc_dev_scrub``) on the same server, scrubs the copy,
+   dumps it to ``fbc-dev-<date>.sql.gz`` and drops it. The fbc user can't
+   create databases, so ``--admin-user`` names a MariaDB user that can, and
+   asks for its password; leave it empty for a user that signs in with
+   ``unix_socket``, and run the script with ``sudo``. ``-o`` picks the folder
+   to write to. It needs Python 3 and the MariaDB client (``mariadb`` and
+   ``mariadb-dump``), but not the app's packages.
+
+   Before finishing, it checks the dump for rows of the emptied tables and
+   for any of the live tokens, password hashes, API keys and user emails, and
+   deletes it if it finds one.
+
+2. Copy it into ``docker/dev-db/`` here, and remove any older dumps there,
+   since they'd all be loaded::
+
+     scp <live server>:fbc-dev-<date>.sql.gz docker/dev-db/
+
+3. Start from an empty database, so the dump is loaded. This removes the
+   database you had, and any changes made in it::
+
+     docker compose -f docker/compose.dev.yml down -v
+     dev-scripts/compose-up.sh
+
+4. The dump has no users, so create an admin to sign in with::
+
+     docker compose -f docker/compose.dev.yml exec app flask fab create-admin
+
+The app runs in dev mode, and the dump has no tokens, so syncs and the eBay
+and Discogs actions do nothing.
+
+The Dev dump workflow runs the script on a PR that changes it, against a
+MariaDB seeded with tokens, users and buyers, and checks the dump it makes.
 
 Fake eBay and Discogs records
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
