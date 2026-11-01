@@ -63,6 +63,8 @@ jobs:
     env:
       FLASK_APP: fbc
       MYSQL: mysql -h 127.0.0.1 -uroot -proot
+      # config.py uses this in place of its own SQLALCHEMY_DATABASE_URI.
+      SQLALCHEMY_DATABASE_URI: mysql+pymysql://root:root@127.0.0.1/fbc
     steps:
       - uses: actions/checkout@v7
 
@@ -77,11 +79,9 @@ jobs:
           pipenv install --dev --deploy
 
       # config.py holds real credentials and isn't committed, so use the
-      # template, pointed at the MySQL service.
+      # template; SQLALCHEMY_DATABASE_URI above points it at the MySQL service.
       - name: Use config.py.tpl as config.py
-        run: >-
-          sed "s|^SQLALCHEMY_DATABASE_URI = .*|SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:root@127.0.0.1/fbc'|"
-          config.py.tpl > config.py
+        run: cp config.py.tpl config.py
 
       # PyMySQL can only log in to MySQL 8.4 once the server has cached the
       # login (the full exchange needs the cryptography package, which isn't
