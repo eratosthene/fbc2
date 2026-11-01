@@ -1,21 +1,56 @@
-Base Skeleton to start your application using Flask-AppBuilder
---------------------------------------------------------------
+fbc
+===
 
-- Install it::
+fbc keeps track of a record shop's stock and sales, and keeps them in step
+with Discogs and eBay. It's a Flask-AppBuilder app on MariaDB.
 
-	pip install flask-appbuilder
-	git clone https://github.com/dpgaspar/Flask-AppBuilder-Skeleton.git
+- **Inventory**: Units (one copy of a record each), the Purchase Lots they
+  came in and the Storage Boxes they're kept in.
+- **Discogs**: the Discogs collection, synced in, with Add Unit for releases
+  that have none yet.
+- **Sales**: eBay listings and orders, synced in. eBay Drafts turn a Unit into
+  a listing, and Ship This turns an order into a Sales Receipt.
+- **Supplies**: the packing supplies sales use up, and Purchase Orders to
+  restock them.
 
-- Run it::
+Setting up
+----------
 
-    $ export FLASK_APP=app
-    # Create an admin user
-    $ flask fab create-admin
-    # Run dev server
-    $ flask run
+Everything the app needs, apart from its code, is in ``config.py``. It isn't
+in git, since it holds the live credentials. Copy ``config.py.tpl`` to start
+one, and fill in:
 
+- ``SECRET_KEY``: a long random string, such as the output of
+  ``openssl rand -hex 32``.
+- ``SQLALCHEMY_DATABASE_URI``: the MariaDB database.
+- ``EBAY_SETTINGS`` and ``DISCOGS_SETTINGS``: the eBay and Discogs app keys,
+  and the listing defaults. The comments there say where each one comes from.
+  Once the app is running, Sales > Connect eBay and Discogs > Connect Discogs
+  sign in to each site, and keep the tokens in the database.
 
-That's it!!
+The app creates the database's tables, or brings them up to date, with::
+
+    flask --app fbc setup-db
+
+and needs an admin user to sign in with::
+
+    flask --app fbc fab create-admin
+
+Both run in the app's container too (``docker compose exec fbc flask ...``).
+The container runs ``setup-db`` itself each time it starts.
+
+Running on the live server
+--------------------------
+
+The live server runs the app's Docker image with gunicorn, on port 20000.
+Build the image there, since it's built for the machine that builds it, and
+then start it::
+
+    ./build.sh
+    sudo docker compose up -d
+
+The image has ``config.py`` built into it, so a change to it needs a
+rebuild too.
 
 Development
 -----------
@@ -43,6 +78,16 @@ Development
   reach it from other machines) and ``-p`` the port; ``FBC_HOST`` and
   ``FBC_PORT`` do the same. Its port isn't 5555, so it can run alongside the
   Docker setup below.
+
+- Run the tests::
+
+    pipenv run pytest
+
+- After changing a model, generate a migration for it, and check it over
+  before committing it. The Migrations workflow runs it against MariaDB on
+  the PR, and checks the result matches the models::
+
+    pipenv run flask --app fbc db migrate -m "Describe the change"
 
 Testing with Docker
 -------------------
