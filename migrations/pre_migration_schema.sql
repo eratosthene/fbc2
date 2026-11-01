@@ -3,16 +3,20 @@
 -- migration (b96bd65a7506) starts from this, so the Migrations workflow loads
 -- it and runs every migration on top. Don't edit it to match new models.
 --
--- MySQL dump 10.13  Distrib 8.4.13, for Linux (aarch64)
+-- Dumped from MariaDB 10.11, as on the live server, with the live tables'
+-- utf8mb3 character set. mariadb-dump's first line, a sandbox-mode marker
+-- the mysql client can't read, is left out.
+--
+-- MariaDB dump 10.19  Distrib 10.11.19-MariaDB, for debian-linux-gnu (aarch64)
 --
 -- Host: localhost    Database: fbc
 -- ------------------------------------------------------
--- Server version	8.4.13
+-- Server version	10.11.19-MariaDB-ubu2204
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8mb4 */;
+/*!40101 SET NAMES utf8mb4 */;
 /*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
 /*!40103 SET TIME_ZONE='+00:00' */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
@@ -26,14 +30,14 @@
 
 DROP TABLE IF EXISTS `artist`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `artist` (
-  `artist_id` int NOT NULL AUTO_INCREMENT,
+  `artist_id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   `sort_name` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`artist_id`),
   UNIQUE KEY `artist_id` (`artist_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -42,17 +46,17 @@ CREATE TABLE `artist` (
 
 DROP TABLE IF EXISTS `artist_discogs_release`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `artist_discogs_release` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `artist_id` int DEFAULT NULL,
-  `release_id` int DEFAULT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `artist_id` int(11) DEFAULT NULL,
+  `release_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `artist_id` (`artist_id`),
   KEY `release_id` (`release_id`),
   CONSTRAINT `artist_discogs_release_ibfk_1` FOREIGN KEY (`artist_id`) REFERENCES `artist` (`artist_id`),
   CONSTRAINT `artist_discogs_release_ibfk_2` FOREIGN KEY (`release_id`) REFERENCES `discogs_release` (`release_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -61,12 +65,12 @@ CREATE TABLE `artist_discogs_release` (
 
 DROP TABLE IF EXISTS `discogs_instance`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `discogs_instance` (
-  `instance_id` int NOT NULL AUTO_INCREMENT,
+  `instance_id` int(11) NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`instance_id`),
   UNIQUE KEY `instance_id` (`instance_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -75,17 +79,17 @@ CREATE TABLE `discogs_instance` (
 
 DROP TABLE IF EXISTS `discogs_instance_discogs_release`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `discogs_instance_discogs_release` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `instance_id` int DEFAULT NULL,
-  `release_id` int DEFAULT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `instance_id` int(11) DEFAULT NULL,
+  `release_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `instance_id` (`instance_id`),
   KEY `release_id` (`release_id`),
   CONSTRAINT `discogs_instance_discogs_release_ibfk_1` FOREIGN KEY (`instance_id`) REFERENCES `discogs_instance` (`instance_id`),
   CONSTRAINT `discogs_instance_discogs_release_ibfk_2` FOREIGN KEY (`release_id`) REFERENCES `discogs_release` (`release_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -94,24 +98,24 @@ CREATE TABLE `discogs_instance_discogs_release` (
 
 DROP TABLE IF EXISTS `discogs_release`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `discogs_release` (
-  `release_id` int NOT NULL AUTO_INCREMENT,
+  `release_id` int(11) NOT NULL AUTO_INCREMENT,
   `title` varchar(200) NOT NULL,
-  `year` int DEFAULT NULL,
-  `master_id` int DEFAULT NULL,
-  `master_year` int DEFAULT NULL,
-  `formats` text,
+  `year` int(11) DEFAULT NULL,
+  `master_id` int(11) DEFAULT NULL,
+  `master_year` int(11) DEFAULT NULL,
+  `formats` text DEFAULT NULL,
   `released` varchar(20) DEFAULT NULL,
-  `notes` text,
-  `folder_id` int DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `folder_id` int(11) DEFAULT NULL,
   `date_added` date DEFAULT NULL,
   PRIMARY KEY (`release_id`),
   UNIQUE KEY `release_id` (`release_id`),
   KEY `folder_id` (`folder_id`),
   KEY `ix_discogs_release_title` (`title`),
   CONSTRAINT `discogs_release_ibfk_1` FOREIGN KEY (`folder_id`) REFERENCES `folder` (`folder_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -120,7 +124,7 @@ CREATE TABLE `discogs_release` (
 
 DROP TABLE IF EXISTS `ebay_listing`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ebay_listing` (
   `item_id` varchar(20) NOT NULL,
   `title` varchar(100) DEFAULT NULL,
@@ -129,7 +133,7 @@ CREATE TABLE `ebay_listing` (
   `start_time` datetime DEFAULT NULL,
   PRIMARY KEY (`item_id`),
   UNIQUE KEY `item_id` (`item_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -138,7 +142,7 @@ CREATE TABLE `ebay_listing` (
 
 DROP TABLE IF EXISTS `ebay_order`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `ebay_order` (
   `order_id` varchar(20) NOT NULL,
   `created_time` datetime DEFAULT NULL,
@@ -150,7 +154,7 @@ CREATE TABLE `ebay_order` (
   UNIQUE KEY `order_id` (`order_id`),
   KEY `ebay_listing_id` (`ebay_listing_id`),
   CONSTRAINT `ebay_order_ibfk_1` FOREIGN KEY (`ebay_listing_id`) REFERENCES `ebay_listing` (`item_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -159,13 +163,13 @@ CREATE TABLE `ebay_order` (
 
 DROP TABLE IF EXISTS `folder`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `folder` (
-  `folder_id` int NOT NULL AUTO_INCREMENT,
+  `folder_id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   PRIMARY KEY (`folder_id`),
   UNIQUE KEY `folder_id` (`folder_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -174,13 +178,13 @@ CREATE TABLE `folder` (
 
 DROP TABLE IF EXISTS `genre`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `genre` (
-  `id` int NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -189,17 +193,17 @@ CREATE TABLE `genre` (
 
 DROP TABLE IF EXISTS `genre_discogs_release`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `genre_discogs_release` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `genre_id` int DEFAULT NULL,
-  `release_id` int DEFAULT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `genre_id` int(11) DEFAULT NULL,
+  `release_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `genre_id` (`genre_id`),
   KEY `release_id` (`release_id`),
   CONSTRAINT `genre_discogs_release_ibfk_1` FOREIGN KEY (`genre_id`) REFERENCES `genre` (`id`),
   CONSTRAINT `genre_discogs_release_ibfk_2` FOREIGN KEY (`release_id`) REFERENCES `discogs_release` (`release_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -208,16 +212,16 @@ CREATE TABLE `genre_discogs_release` (
 
 DROP TABLE IF EXISTS `purchase_lot`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `purchase_lot` (
-  `id` int NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `old_id` varchar(24) DEFAULT NULL,
   `name` varchar(100) NOT NULL,
   `date` date NOT NULL,
   `price` float NOT NULL,
   `notes` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -226,16 +230,16 @@ CREATE TABLE `purchase_lot` (
 
 DROP TABLE IF EXISTS `purchase_order`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `purchase_order` (
-  `id` int NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `old_id` varchar(24) DEFAULT NULL,
   `date` date NOT NULL,
   `price` float NOT NULL,
   `notes` varchar(100) DEFAULT NULL,
   `link` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -244,17 +248,17 @@ CREATE TABLE `purchase_order` (
 
 DROP TABLE IF EXISTS `purchase_order_supply`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `purchase_order_supply` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `purchase_order_id` int DEFAULT NULL,
-  `supply_id` int DEFAULT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `purchase_order_id` int(11) DEFAULT NULL,
+  `supply_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `purchase_order_id` (`purchase_order_id`),
   KEY `supply_id` (`supply_id`),
   CONSTRAINT `purchase_order_supply_ibfk_1` FOREIGN KEY (`purchase_order_id`) REFERENCES `purchase_order` (`id`),
   CONSTRAINT `purchase_order_supply_ibfk_2` FOREIGN KEY (`supply_id`) REFERENCES `supply` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -263,9 +267,9 @@ CREATE TABLE `purchase_order_supply` (
 
 DROP TABLE IF EXISTS `sales_receipt`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sales_receipt` (
-  `id` int NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `old_id` varchar(24) DEFAULT NULL,
   `date` date NOT NULL,
   `ebay_order_id` varchar(20) DEFAULT NULL,
@@ -274,7 +278,7 @@ CREATE TABLE `sales_receipt` (
   PRIMARY KEY (`id`),
   KEY `ebay_order_id` (`ebay_order_id`),
   CONSTRAINT `sales_receipt_ibfk_1` FOREIGN KEY (`ebay_order_id`) REFERENCES `ebay_order` (`order_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -283,13 +287,13 @@ CREATE TABLE `sales_receipt` (
 
 DROP TABLE IF EXISTS `storage_box`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `storage_box` (
-  `id` int NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `old_id` varchar(24) DEFAULT NULL,
   `name` varchar(100) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -298,13 +302,13 @@ CREATE TABLE `storage_box` (
 
 DROP TABLE IF EXISTS `style`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `style` (
-  `id` int NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -313,17 +317,17 @@ CREATE TABLE `style` (
 
 DROP TABLE IF EXISTS `style_discogs_release`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `style_discogs_release` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `style_id` int DEFAULT NULL,
-  `release_id` int DEFAULT NULL,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `style_id` int(11) DEFAULT NULL,
+  `release_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `style_id` (`style_id`),
   KEY `release_id` (`release_id`),
   CONSTRAINT `style_discogs_release_ibfk_1` FOREIGN KEY (`style_id`) REFERENCES `style` (`id`),
   CONSTRAINT `style_discogs_release_ibfk_2` FOREIGN KEY (`release_id`) REFERENCES `discogs_release` (`release_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -332,14 +336,14 @@ CREATE TABLE `style_discogs_release` (
 
 DROP TABLE IF EXISTS `supply`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `supply` (
-  `id` int NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `old_id` varchar(24) DEFAULT NULL,
   `name` varchar(100) NOT NULL,
-  `quantity` int NOT NULL,
+  `quantity` int(11) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -348,25 +352,25 @@ CREATE TABLE `supply` (
 
 DROP TABLE IF EXISTS `unit`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
+/*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `unit` (
-  `id` int NOT NULL AUTO_INCREMENT,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
   `old_id` varchar(24) DEFAULT NULL,
   `name` varchar(200) NOT NULL,
   `unit_type` varchar(30) DEFAULT NULL,
   `description` varchar(300) DEFAULT NULL,
-  `discogs_release_id` int DEFAULT NULL,
-  `discogs_instance_id` int DEFAULT NULL,
+  `discogs_release_id` int(11) DEFAULT NULL,
+  `discogs_instance_id` int(11) DEFAULT NULL,
   `ebay_listing_id` varchar(20) DEFAULT NULL,
-  `purchase_lot_id` int DEFAULT NULL,
-  `storage_box_id` int DEFAULT NULL,
+  `purchase_lot_id` int(11) DEFAULT NULL,
+  `storage_box_id` int(11) DEFAULT NULL,
   `grading` varchar(20) DEFAULT NULL,
   `pressing` varchar(100) DEFAULT NULL,
   `matrix` varchar(100) DEFAULT NULL,
   `notes` varchar(100) DEFAULT NULL,
   `retail_price` float DEFAULT NULL,
   `sold` tinyint(1) DEFAULT NULL,
-  `sales_receipt_id` int DEFAULT NULL,
+  `sales_receipt_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `discogs_release_id` (`discogs_release_id`),
   KEY `discogs_instance_id` (`discogs_instance_id`),
@@ -383,7 +387,7 @@ CREATE TABLE `unit` (
   CONSTRAINT `unit_ibfk_4` FOREIGN KEY (`purchase_lot_id`) REFERENCES `purchase_lot` (`id`),
   CONSTRAINT `unit_ibfk_5` FOREIGN KEY (`storage_box_id`) REFERENCES `storage_box` (`id`),
   CONSTRAINT `unit_ibfk_6` FOREIGN KEY (`sales_receipt_id`) REFERENCES `sales_receipt` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -395,4 +399,4 @@ CREATE TABLE `unit` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-10-30 20:53:45
+-- Dump completed
