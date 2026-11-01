@@ -34,6 +34,16 @@ Development
 
     pipenv requirements > requirements.txt
 
+- To run the app on this machine, with Flask's reloading dev server and the
+  database in ``config.py``, then open http://127.0.0.1:5556::
+
+    dev-scripts/run-local.sh
+
+  ``-H`` picks the address to listen on (a LAN address, or ``0.0.0.0``, to
+  reach it from other machines) and ``-p`` the port; ``FBC_HOST`` and
+  ``FBC_PORT`` do the same. Its port isn't 5555, so it can run alongside the
+  Docker setup below.
+
 Testing with Docker
 -------------------
 
@@ -73,7 +83,10 @@ the machine it runs on, so build the live server's image there with
 
 - Start it, then open http://127.0.0.1:5555::
 
-    docker compose -f docker-compose.dev.yml up --build
+    dev-scripts/compose-up.sh
+
+  It runs in the foreground, with the logs, until Ctrl-C. With ``-d`` it
+  starts in the background, and says how to follow the logs and stop it.
 
 The database is kept in the ``fbc2-dev_db`` volume between sessions. To start
 again from the dumps, remove it::
@@ -83,7 +96,7 @@ again from the dumps, remove it::
 Fake eBay and Discogs records
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The scripts in ``dev-scripts/`` add fake records in place of a sync from eBay
+The ``fake_*.py`` scripts in ``dev-scripts/`` add fake records in place of a sync from eBay
 or Discogs, to try things like Ship This and Add Unit without the real sites.
 They only run when ``config.py`` sets ``ALLOW_FAKE_DATA = True`` and the
 database is on this machine or in ``docker-compose.dev.yml``, and they aren't
