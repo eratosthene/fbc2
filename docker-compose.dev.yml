@@ -47,6 +47,10 @@ services:
     environment:
       # config.py uses this in place of its own SQLALCHEMY_DATABASE_URI.
       SQLALCHEMY_DATABASE_URI: mysql+pymysql://fbc:${FBC_DEV_DB_PASSWORD}@db/fbc
+      # Dev mode (see fbc/devmode.py), so a copy of live data can't reach the
+      # live eBay and Discogs accounts. FBC_DEV_MODE=0 in .env turns it off,
+      # unless config.py sets DEV_MODE = True.
+      FBC_DEV_MODE: ${FBC_DEV_MODE:-1}
     # Mounted rather than baked in, so edits show up without a rebuild. The
     # entrypoint still runs `flask setup-db` first, as on the live server.
     volumes:

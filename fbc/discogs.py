@@ -8,6 +8,8 @@ access token, is used only until then.
 import datetime
 import logging
 
+from fbc import devmode
+
 logger = logging.getLogger()
 
 
@@ -29,6 +31,7 @@ def has_app_keys():
 def _app_client(token=None, secret=None):
     import discogs_client
 
+    devmode.check(DiscogsAuthError, "Discogs")
     settings = _settings()
     if not has_app_keys():
         raise DiscogsAuthError(
@@ -65,6 +68,7 @@ def client():
     """
     import discogs_client
 
+    devmode.check(DiscogsAuthError, "Discogs")
     saved = saved_oauth_token()
     if saved:
         return _app_client(saved.token, saved.secret)

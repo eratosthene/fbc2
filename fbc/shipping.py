@@ -9,6 +9,8 @@ instance of the release from the Discogs collection.
 
 import logging
 
+from fbc import devmode
+
 logger = logging.getLogger()
 
 FINANCES_URL = "https://apiz.ebay.com/sell/finances/v1/transaction"
@@ -87,6 +89,11 @@ def order_earnings(order_id):
     )
 
     result = {"net": None, "lines": [], "items": 0, "errors": [], "warnings": []}
+    if devmode.on():
+        result["warnings"].append(
+            devmode.message("eBay earnings lookup") + " Enter Net Sold yourself."
+        )
+        return result
     try:
         token = oauth_token(FINANCES_SCOPE)
     except OAuthError as e:
@@ -203,7 +210,8 @@ def remove_from_discogs(unit):
 
     The instance is looked up on Discogs first, to find the folder it's in
     and to make sure it's still there; the delete names that one instance,
-    so other copies of the same release are left alone.
+    so other copies of the same release are left alone. In dev mode it's
+    only removed from fbc.
     """
     from discogs_client.exceptions import DiscogsAPIError, HTTPError
 
@@ -216,6 +224,17 @@ def remove_from_discogs(unit):
     instance_id = instance.instance_id
     release_id = unit.discogs_release_id
     title = str(unit.discogs_release)
+    if devmode.on():
+        forget_discogs_instance(instance)
+        return (
+            devmode.message("Discogs removal")
+            + " Removed "
+            + title
+            + " (instance "
+            + str(instance_id)
+            + ") from fbc only.",
+            "warning",
+        )
     try:
         client = _discogs()
         me = client.identity()

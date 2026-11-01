@@ -7,6 +7,9 @@ keeps the token eBay gives it (good for about 18 months) and renews its access
 from that. If you connected before fbc stopped using a user token from
 config.py, connect again so syncing and listing keep working.</p>
 
+{% if dev_mode_message %}
+<div class="alert alert-warning">{{ dev_mode_message }}</div>
+{% endif %}
 {% if saved %}
 <div class="alert alert-success">
   Connected {{ saved.created.strftime("%Y-%m-%d") if saved.created }}{% if saved.expires %}; sign in again before {{ saved.expires.strftime("%Y-%m-%d") }}{% endif %}.

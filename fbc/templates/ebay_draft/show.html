@@ -19,18 +19,25 @@
   {% endfor %}
 </div>
 {% if draft.status == "draft" %}
+{% if dev_mode %}
+<p class="text-warning">Dev Mode is turned on, picture uploads disabled.</p>
+{% else %}
 <form method="post" enctype="multipart/form-data" action="{{ url_for('EbayDraftModelView.pictures', pk=draft.id) }}" class="form-inline">
   <input type="file" name="pictures" accept="image/*" multiple class="form-control">
   <button class="btn btn-default">Upload to eBay</button>
 </form>
+{% endif %}
 <hr>
 <a href="{{ url_for('EbayDraftModelView.edit', pk=draft.id) }}" class="btn btn-default">Edit</a>
 <form method="post" action="{{ url_for('EbayDraftModelView.verify', pk=draft.id) }}" style="display: inline">
-  <button class="btn btn-info">Check with eBay</button>
+  <button class="btn btn-info" {% if dev_mode %}disabled{% endif %}>Check with eBay</button>
 </form>
 <form method="post" action="{{ url_for('EbayDraftModelView.publish', pk=draft.id) }}" style="display: inline">
-  <button class="btn btn-primary" {% if problems %}disabled{% endif %}>Publish to eBay (goes live)</button>
+  <button class="btn btn-primary" {% if problems or dev_mode %}disabled{% endif %}>Publish to eBay (goes live)</button>
 </form>
+{% if dev_mode %}
+<p class="text-warning" style="margin-top: 10px">Dev Mode is turned on, checking and publishing listings disabled.</p>
+{% endif %}
 {% if problems %}
 <ul class="text-warning" style="margin-top: 10px">
   {% for p in problems %}<li>{{ p }}</li>{% endfor %}

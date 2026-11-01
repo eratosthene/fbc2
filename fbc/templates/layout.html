@@ -1,0 +1,11 @@
+{% extends 'appbuilder/baselayout.html' %}
+{# Every page's layout: Flask-AppBuilder's, with a banner in dev mode (see fbc/devmode.py). #}
+{% block messages %}
+{% if dev_mode %}
+<div class="alert alert-warning">
+  <strong>Dev Mode:</strong> eBay and Discogs are turned off. Syncs, picture
+  uploads, publishing and connecting do nothing here.
+</div>
+{% endif %}
+{{ super() }}
+{% endblock %}
