@@ -207,6 +207,7 @@ def remove_from_discogs(unit):
     """
     from discogs_client.exceptions import DiscogsAPIError, HTTPError
 
+    from fbc.discogs import DiscogsAuthError
     from fbc.util import forget_discogs_instance
 
     instance, problem = discogs_plan(unit)
@@ -253,7 +254,9 @@ def remove_from_discogs(unit):
                 + str(instance_id)
                 + ") was already gone from Discogs; removed it from fbc too."
             )
-    except (DiscogsAPIError, OSError) as e:
+    # DiscogsAuthError: fbc isn't connected to Discogs, which is only found
+    # out once the receipt is saved, so it's reported like any other failure.
+    except (DiscogsAPIError, DiscogsAuthError, OSError) as e:
         logger.error(e)
         return (
             "Couldn't remove "

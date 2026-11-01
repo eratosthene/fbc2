@@ -8,6 +8,7 @@ import fbc
 from fbc import db
 from fbc import listing
 from fbc import shipping
+from fbc.discogs import DiscogsAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsRelease
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit
@@ -299,6 +300,22 @@ def test_remove_from_discogs_keeps_fbc_as_is_when_discogs_fails(app, discogs):
     assert db.session.get(DiscogsInstance, 1002) is not None
 
 
+def _not_connected():
+    raise DiscogsAuthError("Connect fbc to Discogs first (Discogs > Connect Discogs).")
+
+
+def test_remove_from_discogs_says_so_when_discogs_isnt_connected(app, monkeypatch):
+    order, unit = _order()
+    monkeypatch.setattr(shipping, "_discogs", _not_connected)
+
+    message, category = shipping.remove_from_discogs(unit)
+
+    assert category == "danger"
+    assert "Connect fbc to Discogs first" in message
+    assert "Remove it by hand" in message
+    assert db.session.get(DiscogsInstance, 1002) is not None
+
+
 def test_forgetting_the_last_instance_removes_the_release(app):
     order, unit = _order()
     release = unit.discogs_release
@@ -371,6 +388,26 @@ def test_shipping_records_the_receipt_marks_sold_and_removes_from_discogs(
     again = client.get("/ebayordermodelview/ship/" + order.order_id)
     assert again.status_code == 302
     assert db.session.query(SalesReceipt).count() == 1
+
+
+def test_shipping_without_discogs_connected_still_records_the_receipt(
+    client, monkeypatch
+):
+    order, unit = _order()
+    monkeypatch.setattr(shipping, "_discogs", _not_connected)
+
+    page = client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={"net_sold": "16.50", "remove_discogs": "1"},
+    )
+
+    assert page.status_code == 302
+    db.session.expire_all()
+    receipt = db.session.query(SalesReceipt).one()
+    assert db.session.get(Unit, unit.id).sales_receipt_id == receipt.id
+    assert db.session.get(DiscogsInstance, 1002) is not None
+    listed = client.get(page.headers["Location"]).get_data(as_text=True)
+    assert "Connect fbc to Discogs first" in listed
 
 
 def test_shipping_can_leave_discogs_alone(client, discogs):
