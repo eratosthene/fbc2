@@ -45,58 +45,35 @@ class EbayOrder(Model):
     order_id = Column(String(20), primary_key=True, unique=True)
     created_time = Column(DateTime)
     buyer = Column(String(50))
+    # The items' subtotal, without shipping.
     price = Column(Float)
+    # What the buyer paid for shipping. None for orders synced before fbc
+    # kept it.
+    shipping = Column(Float)
+    # The first item's title and listing; every item is in items.
     title = Column(String(100))
     ebay_listing_id = Column(String(20), ForeignKey("ebay_listing.item_id"))
     ebay_listing = relationship("EbayListing")
+    items = relationship(
+        "EbayOrderItem",
+        back_populates="ebay_order",
+        cascade="all, delete-orphan",
+        order_by="EbayOrderItem.id",
+    )
+    sales_receipts = relationship(
+        "SalesReceipt",
+        secondary="sales_receipt_ebay_order",
+        back_populates="ebay_orders",
+    )
 
     def __unicode__(self):
-        if self.title:
-            return (
-                str(self.created_time.date())
-                + " "
-                + self.order_id
-                + " ["
-                + self.title[:45]
-                + "]: "
-                + self.buyer
-                + " $"
-                + f"{self.price:.2f}"
-            )
-        else:
-            return (
-                str(self.created_time.date())
-                + " "
-                + self.order_id
-                + ": "
-                + self.buyer
-                + " $"
-                + f"{self.price:.2f}"
-            )
+        return self.__repr__()
 
     def __repr__(self):
+        ret = str(self.created_time.date()) + " " + self.order_id
         if self.title:
-            return (
-                str(self.created_time.date())
-                + " "
-                + self.order_id
-                + " ["
-                + self.title[:45]
-                + "]: "
-                + self.buyer
-                + " $"
-                + f"{self.price:.2f}"
-            )
-        else:
-            return (
-                str(self.created_time.date())
-                + " "
-                + self.order_id
-                + ": "
-                + self.buyer
-                + " $"
-                + f"{self.price:.2f}"
-            )
+            ret = ret + " [" + self.title[:45] + "]"
+        return ret + ": " + self.buyer + " $" + f"{self.price:.2f}"
 
     def fmt_price(self):
         return "$" + f"{self.price:.2f}"
@@ -110,26 +87,61 @@ class EbayOrder(Model):
             + "</a>"
         )
 
+    def listing_ids(self):
+        """
+        {listing id: quantity} for every item on the order. An order synced
+        before fbc kept every item has only its first item's listing.
+        """
+        if self.items:
+            ids = {}
+            for item in self.items:
+                if item.ebay_listing_id:
+                    ids[item.ebay_listing_id] = ids.get(item.ebay_listing_id, 0) + (
+                        item.quantity or 1
+                    )
+            return ids
+        if self.ebay_listing_id:
+            return {self.ebay_listing_id: 1}
+        return {}
+
     def links(self):
         retval = (
             '<a href="'
             + url_for(
                 "SalesReceiptModelView.add",
                 sold_price=self.price,
-                ebay_order=self.order_id,
+                ebay_orders=self.order_id,
                 date=self.created_time.date(),
             )
             + '">Add&nbsp;SR</a>'
         )
-        from fbc.shipping import can_ship
+        from fbc.shipping import can_ship, combinable_orders
 
         if can_ship(self):
-            retval = (
-                retval
-                + '<br><a href="'
-                + url_for("EbayOrderModelView.ship", pk=self.order_id)
-                + '">Ship&nbsp;This</a>'
-            )
+            others = combinable_orders(self)
+            if others:
+                retval = (
+                    retval
+                    + '<br><a href="'
+                    + url_for(
+                        "EbayOrderModelView.ship",
+                        pk=self.order_id,
+                        combine=[o.order_id for o in others],
+                    )
+                    + '">Ship&nbsp;This&nbsp;Combined</a> ('
+                    + str(len(others) + 1)
+                    + "&nbsp;orders)"
+                    + '<br><a href="'
+                    + url_for("EbayOrderModelView.ship", pk=self.order_id)
+                    + '">Ship&nbsp;This&nbsp;Alone</a>'
+                )
+            else:
+                retval = (
+                    retval
+                    + '<br><a href="'
+                    + url_for("EbayOrderModelView.ship", pk=self.order_id)
+                    + '">Ship&nbsp;This</a>'
+                )
         if self.ebay_listing:
             from fbc.models.inventory import Unit
             from fbc import db
@@ -150,6 +162,33 @@ class EbayOrder(Model):
                     retval = retval + "<br>" + o.discogs_release.release_show(False)
 
         return Markup(retval)
+
+
+class EbayOrderItem(Model):
+    """
+    One item on an eBay order: a listing, and how many of it were bought at
+    what price each.
+    """
+
+    __tablename__ = "ebay_order_item"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ebay_order_id = Column(
+        String(20),
+        ForeignKey("ebay_order.order_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    ebay_order = relationship("EbayOrder", back_populates="items")
+    # Not a foreign key: the order sync keeps an item even when its listing
+    # isn't in fbc.
+    ebay_listing_id = Column(String(20), index=True)
+    title = Column(String(100))
+    quantity = Column(Integer, nullable=False, default=1)
+    # For one of them.
+    price = Column(Float)
+
+    def __repr__(self):
+        return (self.title or self.ebay_listing_id or "") + " x" + str(self.quantity)
 
 
 class EbayDraft(Model):

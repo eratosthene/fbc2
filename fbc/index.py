@@ -20,218 +20,260 @@ from fbc.util import relist_ebay_listing
 logger = logging.getLogger()
 
 
+def home_totals():
+    """Everything the home page shows, worked out from the database."""
+    from fbc import db
+    from fbc.models.ebay import EbayListing, EbayOrderItem
+    from fbc.models.inventory import PurchaseLot, StorageBox, Unit
+    from fbc.models.sales import (
+        SalesReceipt,
+        sales_receipt_ebay_order,
+        unit_share,
+        unit_weights,
+    )
+    from fbc.models.expenses import (
+        category_label,
+        expense_totals,
+        purchase_order_expense_total,
+    )
+    from fbc.models.supplies import PurchaseOrder, Supply
+
+    # Load just the columns the totals need, once, and do every count
+    # from them in Python, rather than a COUNT query per lot, box and
+    # sold unit. Units stay in id order and are still visited one at a
+    # time below, so the floating-point sums add up in the same order
+    # (and so come out exactly the same) as summing unit by unit did.
+    units = (
+        db.session.query(
+            Unit.id,
+            Unit.ebay_listing_id,
+            Unit.sold_price,
+            Unit.retail_price,
+            Unit.purchase_lot_id,
+            Unit.storage_box_id,
+            Unit.sales_receipt_id,
+            Unit.sold,
+        )
+        .order_by(Unit.id)
+        .all()
+    )
+    receipts = {
+        r.id: r
+        for r in db.session.query(
+            SalesReceipt.id, SalesReceipt.sold_price, SalesReceipt.net_sold
+        )
+    }
+    units_per_lot = Counter(u.purchase_lot_id for u in units)
+    units_per_receipt = Counter(u.sales_receipt_id for u in units)
+    # A receipt of several Units is split between them by what each sold
+    # for (see unit_weights), or evenly when that isn't known.
+    receipt_units = {}
+    for u in units:
+        if units_per_receipt[u.sales_receipt_id] > 1 and u.sales_receipt_id:
+            receipt_units.setdefault(u.sales_receipt_id, []).append(
+                (u.id, u.ebay_listing_id, u.sold_price, u.retail_price)
+            )
+    # Two queries whatever the size, like the rest of the page.
+    weights = {}
+    receipt_items = {}
+    for receipt_id, listing_id, price in (
+        db.session.query(
+            sales_receipt_ebay_order.c.sales_receipt_id,
+            EbayOrderItem.ebay_listing_id,
+            EbayOrderItem.price,
+        )
+        .join(
+            EbayOrderItem,
+            EbayOrderItem.ebay_order_id == sales_receipt_ebay_order.c.ebay_order_id,
+        )
+        .order_by(EbayOrderItem.id)
+    ):
+        if listing_id and price is not None:
+            receipt_items.setdefault(receipt_id, {}).setdefault(listing_id, price)
+    listing_prices = dict(db.session.query(EbayListing.item_id, EbayListing.price))
+    for receipt_id, receipt_unit_list in receipt_units.items():
+        weights[receipt_id] = unit_weights(
+            receipt_unit_list, receipt_items.get(receipt_id, {}), listing_prices
+        )
+    # sold=False, like filter_by(sold=False), leaves out NULL as well as True.
+    unsold = [u for u in units if u.sold is False]
+    unsold_per_lot = Counter(u.purchase_lot_id for u in unsold)
+    unsold_per_box = Counter(u.storage_box_id for u in unsold)
+
+    stock_total = len(unsold)
+    unit_total = len(units)
+    lots = db.session.query(PurchaseLot).all()
+    boxes = db.session.query(StorageBox).all()
+    box_ids = {b.id for b in boxes}
+    lot_totals = {}
+    box_totals = {}
+    pos = db.session.query(PurchaseOrder).all()
+    supply_total = 0
+    totals = {
+        "capital": 0,
+        "gross": 0,
+        "net": 0,
+        "fees": 0,
+        "feepc": 0,
+        "profit": 0,
+        "roi": 0,
+    }
+    for b in boxes:
+        box_totals[b.id] = {}
+        box_totals[b.id]["name"] = b.name
+        box_totals[b.id]["instock"] = unsold_per_box[b.id]
+        box_totals[b.id]["capital"] = 0.0
+        box_totals[b.id]["gross"] = 0.0
+        box_totals[b.id]["net"] = 0.0
+    box_totals[0] = {}
+    box_totals[0]["name"] = "No Box Assigned"
+    box_totals[0]["instock"] = unsold_per_box[None]
+    box_totals[0]["capital"] = 0.0
+    box_totals[0]["gross"] = 0.0
+    box_totals[0]["net"] = 0.0
+    for lot in lots:
+        totals["capital"] += lot.price
+        lot_totals[lot.id] = {}
+        lot_totals[lot.id]["gross"] = 0
+        lot_totals[lot.id]["net"] = 0
+        plcount = units_per_lot[lot.id]
+        if plcount > 0:
+            lot_totals[lot.id]["perunit"] = round(lot.price / plcount, 2)
+        else:
+            lot_totals[lot.id]["perunit"] = 0
+    for po in pos:
+        supply_total += po.price
+    # Expenses on a Purchase Order are part of its price, and count as
+    # expenses, not supplies.
+    supply_total -= purchase_order_expense_total()
+    for u in units:
+        # A unit whose box no longer exists counts as having no box.
+        box = box_totals[u.storage_box_id if u.storage_box_id in box_ids else 0]
+        # A unit with no lot (or whose lot no longer exists) adds no
+        # capital, but its sales still count toward its box and the totals.
+        lot_total = lot_totals.get(u.purchase_lot_id)
+        receipt = receipts.get(u.sales_receipt_id)
+        if receipt:
+            num_units = units_per_receipt[u.sales_receipt_id]
+            w = weights.get(u.sales_receipt_id)
+            c_sold_price = unit_share(receipt.sold_price, u.id, w, num_units)
+            c_net_sold = unit_share(receipt.net_sold, u.id, w, num_units)
+            box["gross"] += c_sold_price
+            box["net"] += c_net_sold
+            totals["gross"] += c_sold_price
+            totals["net"] += c_net_sold
+            if lot_total:
+                lot_total["gross"] += c_sold_price
+                lot_total["net"] += c_net_sold
+        if lot_total:
+            box["capital"] += lot_total["perunit"]
+    for lot in lots:
+        lot_totals[lot.id]["fees"] = round(
+            lot_totals[lot.id]["gross"] - lot_totals[lot.id]["net"], 2
+        )
+        totals["fees"] += lot_totals[lot.id]["fees"]
+        if lot_totals[lot.id]["gross"] > 0:
+            lot_totals[lot.id]["feepc"] = round(
+                lot_totals[lot.id]["fees"] / lot_totals[lot.id]["gross"] * 100, 2
+            )
+        else:
+            lot_totals[lot.id]["feepc"] = 0.0
+        lot_totals[lot.id]["profit"] = round(lot_totals[lot.id]["net"] - lot.price, 2)
+        totals["profit"] += lot_totals[lot.id]["profit"]
+        if lot.price > 0:
+            lot_totals[lot.id]["roi"] = round(
+                lot_totals[lot.id]["profit"] / lot.price * 100, 2
+            )
+        else:
+            lot_totals[lot.id]["roi"] = 0.0
+    for b in boxes:
+        box_totals[b.id]["fees"] = round(
+            box_totals[b.id]["gross"] - box_totals[b.id]["net"], 2
+        )
+        if box_totals[b.id]["gross"] > 0:
+            box_totals[b.id]["feepc"] = round(
+                box_totals[b.id]["fees"] / box_totals[b.id]["gross"] * 100, 2
+            )
+        else:
+            box_totals[b.id]["feepc"] = 0.0
+        box_totals[b.id]["profit"] = round(
+            box_totals[b.id]["net"] - box_totals[b.id]["capital"], 2
+        )
+        if box_totals[b.id]["capital"] > 0:
+            box_totals[b.id]["roi"] = round(
+                box_totals[b.id]["profit"] / box_totals[b.id]["capital"] * 100, 2
+            )
+        else:
+            box_totals[b.id]["roi"] = 0.0
+    box_totals[0]["fees"] = round(box_totals[0]["gross"] - box_totals[0]["net"], 2)
+    if box_totals[0]["gross"] > 0:
+        box_totals[0]["feepc"] = round(
+            box_totals[0]["fees"] / box_totals[0]["gross"] * 100, 2
+        )
+    else:
+        box_totals[0]["feepc"] = 0.0
+    box_totals[0]["profit"] = round(box_totals[0]["net"] - box_totals[0]["capital"], 2)
+    if box_totals[0]["capital"] > 0:
+        box_totals[0]["roi"] = round(
+            box_totals[0]["profit"] / box_totals[0]["capital"] * 100, 2
+        )
+    else:
+        box_totals[0]["roi"] = 0.0
+    if totals["gross"] > 0:
+        totals["feepc"] = round(totals["fees"] / totals["gross"] * 100, 2)
+    else:
+        totals["feepc"] = 0.0
+    if totals["capital"] > 0:
+        totals["roi"] = round(totals["profit"] / totals["capital"] * 100, 2)
+    expenses = [
+        (category_label(category), amount)
+        for category, amount in expense_totals().items()
+    ]
+    expense_total = sum(amount for _, amount in expenses)
+    total_net_profit = totals["profit"] - supply_total - expense_total
+    if totals["net"] != 0:
+        profit_margin = total_net_profit / totals["net"] * 100
+    else:
+        profit_margin = 0.0
+    fee_factor = 1 - totals["feepc"] / 100
+    if unit_total > 0:
+        supply_per_unit = supply_total / unit_total
+    else:
+        supply_per_unit = 0.0
+    if unit_total > 0 and fee_factor != 0:
+        breakeven_per_unit = (
+            totals["capital"] / unit_total / fee_factor + supply_per_unit
+        )
+    else:
+        breakeven_per_unit = 0.0
+    for lot in lots:
+        lot_totals[lot.id]["instock"] = unsold_per_lot[lot.id]
+    return {
+        "stock_total": stock_total,
+        "lots": lots,
+        "lot_totals": lot_totals,
+        "totals": totals,
+        "supply_total": supply_total,
+        "expenses": expenses,
+        "expense_total": expense_total,
+        "total_net_profit": total_net_profit,
+        "profit_margin": profit_margin,
+        "supply_per_unit": supply_per_unit,
+        "breakeven_per_unit": breakeven_per_unit,
+        "unit_total": unit_total,
+        "box_totals": box_totals,
+        "low_supplies": Supply.low_list(),
+    }
+
+
 class MyIndexView(IndexView):
     index_template = "index.html"
 
     @expose("/")
     def index(self):
         self.update_redirect()
-        from fbc import db
-        from fbc.models.inventory import PurchaseLot, StorageBox, Unit
-        from fbc.models.sales import SalesReceipt
-        from fbc.models.expenses import (
-            category_label,
-            expense_totals,
-            purchase_order_expense_total,
-        )
-        from fbc.models.supplies import PurchaseOrder, Supply
-
-        # Load just the columns the totals need, once, and do every count
-        # from them in Python, rather than a COUNT query per lot, box and
-        # sold unit. Units stay in id order and are still visited one at a
-        # time below, so the floating-point sums add up in the same order
-        # (and so come out exactly the same) as summing unit by unit did.
-        units = (
-            db.session.query(
-                Unit.purchase_lot_id,
-                Unit.storage_box_id,
-                Unit.sales_receipt_id,
-                Unit.sold,
-            )
-            .order_by(Unit.id)
-            .all()
-        )
-        receipts = {
-            r.id: r
-            for r in db.session.query(
-                SalesReceipt.id, SalesReceipt.sold_price, SalesReceipt.net_sold
-            )
-        }
-        units_per_lot = Counter(u.purchase_lot_id for u in units)
-        units_per_receipt = Counter(u.sales_receipt_id for u in units)
-        # sold=False, like filter_by(sold=False), leaves out NULL as well as True.
-        unsold = [u for u in units if u.sold is False]
-        unsold_per_lot = Counter(u.purchase_lot_id for u in unsold)
-        unsold_per_box = Counter(u.storage_box_id for u in unsold)
-
-        stock_total = len(unsold)
-        unit_total = len(units)
-        lots = db.session.query(PurchaseLot).all()
-        boxes = db.session.query(StorageBox).all()
-        box_ids = {b.id for b in boxes}
-        lot_totals = {}
-        box_totals = {}
-        pos = db.session.query(PurchaseOrder).all()
-        supply_total = 0
-        totals = {
-            "capital": 0,
-            "gross": 0,
-            "net": 0,
-            "fees": 0,
-            "feepc": 0,
-            "profit": 0,
-            "roi": 0,
-        }
-        for b in boxes:
-            box_totals[b.id] = {}
-            box_totals[b.id]["name"] = b.name
-            box_totals[b.id]["instock"] = unsold_per_box[b.id]
-            box_totals[b.id]["capital"] = 0.0
-            box_totals[b.id]["gross"] = 0.0
-            box_totals[b.id]["net"] = 0.0
-        box_totals[0] = {}
-        box_totals[0]["name"] = "No Box Assigned"
-        box_totals[0]["instock"] = unsold_per_box[None]
-        box_totals[0]["capital"] = 0.0
-        box_totals[0]["gross"] = 0.0
-        box_totals[0]["net"] = 0.0
-        for lot in lots:
-            totals["capital"] += lot.price
-            lot_totals[lot.id] = {}
-            lot_totals[lot.id]["gross"] = 0
-            lot_totals[lot.id]["net"] = 0
-            plcount = units_per_lot[lot.id]
-            if plcount > 0:
-                lot_totals[lot.id]["perunit"] = round(lot.price / plcount, 2)
-            else:
-                lot_totals[lot.id]["perunit"] = 0
-        for po in pos:
-            supply_total += po.price
-        # Expenses on a Purchase Order are part of its price, and count as
-        # expenses, not supplies.
-        supply_total -= purchase_order_expense_total()
-        for u in units:
-            # A unit whose box no longer exists counts as having no box.
-            box = box_totals[u.storage_box_id if u.storage_box_id in box_ids else 0]
-            # A unit with no lot (or whose lot no longer exists) adds no
-            # capital, but its sales still count toward its box and the totals.
-            lot_total = lot_totals.get(u.purchase_lot_id)
-            receipt = receipts.get(u.sales_receipt_id)
-            if receipt:
-                num_units = units_per_receipt[u.sales_receipt_id]
-                c_sold_price = receipt.sold_price / num_units
-                c_net_sold = receipt.net_sold / num_units
-                box["gross"] += c_sold_price
-                box["net"] += c_net_sold
-                totals["gross"] += c_sold_price
-                totals["net"] += c_net_sold
-                if lot_total:
-                    lot_total["gross"] += c_sold_price
-                    lot_total["net"] += c_net_sold
-            if lot_total:
-                box["capital"] += lot_total["perunit"]
-        for lot in lots:
-            lot_totals[lot.id]["fees"] = round(
-                lot_totals[lot.id]["gross"] - lot_totals[lot.id]["net"], 2
-            )
-            totals["fees"] += lot_totals[lot.id]["fees"]
-            if lot_totals[lot.id]["gross"] > 0:
-                lot_totals[lot.id]["feepc"] = round(
-                    lot_totals[lot.id]["fees"] / lot_totals[lot.id]["gross"] * 100, 2
-                )
-            else:
-                lot_totals[lot.id]["feepc"] = 0.0
-            lot_totals[lot.id]["profit"] = round(
-                lot_totals[lot.id]["net"] - lot.price, 2
-            )
-            totals["profit"] += lot_totals[lot.id]["profit"]
-            if lot.price > 0:
-                lot_totals[lot.id]["roi"] = round(
-                    lot_totals[lot.id]["profit"] / lot.price * 100, 2
-                )
-            else:
-                lot_totals[lot.id]["roi"] = 0.0
-        for b in boxes:
-            box_totals[b.id]["fees"] = round(
-                box_totals[b.id]["gross"] - box_totals[b.id]["net"], 2
-            )
-            if box_totals[b.id]["gross"] > 0:
-                box_totals[b.id]["feepc"] = round(
-                    box_totals[b.id]["fees"] / box_totals[b.id]["gross"] * 100, 2
-                )
-            else:
-                box_totals[b.id]["feepc"] = 0.0
-            box_totals[b.id]["profit"] = round(
-                box_totals[b.id]["net"] - box_totals[b.id]["capital"], 2
-            )
-            if box_totals[b.id]["capital"] > 0:
-                box_totals[b.id]["roi"] = round(
-                    box_totals[b.id]["profit"] / box_totals[b.id]["capital"] * 100, 2
-                )
-            else:
-                box_totals[b.id]["roi"] = 0.0
-        box_totals[0]["fees"] = round(box_totals[0]["gross"] - box_totals[0]["net"], 2)
-        if box_totals[0]["gross"] > 0:
-            box_totals[0]["feepc"] = round(
-                box_totals[0]["fees"] / box_totals[0]["gross"] * 100, 2
-            )
-        else:
-            box_totals[0]["feepc"] = 0.0
-        box_totals[0]["profit"] = round(
-            box_totals[0]["net"] - box_totals[0]["capital"], 2
-        )
-        if box_totals[0]["capital"] > 0:
-            box_totals[0]["roi"] = round(
-                box_totals[0]["profit"] / box_totals[0]["capital"] * 100, 2
-            )
-        else:
-            box_totals[0]["roi"] = 0.0
-        if totals["gross"] > 0:
-            totals["feepc"] = round(totals["fees"] / totals["gross"] * 100, 2)
-        else:
-            totals["feepc"] = 0.0
-        if totals["capital"] > 0:
-            totals["roi"] = round(totals["profit"] / totals["capital"] * 100, 2)
-        expenses = [
-            (category_label(category), amount)
-            for category, amount in expense_totals().items()
-        ]
-        expense_total = sum(amount for _, amount in expenses)
-        total_net_profit = totals["profit"] - supply_total - expense_total
-        if totals["net"] != 0:
-            profit_margin = total_net_profit / totals["net"] * 100
-        else:
-            profit_margin = 0.0
-        fee_factor = 1 - totals["feepc"] / 100
-        if unit_total > 0:
-            supply_per_unit = supply_total / unit_total
-        else:
-            supply_per_unit = 0.0
-        if unit_total > 0 and fee_factor != 0:
-            breakeven_per_unit = (
-                totals["capital"] / unit_total / fee_factor + supply_per_unit
-            )
-        else:
-            breakeven_per_unit = 0.0
-        for lot in lots:
-            lot_totals[lot.id]["instock"] = unsold_per_lot[lot.id]
         return self.render_template(
-            self.index_template,
-            appbuilder=self.appbuilder,
-            stock_total=stock_total,
-            lots=lots,
-            lot_totals=lot_totals,
-            totals=totals,
-            supply_total=supply_total,
-            expenses=expenses,
-            expense_total=expense_total,
-            total_net_profit=total_net_profit,
-            profit_margin=profit_margin,
-            supply_per_unit=supply_per_unit,
-            breakeven_per_unit=breakeven_per_unit,
-            unit_total=unit_total,
-            box_totals=box_totals,
-            low_supplies=Supply.low_list(),
+            self.index_template, appbuilder=self.appbuilder, **home_totals()
         )
 
     def _start_sync(self, kind, title, fn, fallback_url):
@@ -402,14 +444,14 @@ class MyIndexView(IndexView):
         logger.info("Total local orders: " + str(len(local_orders)))
         for item in orders:
             logger.info("Checking ebay: " + str(item["OrderID"]))
-            if (
-                not db.session.query(EbayOrder)
-                .filter_by(order_id=item["OrderID"])
-                .first()
-            ):
+            order = (
+                db.session.query(EbayOrder).filter_by(order_id=item["OrderID"]).first()
+            )
+            if not order:
                 logger.info("Adding " + str(item["OrderID"]))
                 add_ebay_order(item)
-            elif doupdate == "True":
+            elif doupdate == "True" or not order.items:
+                # Orders synced before fbc kept every item get them now.
                 logger.info("Updating " + str(item["OrderID"]))
                 add_ebay_order(item)
 

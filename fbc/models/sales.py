@@ -1,6 +1,15 @@
 from flask_appbuilder import Model
 from markupsafe import Markup
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Date, DateTime
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+)
 from sqlalchemy.orm import relationship
 
 # SalesReceiptLine.kind is eBay's transactionType (SALE, SHIPPING_LABEL,
@@ -57,9 +66,79 @@ def line_category(kind, fee_type=None):
     return KIND_CATEGORIES.get(kind, "other")
 
 
+def item_prices(orders):
+    """{listing id: what one Unit on it sold for} from `orders`' items."""
+    prices = {}
+    for order in orders:
+        for item in order.items:
+            if item.ebay_listing_id and item.price is not None:
+                prices.setdefault(item.ebay_listing_id, item.price)
+    return prices
+
+
+def unit_weights(units, item_prices, listing_prices):
+    """
+    How a Sales Receipt's prices are split between its `units` ([(unit id,
+    listing id, Unit.sold_price, Unit.retail_price)]): {unit id: weight}.
+    Each Unit's weight is the first of these it has: its sold price, its
+    order's item price (`item_prices`, {listing id: price}), its listing's
+    asking price (`listing_prices`) or its Retail Price. A Unit with none of
+    them counts as the average of the others. None to split them evenly:
+    for a single Unit, or when no Unit has a price.
+    """
+    if len(units) <= 1:
+        return None
+    prices = {}
+    for unit_id, listing_id, sold_price, retail_price in units:
+        price = sold_price
+        if price is None:
+            price = item_prices.get(listing_id, listing_prices.get(listing_id))
+        if price is None:
+            price = retail_price
+        prices[unit_id] = price
+    known = [p for p in prices.values() if p is not None]
+    if not known or sum(known) <= 0:
+        return None
+    average = sum(known) / len(known)
+    return {
+        unit_id: price if price is not None else average
+        for unit_id, price in prices.items()
+    }
+
+
+def unit_share(amount, unit_id, weights, count):
+    """`unit_id`'s part of `amount`, split between `count` Units by `weights`."""
+    if weights is None:
+        return amount / count
+    return amount * weights[unit_id] / sum(weights.values())
+
+
 def fmt_money(amount):
     """$4.63, or -$4.63 below 0."""
     return ("-" if amount < 0 else "") + "$" + f"{abs(amount):.2f}"
+
+
+# The eBay orders a Sales Receipt covers: one, or several shipped together.
+# An order should be on one receipt, but orders of several Units were split
+# into a receipt per Unit by hand before Ship This handled them, and
+# combine_receipts puts those back together.
+sales_receipt_ebay_order = Table(
+    "sales_receipt_ebay_order",
+    Model.metadata,
+    Column(
+        "sales_receipt_id",
+        Integer,
+        ForeignKey("sales_receipt.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "ebay_order_id",
+        String(20),
+        ForeignKey("ebay_order.order_id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    ),
+)
 
 
 class SalesReceipt(Model):
@@ -67,8 +146,12 @@ class SalesReceipt(Model):
     id = Column(Integer, primary_key=True, autoincrement=True)
     old_id = Column(String(24))
     date = Column(Date, nullable=False)
-    ebay_order_id = Column(String(20), ForeignKey("ebay_order.order_id"))
-    ebay_order = relationship("EbayOrder", lazy="joined")
+    ebay_orders = relationship(
+        "EbayOrder",
+        secondary=sales_receipt_ebay_order,
+        back_populates="sales_receipts",
+        order_by="EbayOrder.created_time",
+    )
     sold_price = Column(Float)
     net_sold = Column(Float)
     # How eBay's earnings add up to net_sold. Receipts from before these
@@ -80,23 +163,42 @@ class SalesReceipt(Model):
         order_by="SalesReceiptLine.id",
     )
 
+    def order_ids(self):
+        return [order.order_id for order in self.ebay_orders]
+
     def order_receipts(self):
         """
-        How many Sales Receipts, this one included, are linked to its eBay
-        order. More than one when an order of several Units was split into
-        a receipt per Unit by hand. eBay's earnings are for the whole order
-        and can't be split between them, so those receipts get no lines
-        until a receipt can cover a whole order (#53).
+        How many Sales Receipts, this one included, are linked to any of its
+        eBay orders. More than one when an order of several Units was split
+        into a receipt per Unit by hand. eBay's earnings are for the whole
+        order and can't be split between them, so those receipts get no
+        lines until they're combined (see shipping.combine_receipts).
         """
         from fbc import db
 
-        if not self.ebay_order_id:
+        if not self.ebay_orders:
             return 0
         return (
-            db.session.query(SalesReceipt)
-            .filter_by(ebay_order_id=self.ebay_order_id)
+            db.session.query(sales_receipt_ebay_order.c.sales_receipt_id)
+            .filter(sales_receipt_ebay_order.c.ebay_order_id.in_(self.order_ids()))
+            .distinct()
             .count()
         )
+
+    def unit_share(self, unit, amount):
+        """`unit`'s part of `amount`, one of this receipt's prices."""
+        from fbc import db
+        from fbc.models.inventory import Unit
+
+        units = db.session.query(Unit).filter_by(sales_receipt_id=self.id).all()
+        if len(units) <= 1:
+            return amount
+        weights = unit_weights(
+            [(u.id, u.ebay_listing_id, u.sold_price, u.retail_price) for u in units],
+            item_prices(self.ebay_orders),
+            {u.ebay_listing_id: u.ebay_listing.price for u in units if u.ebay_listing},
+        )
+        return unit_share(amount, unit.id, weights, len(units))
 
     def lines_total(self):
         return round(sum(line.amount for line in self.lines), 2)
@@ -129,30 +231,16 @@ class SalesReceipt(Model):
         return adjustment
 
     def __unicode__(self):
-        ret = str(self.date)
-        if self.ebay_order:
-            ret = (
-                ret
-                + " ["
-                + self.ebay_order.order_id
-                + "|"
-                + self.ebay_order.title[:45]
-                + "] "
-            )
-        ret = ret + " $" + f"{self.sold_price:.2f}" + "/$" + f"{self.net_sold:.2f}"
-        return ret
+        return self.__repr__()
 
     def __repr__(self):
         ret = str(self.date)
-        if self.ebay_order:
-            ret = (
-                ret
-                + " ["
-                + self.ebay_order.order_id
-                + "|"
-                + self.ebay_order.title[:45]
-                + "] "
-            )
+        if self.ebay_orders:
+            first = self.ebay_orders[0]
+            ret = ret + " [" + first.order_id + "|" + (first.title or "")[:45]
+            if len(self.ebay_orders) > 1:
+                ret = ret + " +" + str(len(self.ebay_orders) - 1) + " more"
+            ret = ret + "] "
         ret = ret + " $" + f"{self.sold_price:.2f}" + "/$" + f"{self.net_sold:.2f}"
         return ret
 
@@ -163,15 +251,14 @@ class SalesReceipt(Model):
         return "$" + f"{self.net_sold:.2f}"
 
     def fmt_ebay_order(self, markup=True):
-        ret = ""
-        if self.ebay_order_id:
-            ret = (
-                '<a href="https://www.ebay.com/mesh/ord/details?orderid='
-                + self.ebay_order_id
-                + '">eBay:Order&nbsp;$'
-                + f"{self.ebay_order.price:.2f}"
-                + "</a>"
-            )
+        ret = "<br>".join(
+            '<a href="https://www.ebay.com/mesh/ord/details?orderid='
+            + order.order_id
+            + '">eBay:Order&nbsp;$'
+            + f"{order.price:.2f}"
+            + "</a>"
+            for order in self.ebay_orders
+        )
         if markup:
             return Markup(ret)
         else:

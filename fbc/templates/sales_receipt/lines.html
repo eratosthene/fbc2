@@ -2,15 +2,18 @@
 {% macro money(amount) %}{% if amount < 0 %}&minus;{% endif %}${{ "%.2f"|format(amount|abs) }}{% endmacro %}
 
 {% macro lines_table(lines, total_label=None, total=None) %}
+{# Lines from several orders (a combined shipment) say which each came from. #}
+{% set orders = lines|map(attribute="ebay_order_id")|select|unique|list %}
 <table class="table table-bordered table-condensed" style="width: auto">
   {% for line in lines %}
   <tr>
     <td{% if line.kind == "FEE" %} style="padding-left: 2em"{% endif %}>{{ line.label }}</td>
+    {% if orders|length > 1 %}<td class="text-muted">{{ line.ebay_order_id or "" }}</td>{% endif %}
     <td class="text-right">{{ money(line.amount) }}</td>
   </tr>
   {% endfor %}
   {% if total is not none %}
-  <tr><th>{{ total_label }}</th><th class="text-right">{{ money(total) }}</th></tr>
+  <tr><th{% if orders|length > 1 %} colspan="2"{% endif %}>{{ total_label }}</th><th class="text-right">{{ money(total) }}</th></tr>
   {% endif %}
 </table>
 {% endmacro %}

@@ -1,30 +1,73 @@
 {% extends "appbuilder/base.html" %}
-{% from "sales_receipt/lines.html" import lines_table %}
+{% from "sales_receipt/lines.html" import lines_table, money %}
 {% block content %}
 <h3>Ship This</h3>
 <p>Buy the shipping label on eBay before shipping this here; the earnings below
 come from eBay and only take the label off once it's bought.</p>
 
 <table class="table table-bordered table-condensed" style="width: auto">
-  <tr><th>Order</th><td>{{ order.fmt_url() }} {{ order.title }}</td></tr>
-  <tr><th>Buyer</th><td>{{ order.buyer }}</td></tr>
-  <tr><th>Date</th><td>{{ order.created_time.date() }}</td></tr>
-  <tr><th>Sold Price</th><td>{{ order.fmt_price() }}</td></tr>
-  <tr><th>Unit</th><td><a href="{{ url_for('UnitModelView.show', pk=unit.id) }}">{{ unit.name }}</a></td></tr>
+  <tr><th>Order</th><th>Date</th><th>Items</th><th>Sold Price</th><th>Shipping paid</th></tr>
+  {% for o in orders %}
+  <tr>
+    <td>{{ o.fmt_url() }}</td>
+    <td>{{ o.created_time.date() }}</td>
+    <td>{% for item in o.items %}{% if not loop.first %}<br>{% endif %}{{ item.title }}{% if item.quantity > 1 %} &times;{{ item.quantity }}{% endif %}{% else %}{{ o.title }}{% endfor %}</td>
+    <td class="text-right">{{ o.fmt_price() }}</td>
+    <td class="text-right">{% if o.shipping is not none %}{{ money(o.shipping) }}{% endif %}</td>
+  </tr>
+  {% endfor %}
 </table>
+<p>Buyer: {{ order.buyer }}</p>
 
-<h4>Order earnings</h4>
+{% if others %}
+<form method="get" action="{{ url_for('EbayOrderModelView.ship', pk=order.order_id) }}">
+  <h4>Ship with the buyer's other orders</h4>
+  <p>Tick the orders going in the same package, for one Sales Receipt for all
+  of them, then press Update.</p>
+  {% for o in others %}
+  <div class="checkbox">
+    <label>
+      <input type="checkbox" name="combine" value="{{ o.order_id }}" {% if o in orders %}checked{% endif %}>
+      {{ o.order_id }}, {{ o.created_time.date() }}: {{ o.title }} {{ o.fmt_price() }}
+    </label>
+  </div>
+  {% endfor %}
+  <button class="btn btn-default btn-sm">Update</button>
+</form>
+{% endif %}
+
+<h4>Units</h4>
+<ul>
+  {% for unit in units %}
+  <li><a href="{{ url_for('UnitModelView.show', pk=unit.id) }}">{{ unit.name }}</a></li>
+  {% endfor %}
+</ul>
+
+<h4>Earnings</h4>
 {% for e in earnings.errors %}<div class="alert alert-danger">{{ e }}</div>{% endfor %}
 {% for w in earnings.warnings %}<div class="alert alert-warning">{{ w }}</div>{% endfor %}
-{% if earnings["items"] > 1 %}
-<div class="alert alert-danger">This order has {{ earnings["items"] }} items, and Ship This
-only handles orders of one Unit. Ship it by hand.</div>
+{% if missing_items %}
+<div class="alert alert-danger">eBay says {% if orders|length > 1 %}these orders have{% else %}this order has{% endif %}
+{{ earnings["items"] }} items, and fbc only knows of {{ known_items }}. Sync eBay
+orders to get every item, then try again.</div>
+{% endif %}
+{% if discount %}
+<div class="alert alert-info">The buyer paid {{ money(discount.paid) }} for shipping
+across these orders, and the label cost {{ money(discount.label) }}{% if discount.refunded %};
+{{ money(discount.refunded) }} has been refunded so far{% endif %}.
+{% if discount.discount %}To pass on the combined-shipping saving, refund
+{{ money(discount.discount) }} of shipping on one of the orders on eBay, then
+reload this page so the refund is in the earnings.{% else %}Nothing more is owed
+back for combined shipping.{% endif %}</div>
 {% endif %}
 {% if earnings.lines %}
-{{ lines_table(earnings.lines, "Order earnings", earnings.net) }}
+{{ lines_table(earnings.lines, "Earnings", earnings.net) }}
 {% endif %}
 
 <form method="post" action="{{ url_for('EbayOrderModelView.ship', pk=order.order_id) }}">
+  {% for o in orders %}{% if o.order_id != order.order_id %}
+  <input type="hidden" name="combine" value="{{ o.order_id }}">
+  {% endif %}{% endfor %}
   <div class="form-group" style="max-width: 200px">
     <label for="net_sold">Net Sold</label>
     <input type="text" id="net_sold" name="net_sold" class="form-control" required
@@ -32,8 +75,8 @@ only handles orders of one Unit. Ship it by hand.</div>
   </div>
   <h4>Supplies used</h4>
   {% if supplies %}
-  <p>Filled in for a normal shipment; change them for anything else. Count
-  single uses, like labels, not rolls.</p>
+  <p>Filled in for a normal shipment of {% if units|length > 1 %}these {{ units|length }} Units{% else %}one Unit{% endif %};
+  change them for anything else. Count single uses, like labels, not rolls.</p>
   <table class="table table-bordered table-condensed" style="width: auto">
     <tr><th>Supply</th><th>In stock</th><th>Used</th></tr>
     {% for supply, count in supplies %}
@@ -53,23 +96,28 @@ only handles orders of one Unit. Ship it by hand.</div>
   <p>No supplies are set as Used For shipping, so none will be taken out of
   stock. Set them on the <a href="{{ url_for('SupplyModelView.list') }}">Supply List</a>.</p>
   {% endif %}
+  {% for unit, instance, problem in discogs %}
   {% if instance %}
   <div class="checkbox">
     <label>
-      <input type="checkbox" name="remove_discogs" value="1"
-        {% if values is none or values.get('remove_discogs') %}checked{% endif %}>
+      <input type="checkbox" name="remove_discogs-{{ unit.id }}" value="1"
+        {% if values is none or values.get('remove_discogs-%d' % unit.id) %}checked{% endif %}>
       Remove {{ unit.discogs_release }} (instance {{ instance.instance_id }}) from the Discogs collection{% if dev_mode %}
       (Dev Mode: from fbc only){% endif %}
     </label>
   </div>
-  {% elif discogs_problem %}
-  <div class="alert alert-warning">{{ discogs_problem }}</div>
+  {% elif problem %}
+  <div class="alert alert-warning">{% if units|length > 1 %}{{ unit.name }}: {% endif %}{{ problem }}</div>
   {% endif %}
-  <p>Shipping records a Sales Receipt for Net Sold, with eBay's earnings lines
-  (and a manual adjustment line if Net Sold differs from them), marks the Unit sold with it,
-  takes the supplies used out of stock{% if instance %}
-  and removes only this Unit's copy from Discogs{% endif %}.</p>
-  <button class="btn btn-primary" {% if earnings["items"] > 1 %}disabled{% endif %}>Ship</button>
+  {% endfor %}
+  <p>Shipping records one Sales Receipt for Net Sold{% if orders|length == 2 %},
+  covering both orders{% elif orders|length > 2 %}, covering all
+  {{ orders|length }} orders{% endif %}, with eBay's earnings lines
+  (and a manual adjustment line if Net Sold differs from them), marks
+  {% if units|length > 1 %}the Units{% else %}the Unit{% endif %} sold with it,
+  takes the supplies used out of stock and removes only the ticked Units' own
+  copies from Discogs.</p>
+  <button class="btn btn-primary" {% if missing_items %}disabled{% endif %}>Ship</button>
   <a href="{{ url_for('EbayOrderModelView.list') }}" class="btn btn-default">Cancel</a>
 </form>
 {% endblock %}

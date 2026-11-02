@@ -244,7 +244,7 @@ def _sold_unit(db, master, sold_price=None, ebay_order=None, listing_id=None):
             date=datetime.date(2024, 1, 1),
             sold_price=sold_price,
             net_sold=sold_price,
-            ebay_order=ebay_order,
+            ebay_orders=[ebay_order] if ebay_order else [],
         )
     unit = Unit(
         name="Unit",

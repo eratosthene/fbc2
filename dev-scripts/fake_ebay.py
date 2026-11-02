@@ -8,7 +8,9 @@ Add fake eBay records to a dev database, in place of a sync from eBay.
   listings N  N listings, each with an unsold Unit on it, and no order.
 
 --no-unit leaves the Unit out, for orders Ship This can't handle (they
-should only offer Add SR). --size picks the record size, which decides the
+should only offer Add SR). --items puts several items on each order, each
+with its listing and Unit. --buyer gives every order the same buyer, so Ship
+This offers to ship them combined. --size picks the record size, which decides the
 outer sleeve Ship This suggests. Remove everything fake with clear_fake.py.
 
 Run from the repo root, on this machine or in docker/compose.dev.yml's app:
@@ -21,20 +23,35 @@ import argparse
 import _fake
 
 
-def add(kind, count, size, unit=True, discogs=True):
+def add(kind, count, size, unit=True, discogs=True, items=1, buyer=None):
     added = []
     for _ in range(count):
-        item = None
-        if unit:
-            release = _fake.fake_release(size) if discogs else None
-            item = _fake.fake_unit(release, size)
-        listing = _fake.fake_listing(item)
-        record = _fake.fake_order(listing) if kind == "orders" else listing
-        added.append((record, item))
+        listings = []
+        units = []
+        for _ in range(items if kind == "orders" else 1):
+            item = None
+            if unit:
+                release = _fake.fake_release(size) if discogs else None
+                item = _fake.fake_unit(release, size)
+                units.append(item)
+            listings.append(_fake.fake_listing(item))
+        if kind == "orders":
+            added.append((_fake.fake_order(listings, buyer), units))
+        else:
+            added.extend((listing, units) for listing in listings)
     _fake.db.session.commit()
-    for record, item in added:
+    for record, units in added:
         print(
-            "Added " + repr(record) + (" (Unit " + str(item.id) + ")" if item else "")
+            "Added "
+            + repr(record)
+            + (
+                " (Unit"
+                + ("s " if len(units) > 1 else " ")
+                + ", ".join(str(u.id) for u in units)
+                + ")"
+                if units
+                else ""
+            )
         )
 
 
@@ -58,9 +75,21 @@ def main():
         action="store_true",
         help="make the Units without a Discogs release or instance",
     )
+    parser.add_argument(
+        "--items", type=int, default=1, help="items on each order (default: 1)"
+    )
+    parser.add_argument("--buyer", help="give every order this buyer")
     args = parser.parse_args()
     _fake.setup()
-    add(args.kind, args.count, args.size, not args.no_unit, not args.no_discogs)
+    add(
+        args.kind,
+        args.count,
+        args.size,
+        not args.no_unit,
+        not args.no_discogs,
+        args.items,
+        args.buyer,
+    )
 
 
 if __name__ == "__main__":

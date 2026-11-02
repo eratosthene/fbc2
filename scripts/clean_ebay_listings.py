@@ -58,8 +58,7 @@ for ebay_listing in listings:
 
             else:
                 logger.info(f"Found SR: {sr}")
-                eoid = sr.ebay_order_id
-                eo = db.session.query(EbayOrder).filter_by(order_id=eoid).first()
+                eo = sr.ebay_orders[0] if sr.ebay_orders else None
                 if not eo:
                     if srid == 319:
                         logger.info("(KNOWN) Listing was ended, should be deleted.")

@@ -403,7 +403,7 @@ def test_shipping_in_dev_mode_records_the_receipt(client, dev_mode, monkeypatch)
     assert "(Dev Mode: from fbc only)" in page.get_data(as_text=True)
     shipped = client.post(
         "/ebayordermodelview/ship/" + order.order_id,
-        data={"net_sold": "16.50", "remove_discogs": "1"},
+        data={"net_sold": "16.50", "remove_discogs-" + str(unit.id): "1"},
         follow_redirects=True,
     )
 

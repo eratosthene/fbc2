@@ -137,7 +137,45 @@ def relist_ebay_listing(old_listing, item):
     logger.info("Relisted " + old_item_id + " -> " + new_item_id)
 
 
+def _money(amount):
+    """An amount from the Trading API ({"value": "4.37"}) as a float, or None."""
+    try:
+        return float(amount["value"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def order_items(item):
+    """EbayOrderItems for every transaction (item bought) in a GetOrders order."""
+    from fbc.models.ebay import EbayOrderItem
+
+    transactions = (item.get("TransactionArray") or {}).get("Transaction") or []
+    # ebaysdk gives a lone transaction as a dict rather than a list of one.
+    if isinstance(transactions, dict):
+        transactions = [transactions]
+    items = []
+    for t in transactions:
+        try:
+            quantity = int(t.get("QuantityPurchased") or 1)
+        except ValueError:
+            quantity = 1
+        items.append(
+            EbayOrderItem(
+                ebay_listing_id=t["Item"]["ItemID"],
+                title=(t["Item"].get("Title") or "")[:100],
+                quantity=quantity,
+                price=_money(t.get("TransactionPrice")),
+            )
+        )
+    return items
+
+
 def add_ebay_order(item):
+    """
+    Add a GetOrders order, with every item on it, if its first item's
+    listing is in fbc. An order fbc already has only gets the items and
+    shipping it was synced without, from before fbc kept them.
+    """
     from fbc import db
 
     logger.debug(item)
@@ -147,8 +185,12 @@ def add_ebay_order(item):
     created_time = datetime.datetime.strptime(
         item["CreatedTime"], "%Y-%m-%dT%H:%M:%S.000Z"
     )
-    title = item["TransactionArray"]["Transaction"][0]["Item"]["Title"]
-    ebay_listing_id = item["TransactionArray"]["Transaction"][0]["Item"]["ItemID"]
+    items = order_items(item)
+    title = items[0].title
+    ebay_listing_id = items[0].ebay_listing_id
+    shipping = _money(
+        (item.get("ShippingServiceSelected") or {}).get("ShippingServiceCost")
+    )
     from fbc.models.ebay import EbayListing
     from fbc.models.ebay import EbayOrder
 
@@ -166,14 +208,20 @@ def add_ebay_order(item):
             ebay_order = EbayOrder(
                 order_id=order_id,
                 price=price,
+                shipping=shipping,
                 buyer=buyer,
                 created_time=created_time,
                 title=title,
                 ebay_listing_id=ebay_listing.item_id,
+                items=items,
             )
             db.session.add(ebay_order)
         else:
             logger.debug("Order already exists!")
+            if not ebay_order.items:
+                ebay_order.items = items
+            if ebay_order.shipping is None:
+                ebay_order.shipping = shipping
         db.session.commit()
         db.session.refresh(ebay_order)
         logger.debug(ebay_order)

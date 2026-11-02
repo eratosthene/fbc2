@@ -297,18 +297,33 @@ def fake_listing(unit=None):
     return listing
 
 
-def fake_order(listing):
-    """A fake EbayOrder for `listing`, placed in the last few days."""
-    from fbc.models.ebay import EbayOrder
+def fake_order(listings, buyer=None):
+    """
+    A fake EbayOrder of one item from each of `listings` (or one listing),
+    placed in the last few days, by `buyer` or a random fake buyer.
+    """
+    from fbc.models.ebay import EbayOrder, EbayOrderItem
 
+    if not isinstance(listings, list):
+        listings = [listings]
     order = EbayOrder(
         order_id=order_id(next_number(EbayOrder.order_id, FAKE_ORDER_PREFIX)),
         created_time=datetime.datetime.now().replace(microsecond=0)
         - datetime.timedelta(hours=random.randint(1, 96)),
-        buyer="fake-buyer-" + str(random.randint(100, 999)),
-        price=listing.price,
-        title=listing.title,
-        ebay_listing=listing,
+        buyer=buyer or "fake-buyer-" + str(random.randint(100, 999)),
+        price=round(sum(listing.price for listing in listings), 2),
+        shipping=4.37,
+        title=listings[0].title,
+        ebay_listing=listings[0],
+        items=[
+            EbayOrderItem(
+                ebay_listing_id=listing.item_id,
+                title=listing.title,
+                quantity=1,
+                price=listing.price,
+            )
+            for listing in listings
+        ],
     )
     db.session.add(order)
     db.session.flush()

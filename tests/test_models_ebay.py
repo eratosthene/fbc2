@@ -75,7 +75,7 @@ def test_ebay_order_links_offers_add_sales_receipt(app):
     html = str(order.links())
     assert "Add&nbsp;SR" in html
     assert "sold_price=25.0" in html
-    assert "ebay_order=111" in html
+    assert "ebay_orders=111" in html
 
 
 def test_ebay_order_links_includes_edit_unit_when_listing_matches(app, db):
