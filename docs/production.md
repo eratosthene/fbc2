@@ -17,6 +17,8 @@ credentials. Copy `config.py.tpl` to start one, and fill in:
   and the listing defaults. The comments there say where each one comes from.
   Once the app is running, Sales > Connect eBay and Discogs > Connect Discogs
   sign in to each site, and keep the tokens in the database.
+- `MILEAGE_RATE`: the IRS standard mileage rate for the year, for expenses
+  entered as miles. Without it, each one needs its rate typed in.
 
 The app creates the database's tables, or brings them up to date, with:
 

@@ -7,6 +7,10 @@ from sqlalchemy import Column, Integer, String, ForeignKey, Float, Date, DateTim
 from sqlalchemy import inspect
 from sqlalchemy.orm import column_property, object_session, relationship
 
+# PurchaseOrder.expenses names Expense, which has to be mapped by the time
+# the first view sets up its model.
+import fbc.models.expenses  # noqa: F401
+
 # Supply.used_for: where a supply is taken out of stock on its own. A
 # SupplyUse's kind is one of these too, or ADJUSTMENT or RECONCILE.
 SHIPPING = "shipping"
@@ -56,6 +60,12 @@ def fmt_stock(quantity, pack_size, pack_used):
 
 
 class PurchaseOrder(Model):
+    """
+    One order: any number of supplies, and any number of Expenses for what
+    else was on it. price is what the whole order cost; the Expenses' amounts
+    come out of it, and the rest is what the supplies cost.
+    """
+
     __tablename__ = "purchase_order"
     id = Column(Integer, primary_key=True, autoincrement=True)
     old_id = Column(String(24))
@@ -63,16 +73,37 @@ class PurchaseOrder(Model):
     price = Column(Float, nullable=False)
     notes = Column(String(100))
     link = Column(String(255))
+    # Deleting the order keeps its Expenses, which were still spent.
+    expenses = relationship(
+        "Expense", back_populates="purchase_order", order_by="Expense.id"
+    )
 
     @renders("price")
     def purchase_price(self):
         return "$" + f"{self.price:.2f}"
 
+    def expense_total(self):
+        """What the Expenses on this order come to."""
+        return sum(e.amount for e in self.expenses)
+
+    def supply_cost(self):
+        """What the supplies on this order cost: price, less its Expenses."""
+        return self.price - self.expense_total()
+
+    def fmt_supply_cost(self):
+        return "$" + f"{self.supply_cost():.2f}"
+
+    def fmt_supplies(self):
+        # Just the names: a supply's own repr has its quantity now, not what
+        # this order brought in.
+        return ", ".join(sorted(s.name for s in self.supply))
+
     def __unicode__(self):
-        return str(self.date) + ": " + self.notes + " $" + f"{self.price:.2f}"
+        return self.__repr__()
 
     def __repr__(self):
-        return str(self.date) + ": " + self.notes + " $" + f"{self.price:.2f}"
+        # notes can be blank.
+        return str(self.date) + ": " + (self.notes or "") + " $" + f"{self.price:.2f}"
 
 
 class Supply(Model):

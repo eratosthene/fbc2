@@ -61,6 +61,12 @@ and those receipts are left as they are. Run it in the live container like
 
 The packing supplies sales use up, and Purchase Orders to restock them.
 
+A Purchase Order is one order, with its whole price. It can restock any
+number of supplies. Anything else on it, like record crates, is an Expense
+on the order: add it from the order's page, under Expenses. Those come out
+of the order's price, and the rest is the order's Supply Cost. The
+Expenses on an order can't come to more than its price.
+
 Supply Use records each time stock changes, with its date: Ship This, Add
 Unit, edits to Quantity on the Supply List (a stock-take or a restock, which
 counts below 0) and Reconcile Supplies. Each supply's page lists its own. It
@@ -81,3 +87,28 @@ Supply Use keeps each difference apart from Supply List edits, so you can
 see which estimates drift. Purchase Orders aren't changed. Ship This's and
 Add Unit's "There aren't enough" messages and the home page's reorder banner
 link here.
+
+## Expenses
+
+Business costs that aren't Purchase Lots or Purchase Orders, like an eBay
+Store subscription, equipment, booth fees or mileage, under Supplies >
+Expenses. Each has a date, category and amount, and optionally a vendor, a
+note and a link to the receipt.
+
+The categories follow Schedule C's lines, so a year's totals map onto the
+tax form. `EXPENSE_CATEGORIES` in `config.py` changes them.
+
+For mileage, enter Miles and leave Amount blank: it's Miles × `MILEAGE_RATE`
+from `config.py`, or the Rate Per Mile typed in. Each expense keeps the rate
+it was entered with, since the IRS changes it every year.
+
+Packing supplies still go on a Purchase Order, so the Supply List stays
+right. Something bought on a Purchase Order along with supplies is an
+Expense on that order (see [Supplies](#supplies)), so its cost isn't counted
+twice. Deleting the order keeps its Expenses.
+
+Equipment is recorded when it's bought; depreciating it is left to the
+accountant.
+
+The home page takes expenses off the total net profit, with a total per
+category. Its total supply cost leaves out the Expenses on Purchase Orders.

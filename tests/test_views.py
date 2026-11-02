@@ -7,8 +7,9 @@ from werkzeug.datastructures import MultiDict
 import fbc
 from fbc.models.discogs import DiscogsRelease
 from fbc.models.ebay import EbayListing
+from fbc.models.expenses import Expense
 from fbc.models.inventory import PurchaseLot, Unit
-from fbc.models.supplies import Supply, SupplyUse
+from fbc.models.supplies import PurchaseOrder, Supply, SupplyUse
 from fbc.views.discogs import ArtistModelView, DiscogsReleaseModelView, FolderModelView
 from fbc.views.inventory import (
     UNITS_WITHOUT_LISTING_FILTERS,
@@ -666,3 +667,166 @@ def test_reorder_banner_links_to_reconcile_supplies(client):
 
     assert "Time to reorder" in html
     assert 'href="/reconcilesupplies/"' in html
+
+
+def _add_expense(client, **fields):
+    data = {
+        "date": "2026-03-14",
+        "category": "advertising",
+        "amount": "12.50",
+        "miles": "",
+        "mileage_rate": "",
+        "vendor": "eBay",
+        "note": "Promoted listings",
+        "link": "",
+    }
+    data.update(fields)
+    return client.post("/expensemodelview/add", data=data)
+
+
+def test_expenses_can_be_added_and_listed_by_category_label(client):
+    _add_expense(client)
+
+    expense = fbc.db.session.query(Expense).one()
+    assert (expense.date, expense.category, expense.amount, expense.vendor) == (
+        datetime.date(2026, 3, 14),
+        "advertising",
+        12.5,
+        "eBay",
+    )
+    html = _menu_list(client, "Expenses")
+    assert "Advertising (line 8)" in html and "$12.50" in html
+    assert client.get("/expensemodelview/edit/" + str(expense.id)).status_code == 200
+
+
+def test_expense_miles_work_out_the_amount_at_the_config_rate(client, monkeypatch):
+    monkeypatch.setitem(fbc.app.config, "MILEAGE_RATE", 0.725)
+
+    _add_expense(client, category="car", amount="", miles="120")
+
+    expense = fbc.db.session.query(Expense).one()
+    assert (expense.amount, expense.miles, expense.mileage_rate) == (87.0, 120, 0.725)
+
+
+def test_expense_edit_keeps_the_rate_it_was_entered_with(client, monkeypatch):
+    monkeypatch.setitem(fbc.app.config, "MILEAGE_RATE", 0.7)
+    _add_expense(client, category="car", amount="", miles="10")
+    expense = fbc.db.session.query(Expense).one()
+    monkeypatch.setitem(fbc.app.config, "MILEAGE_RATE", 0.725)
+
+    client.post(
+        "/expensemodelview/edit/" + str(expense.id),
+        data={
+            "date": "2026-03-14",
+            "category": "car",
+            "amount": "7.00",
+            "miles": "20",
+            "mileage_rate": "0.7",
+        },
+    )
+
+    fbc.db.session.expire_all()
+    assert (expense.amount, expense.mileage_rate) == (14.0, 0.7)
+
+
+@pytest.mark.parametrize(
+    "fields, error",
+    [
+        ({"amount": ""}, "Enter an Amount, or Miles for mileage."),
+        ({"amount": "", "miles": "10"}, "MILEAGE_RATE isn't set in config.py"),
+        ({"amount": "twelve"}, "Not a valid float value"),
+        ({"category": "nonsense"}, "Not a valid choice"),
+    ],
+)
+def test_expense_form_refuses_what_it_cant_save(client, fields, error):
+    page = _add_expense(client, **fields)
+
+    assert error in page.get_data(as_text=True)
+    assert fbc.db.session.query(Expense).count() == 0
+
+
+def _order_with_two_supplies(client, price="100.00"):
+    """A Uline order for mailers and a label roll, through the form."""
+    mailers = Supply(name="LP Mailers", quantity=10)
+    labels = Supply(name="Shipping Label Roll", quantity=1)
+    fbc.db.session.add_all([mailers, labels])
+    fbc.db.session.commit()
+    client.post(
+        "/purchaseordermodelview/add",
+        data=MultiDict(
+            [
+                ("date", "2026-04-01"),
+                ("price", price),
+                ("notes", "Uline order"),
+                ("link", ""),
+                ("supply", str(mailers.id)),
+                ("supply", str(labels.id)),
+            ]
+        ),
+    )
+    return fbc.db.session.query(PurchaseOrder).one()
+
+
+def test_a_purchase_order_holds_several_supplies_and_expenses(client):
+    order = _order_with_two_supplies(client)
+    assert sorted(s.name for s in order.supply) == ["LP Mailers", "Shipping Label Roll"]
+
+    _add_expense(client, category="supplies", amount="30", purchase_order=str(order.id))
+    # From the order's page, which fills in the order itself.
+    client.post(
+        "/expensemodelview/add?_flt_0_purchase_order=" + str(order.id),
+        data={"date": "2026-04-01", "category": "equipment", "amount": "12.50"},
+    )
+
+    fbc.db.session.expire_all()
+    assert sorted(e.amount for e in order.expenses) == [12.5, 30.0]
+    assert order.supply_cost() == 57.5
+    show = client.get("/purchaseordermodelview/show/" + str(order.id))
+    html = show.get_data(as_text=True)
+    assert "$57.50" in html and "Equipment (line 13)" in html
+    assert "LP Mailers, Shipping Label Roll" in html
+
+
+def test_expenses_cant_come_to_more_than_their_purchase_orders_price(client):
+    order = _order_with_two_supplies(client)
+    _add_expense(client, amount="60", purchase_order=str(order.id))
+
+    page = _add_expense(client, amount="40.01", purchase_order=str(order.id))
+
+    assert "would come to $100.01, more than its price of $100.00" in (
+        page.get_data(as_text=True)
+    )
+    assert fbc.db.session.query(Expense).count() == 1
+
+
+def test_editing_an_expense_on_a_purchase_order_doesnt_count_it_twice(client):
+    order = _order_with_two_supplies(client)
+    _add_expense(client, amount="60", purchase_order=str(order.id))
+    expense = fbc.db.session.query(Expense).one()
+
+    client.post(
+        "/expensemodelview/edit/" + str(expense.id),
+        data={
+            "date": "2026-04-01",
+            "category": "supplies",
+            "amount": "100",
+            "purchase_order": str(order.id),
+        },
+    )
+
+    fbc.db.session.expire_all()
+    assert expense.amount == 100.0
+
+
+def test_a_purchase_orders_price_cant_go_below_its_expenses(client):
+    order = _order_with_two_supplies(client)
+    _add_expense(client, amount="60", purchase_order=str(order.id))
+
+    page = client.post(
+        "/purchaseordermodelview/edit/" + str(order.id),
+        data={"date": "2026-04-01", "price": "50", "notes": "Uline order"},
+    )
+
+    assert "The Expenses on it come to $60.00" in page.get_data(as_text=True)
+    fbc.db.session.expire_all()
+    assert order.price == 100.0
