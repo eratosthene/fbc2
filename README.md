@@ -12,6 +12,8 @@ with Discogs and eBay. It's a Flask-AppBuilder app on MariaDB.
 - **Supplies**: the packing supplies sales use up, Purchase Orders to restock
   them, and Reconcile Supplies to line the Supply List up with what's on
   hand.
+- **Expenses**: business costs that aren't Purchase Lots or Purchase Orders,
+  like an eBay Store subscription, equipment or mileage.
 
 ## Documentation
 

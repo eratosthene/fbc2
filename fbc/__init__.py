@@ -129,6 +129,7 @@ from fbc.views.supplies import (
     SupplyUseModelView,
     PurchaseOrderModelView,
 )
+from fbc.views.expenses import ExpenseModelView
 from fbc.views.inventory import (
     UnitModelView,
     PurchaseLotModelView,
@@ -180,3 +181,4 @@ with app.app_context():
     )
     appbuilder.add_view(PurchaseOrderModelView, "Purchase Orders", category="Supplies")
     appbuilder.add_view(SupplyUseModelView, "Supply Use", category="Supplies")
+    appbuilder.add_view(ExpenseModelView, "Expenses", category="Supplies")
