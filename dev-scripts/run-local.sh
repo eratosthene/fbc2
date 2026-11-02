@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run fbc on this machine with Flask's reloading dev server, from the
-# Pipenv environment (`pipenv install --dev`). See "Development" in
-# README.md; for the app and a MariaDB in Docker, use compose-up.sh.
+# Pipenv environment (`pipenv install --dev`). See "Setting up" in
+# docs/development.md; for the app and a MariaDB in Docker, use compose-up.sh.
 #
 #   dev-scripts/run-local.sh [-H HOST] [-p PORT]
 #
@@ -35,7 +35,7 @@ if [ ! -f config.py ]; then
 fi
 
 if ! command -v pipenv >/dev/null 2>&1; then
-    echo "pipenv is not installed; see \"Development\" in README.md." >&2
+    echo "pipenv is not installed; see \"Setting up\" in docs/development.md." >&2
     exit 1
 fi
 

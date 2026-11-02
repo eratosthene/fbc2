@@ -66,8 +66,8 @@ jobs:
         run: cp config.py.tpl config.py
 
       # A user like the live one, which can't create databases, the dump-only
-      # user README.md sets up, and a row in every table the dump has to
-      # empty.
+      # user docs/development.md sets up, and a row in every table the dump
+      # has to empty.
       - name: Set up and seed the database
         run: |
           $MYSQL -e "ALTER DATABASE fbc $CHARSET"

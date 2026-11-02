@@ -14,7 +14,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 # they go in docker/.env, which keeps the secrets out of this file:
 #   FBC_CONFIG_SECRET_KEY='...'
 #   FBC_CONFIG_EBAY_SETTINGS__APP_ID='...'
-# See "Settings from the environment" in README.md.
+# See "Settings from the environment" in docs/production.md.
 
 # Your App secret key
 SECRET_KEY = "1234567890"

@@ -2,7 +2,7 @@
 """
 Once, on the live server: move the secrets in config.py to docker/.env, as
 FBC_CONFIG_* overrides, and line config.py up with config.py.tpl. See
-"Settings from the environment" in README.md.
+"Settings from the environment" in docs/production.md.
 
   scripts/move_secrets_to_env.py [--apply] [--diff]
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Stop the app on the live server and remove its container. See "Running on
-# the live server" in README.md.
+# the live server" in docs/production.md.
 #
 #   docker/live-down.sh
 #
