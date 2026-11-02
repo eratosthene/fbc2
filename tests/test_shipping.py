@@ -13,7 +13,7 @@ from fbc.discogs import DiscogsAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsRelease
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit
-from fbc.models.sales import SalesReceipt, earnings_totals
+from fbc.models.sales import SalesReceipt, SalesReceiptLine, earnings_totals
 from fbc.models.supplies import Supply, SupplyUse
 from fbc.util import forget_discogs_instance
 from test_listing import FakeHTTPResponse, _carnaval
@@ -1042,8 +1042,12 @@ def test_backfill_earnings_command(app, finances):
     assert len(db.session.get(SalesReceipt, receipt.id).lines) == 2
 
 
-def _at(when, transaction):
-    return dict(transaction, transactionDate="2026-09-" + when + ":00.000Z")
+def _at(when, transaction, transaction_id):
+    return dict(
+        transaction,
+        transactionDate="2026-09-" + when + ":00.000Z",
+        transactionId=transaction_id,
+    )
 
 
 # A real order that was returned. eBay's order page shows earnings of
@@ -1072,8 +1076,9 @@ RETURNED = [
                 }
             ],
         },
+        "03-15224-78875",
     ),
-    _at("25T11:00", RETURN_LABEL),
+    _at("25T11:00", RETURN_LABEL, "02-15228-21773"),
     _at(
         "29T09:00",
         {
@@ -1081,6 +1086,7 @@ RETURNED = [
             "bookingEntry": "DEBIT",
             "amount": {"value": "10.89"},
         },
+        "DISPUTE_HOLD-6765273232",
     ),
     _at(
         "30T09:00",
@@ -1097,8 +1103,9 @@ RETURNED = [
                 }
             ],
         },
+        "RRP-6766918393-CCM_CHARGE",
     ),
-    _at("30T10:00", RETURN_LABEL),
+    _at("30T10:00", RETURN_LABEL, "FEE-7131055129012_11"),
     _at(
         "30T11:00",
         {
@@ -1106,6 +1113,7 @@ RETURNED = [
             "bookingEntry": "CREDIT",
             "amount": {"value": "10.89"},
         },
+        "DISPUTE_HOLD_REVERSE-6765273232-6650821330",
     ),
 ]
 
@@ -1144,3 +1152,15 @@ def test_a_returned_orders_totals_match_ebays_order_page(app, finances):
         totals["other"],
         totals["adjustments"],
     ) == (10.89, -0.41, -8.78, -10.89, 0.0, 0.0)
+
+
+def test_earnings_lines_fit_their_columns(app, finances):
+    # SQLite keeps a string longer than its column, but MariaDB refuses it,
+    # as it did a dispute hold's 42-character transaction ID.
+    finances.reply = _transactions(*RETURNED, SALE_WITH_FEES, AD_FEE)
+    columns = SalesReceiptLine.__table__.columns
+
+    for line in shipping.order_earnings("12-34567-89012")["lines"]:
+        for name, value in line.items():
+            if isinstance(value, str):
+                assert len(value) <= columns[name].type.length, (name, value)
