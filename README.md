@@ -72,9 +72,31 @@ FBC_CONFIG_DISCOGS_SETTINGS__CONSUMER_SECRET='...'
 ```
 
 Put each value in single quotes, so Compose leaves any `$` or `#` in it
-alone. A value that must stay a string but looks like a number, such as a
-postal code with a leading zero, needs double quotes inside those:
-`'"01234"'`.
+alone. A value that must stay a string but looks like a number needs
+double quotes inside those: `'"12345"'`.
+
+To move the secrets from an existing `config.py` to `docker/.env`, and
+line `config.py` up with `config.py.tpl` at the same time, run this from
+the repo root. On its own it only reports what it would change (`--diff`
+shows the changes to `config.py`, with the secrets hidden):
+
+```bash
+scripts/move_secrets_to_env.py
+```
+
+Then make the changes, and recreate the container:
+
+```bash
+scripts/move_secrets_to_env.py --apply
+docker/live-up.sh -n
+```
+
+The new `config.py` is `config.py.tpl` with your values in it. Settings
+only the template has are left commented out, and settings only your
+`config.py` has are kept. Your own comments are dropped. It checks that
+the app sees exactly the same settings before and after, and changes
+nothing if not. The old `config.py` is kept as `config.py.bak-<time>`; it
+still holds the secrets, so delete it once the app runs.
 
 ## Running on the live server
 

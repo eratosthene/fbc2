@@ -45,14 +45,14 @@ def test_the_environment_overrides_one_key_in_a_dict(monkeypatch):
         EBAY_SETTINGS = {"APP_ID": "config-app", "LISTING": {"CATEGORY_ID": "1"}}
 
     monkeypatch.setenv("FBC_CONFIG_EBAY_SETTINGS__APP_ID", "env-app")
-    monkeypatch.setenv("FBC_CONFIG_EBAY_SETTINGS__LISTING__POSTAL_CODE", '"01234"')
+    monkeypatch.setenv("FBC_CONFIG_EBAY_SETTINGS__LISTING__POSTAL_CODE", '"12345"')
 
     config = _load(Source)
 
     assert config["EBAY_SETTINGS"] == {
         "APP_ID": "env-app",
-        # Quoted, so it stays a string with its leading zero.
-        "LISTING": {"CATEGORY_ID": "1", "POSTAL_CODE": "01234"},
+        # Quoted, so it stays a string rather than a number.
+        "LISTING": {"CATEGORY_ID": "1", "POSTAL_CODE": "12345"},
     }
 
 

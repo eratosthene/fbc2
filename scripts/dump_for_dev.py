@@ -207,24 +207,29 @@ def imported_modules(source):
     return names
 
 
-def env_file(path):
-    """The variables in a Compose .env file: KEY=VALUE lines, with # comments
-    and optional quotes. Python-dotenv isn't here to read it."""
+def parse_env(text):
+    """The variables in a Compose .env file's text: KEY=VALUE lines, with #
+    comments and optional quotes. Python-dotenv isn't here to read it."""
     values = {}
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            key = key.strip().removeprefix("export ").strip()
-            value = value.strip()
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-                value = value[1:-1]
-            else:
-                value = value.split(" #", 1)[0].rstrip()
-            values[key] = value
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip().removeprefix("export ").strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        else:
+            value = value.split(" #", 1)[0].rstrip()
+        values[key] = value
     return values
+
+
+def env_file(path):
+    """The variables in a Compose .env file."""
+    with open(path) as f:
+        return parse_env(f.read())
 
 
 def database_uri(repo=REPO):
@@ -245,13 +250,17 @@ def database_uri(repo=REPO):
     if not os.path.exists(path):
         raise Failed(f"There's no config.py in {os.path.abspath(repo)}.")
     with open(path) as f:
-        finder = _StubFinder(imported_modules(f.read()))
-    spec = importlib.util.spec_from_file_location("config", path)
-    config = importlib.util.module_from_spec(spec)
+        return run_config(f.read(), path)["SQLALCHEMY_DATABASE_URI"]
+
+
+def run_config(source, path):
+    """Run config.py's source, as if from `path`, and return its names."""
+    finder = _StubFinder(imported_modules(source))
+    names = {"__name__": "config", "__file__": path}
     # Last, so installed modules are used when there are any.
     sys.meta_path.append(finder)
     try:
-        spec.loader.exec_module(config)
+        exec(compile(source, path, "exec"), names)
     except Exception as e:
         raise Failed(f"Couldn't read config.py: {type(e).__name__}: {e}") from e
     finally:
@@ -259,7 +268,7 @@ def database_uri(repo=REPO):
         for name, module in list(sys.modules.items()):
             if getattr(module, "__loader__", None) is finder:
                 del sys.modules[name]
-    return config.SQLALCHEMY_DATABASE_URI
+    return names
 
 
 def parse_uri(uri):
