@@ -274,3 +274,23 @@ def test_check_dump_shows_progress(tmp_path):
 )
 def test_duration(seconds, text):
     assert dump_for_dev.duration(seconds) == text
+
+
+def test_check_dump_finds_a_table_twice_or_missing(tmp_path):
+    path = _dump(
+        tmp_path,
+        *CLEAN,
+        b"CREATE TABLE `ab_user` (",
+        b"CREATE TABLE `ebay_order` (",
+    )
+    assert dump_for_dev.check_dump(
+        path, [], [], expected={"ab_user", "ebay_order", "unit"}
+    ) == ["it has ab_user more than once", "it's missing unit"]
+
+
+def test_check_dump_with_every_table_once(tmp_path):
+    path = _dump(tmp_path, *CLEAN, b"CREATE SEQUENCE `ab_user_id_seq` start with 1;")
+    assert (
+        dump_for_dev.check_dump(path, [], [], expected={"ab_user", "ab_user_id_seq"})
+        == []
+    )

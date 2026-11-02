@@ -5,16 +5,18 @@ Make a sanitized dump of the live database, for docker/compose.dev.yml. See
 
   scripts/dump_for_dev.py [-o DIR] [--admin-user USER]
 
-Run it on the live server, from the repo root. It copies the database in
-config.py's SQLALCHEMY_DATABASE_URI into a scratch database on the same
-server, scrubs the copy, dumps it to DIR/fbc-dev-<date>.sql.gz and drops the
-copy. The fbc user can't create databases, so --admin-user names a MariaDB
-user that can; its password is asked for (or read from stdin, if that isn't
-a terminal). Without it, the config.py user makes the scratch database.
+Run it on the live server, from the repo root. It dumps the database in
+config.py's SQLALCHEMY_DATABASE_URI to DIR/fbc-dev-<date>.sql.gz, in three
+parts: the tables it keeps as they are, in one snapshot; the emptied tables'
+structure; and the tables whose values it rewrites (eBay orders), copied
+into a scratch database on the same server and scrubbed there first. The
+fbc user can't create databases, so --admin-user names a MariaDB user that
+can; its password is asked for (or read from stdin, if that isn't a
+terminal). Without it, the config.py user makes the scratch database.
 
-Before finishing it checks the dump for rows of the emptied tables and for
-any of the live tokens, password hashes, API keys and user emails, and
-deletes it if it finds one.
+Before finishing it checks the dump has every table once, no rows of the
+emptied tables, and none of the live tokens, password hashes, API keys and
+user emails, and deletes it if not.
 
 It only needs Python 3 and the MariaDB client (mariadb and mariadb-dump, or
 the older mysql and mysqldump names), not the app's packages.
@@ -64,6 +66,12 @@ SECRET_COLUMNS = [
     ("ab_user", "password"),
     ("ab_user", "email"),
 ]
+
+# Tables whose values are rewritten. Only these go into the scratch database
+# to be scrubbed (in run()); the rest are dumped straight from live. Copying
+# everything there took minutes on the live server, whose disk is slow to
+# create tables.
+SCRUBBED_TABLES = ["ebay_order"]
 
 # Buyers' eBay usernames become buyer-1, buyer-2, ..., in order of their
 # first order, so the same buyer keeps the same name within the dump.
@@ -304,7 +312,8 @@ class Client:
             raise Failed(f"{self.mariadb} failed: {result.stderr.strip()}")
         return [line.split("\t") for line in result.stdout.splitlines()]
 
-    def dump(self, database, stdout, stderr):
+    def dump(self, database, stdout, stderr, options=(), tables=()):
+        """mariadb-dump of the database, or just the tables if given."""
         return subprocess.Popen(
             [
                 self.mariadb_dump,
@@ -315,7 +324,9 @@ class Client:
                 # keeps its own character set.
                 "--default-character-set=utf8mb4",
                 "--hex-blob",
+                *options,
                 database,
+                *tables,
             ],
             stdout=stdout,
             stderr=stderr,
@@ -368,10 +379,11 @@ def dump_escaped(value):
     return value
 
 
-def check_dump(path, emptied, secrets, progress=None):
-    """Problems with the gzipped dump: rows for an emptied table, or a live
-    secret. mariadb-dump escapes newlines inside values, so a value is
-    always on one line."""
+def check_dump(path, emptied, secrets, progress=None, expected=None):
+    """Problems with the gzipped dump: rows for an emptied table, a live
+    secret, or, given the expected tables, one missing or there twice (as a
+    live copy of a scrubbed table would be). mariadb-dump escapes newlines
+    inside values, so a value is always on one line."""
     inserts = re.compile(
         rb"^INSERT INTO `(" + b"|".join(re.escape(t.encode()) for t in emptied) + rb")`"
     )
@@ -381,16 +393,26 @@ def check_dump(path, emptied, secrets, progress=None):
         if dump_escaped(value) != value:
             needles.append((where, dump_escaped(value)))
     problems = set()
+    created = []
     with gzip.open(path, "rb") as f:
         for line in f:
             if progress:
                 progress.line(line)
+            start = TABLE_START.match(line)
+            if start:
+                created.append(start.group(1).replace(b"``", b"`").decode())
             match = inserts.match(line) if emptied else None
             if match:
                 problems.add(f"it has rows for {match.group(1).decode()}")
             for where, needle in needles:
                 if needle in line:
                     problems.add(f"it has a value from the live {where}")
+    if expected is not None:
+        for table in sorted({t for t in created if created.count(t) > 1}):
+            problems.add(f"it has {table} more than once")
+        missing = sorted(set(expected) - set(created))
+        if missing:
+            problems.add(f"it's missing {', '.join(missing)}")
     return sorted(problems)
 
 
@@ -426,6 +448,11 @@ def run(args):
             if not existing:
                 raise Failed(f"The {database} database has no tables, or isn't there.")
             emptied = [t for t in EMPTIED_TABLES if t in existing]
+            scrubbed = [t for t in SCRUBBED_TABLES if t in existing]
+            # With no tables, mariadb-dump would dump them all, unscrubbed.
+            if scrubbed != SCRUBBED_TABLES:
+                missing = ", ".join(sorted(set(SCRUBBED_TABLES) - set(scrubbed)))
+                raise Failed(f"The {database} database has no {missing} table.")
             secrets = secret_values(live, database, existing)
             charset, collation = live.query(
                 "SELECT DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME "
@@ -456,17 +483,14 @@ def run(args):
                 "database; pass --admin-user with one that can."
             ) from None
         try:
-            with step(f"Copying {database} to {scratch}"):
-                copy(live, admin, database, scratch, Progress(len(existing)))
+            # Copied before the snapshot of the rest, so a Sales Receipt in
+            # the dump can only miss an order made in the seconds between.
+            with step(f"Copying {', '.join(scrubbed)} to {scratch}"):
+                copy(live, admin, database, scratch, scrubbed, Progress(len(scrubbed)))
 
             with step("Scrubbing the copy"):
-                scrub = ["SET FOREIGN_KEY_CHECKS = 0;"]
-                scrub += [f"DELETE FROM {quote_name(t)};" for t in emptied]
-                scrub.append("SET FOREIGN_KEY_CHECKS = 1;")
-                if "ebay_order" in existing:
-                    scrub.append(SCRUB_BUYERS)
-                admin.query("\n".join(scrub), scratch)
-                if "ebay_order" in existing:
+                if "ebay_order" in scrubbed:
+                    admin.query(SCRUB_BUYERS, scratch)
                     (left,) = admin.query(
                         "SELECT COUNT(*) FROM ebay_order WHERE buyer <> '' "
                         f"AND buyer NOT REGEXP {quote_string(BUYER_ALIAS)}",
@@ -477,14 +501,19 @@ def run(args):
                             f"{left} eBay orders still have a buyer's username."
                         )
 
-            with step(f"Dumping it to {final}"):
-                write_dump(admin, scratch, partial, Progress(len(existing)))
+            with step(f"Dumping to {final}"):
+                ignored = [f"--ignore-table={database}.{t}" for t in emptied + scrubbed]
+                parts = [(live, database, ignored, ())]
+                if emptied:
+                    parts.append((live, database, ["--no-data"], emptied))
+                parts.append((admin, scratch, (), scrubbed))
+                write_dump(parts, partial, Progress(len(existing)))
         finally:
             admin.query(f"DROP DATABASE IF EXISTS {quote_name(scratch)}")
 
     with step("Checking the dump"):
         progress = Progress(len(existing))
-        problems = check_dump(partial, emptied, secrets, progress)
+        problems = check_dump(partial, emptied, secrets, progress, expected=existing)
         progress.finish()
     if problems:
         os.remove(partial)
@@ -495,12 +524,12 @@ def run(args):
     print("Copy it to docker/dev-db/ on the dev machine; see README.md.")
 
 
-def copy(live, admin, database, scratch, progress):
-    """Pipes a dump of the live database into the scratch one, through here
-    so progress can show where it's got to."""
+def copy(live, admin, database, scratch, tables, progress):
+    """Pipes a dump of some live tables into the scratch database, through
+    here so progress can show where it's got to."""
     # stderr goes to files, so a lot of warnings can't fill a pipe and stall.
     with tempfile.TemporaryFile() as dump_err, tempfile.TemporaryFile() as load_err:
-        dump = live.dump(database, subprocess.PIPE, dump_err)
+        dump = live.dump(database, subprocess.PIPE, dump_err, tables=tables)
         load = subprocess.Popen(
             [admin.mariadb, admin.defaults, scratch],
             stdin=subprocess.PIPE,
@@ -527,21 +556,30 @@ def copy(live, admin, database, scratch, progress):
             raise Failed(f"mariadb-dump of {database} failed: {error_text(dump_err)}")
 
 
-def write_dump(client, database, path, progress):
+def write_dump(parts, path, progress):
+    """Writes the dumps, one after another, to one gzipped file. Each sets up
+    and restores its own session settings (foreign key checks off, and so
+    on), so they load one after another like one dump."""
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        with tempfile.TemporaryFile() as err, os.fdopen(fd, "wb") as raw:
+        with os.fdopen(fd, "wb") as raw:
             out = gzip.GzipFile(fileobj=raw, mode="wb")
-            dump = client.dump(database, subprocess.PIPE, err)
             try:
-                for line in dump.stdout:
-                    progress.line(line)
-                    out.write(line)
+                for client, database, options, tables in parts:
+                    with tempfile.TemporaryFile() as err:
+                        dump = client.dump(
+                            database, subprocess.PIPE, err, options, tables
+                        )
+                        for line in dump.stdout:
+                            progress.line(line)
+                            out.write(line)
+                        if dump.wait():
+                            raise Failed(
+                                f"mariadb-dump of {database} failed: {error_text(err)}"
+                            )
             finally:
                 progress.finish()
                 out.close()
-            if dump.wait():
-                raise Failed(f"mariadb-dump of {database} failed: {error_text(err)}")
     except BaseException:
         os.remove(path)
         raise

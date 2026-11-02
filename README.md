@@ -178,13 +178,14 @@ so `flask setup-db` brings it up to date when the app starts.
    scripts/dump_for_dev.py --admin-user fbc_dump
    ```
 
-   It copies the database in `config.py`'s `SQLALCHEMY_DATABASE_URI` into
-   a scratch database (`fbc_dev_scrub`) on the same server, scrubs the copy,
-   dumps it to `fbc-dev-<date>.sql.gz` and drops it. Each step says how long
-   it took, and the long ones show which table they're on and how many MB
-   they've done so far. The fbc user can't
-   create databases, so `--admin-user` names a MariaDB user that can, and
-   asks for its password. `-o` picks the folder to write to. It needs
+   It dumps the database in `config.py`'s `SQLALCHEMY_DATABASE_URI` to
+   `fbc-dev-<date>.sql.gz`. The eBay orders, whose buyers it changes, are
+   first copied into a scratch database (`fbc_dev_scrub`) on the same
+   server and scrubbed there; everything else comes straight from live, in
+   one snapshot taken just after. Each step says how long it took, and the
+   long ones show which table they're on and how many MB they've done so
+   far. The fbc user can't create databases, so `--admin-user` names a
+   MariaDB user that can, and asks for its password. `-o` picks the folder to write to. It needs
    Python 3 and the MariaDB client (`mariadb` and `mariadb-dump`, or
    MariaDB's `mysql` and `mysqldump` where it only has those names), but not
    the app's packages.
@@ -219,9 +220,9 @@ so `flask setup-db` brings it up to date when the app starts.
            break'
    ```
 
-   Before finishing, it checks the dump for rows of the emptied tables and
-   for any of the live tokens, password hashes, API keys and user emails, and
-   deletes it if it finds one.
+   Before finishing, it checks the dump has every table once, no rows of the
+   emptied tables, and none of the live tokens, password hashes, API keys
+   and user emails, and deletes it if not.
 
 2. Copy it into `docker/dev-db/` here, and remove any older dumps there,
    since they'd all be loaded:
