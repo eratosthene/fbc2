@@ -49,7 +49,9 @@ only handles orders of one Unit. Ship it by hand.</div>
     <tr>
       <td><label for="supply-{{ supply.id }}">{{ supply.name }}</label></td>
       <td>{{ supply.fmt_quantity() }}{% if count > supply.available() %}
-        <br><span class="text-danger">Not enough for this; check the Supply List.</span>{% endif %}</td>
+        <br><span class="text-danger">Not enough for this; <a
+          href="{{ url_for('ReconcileSuppliesView.reconcile', supply=supply.id, _anchor='supply-%d' % supply.id) }}"
+          >count what's on hand</a>.</span>{% endif %}</td>
       <td><input type="number" min="0" step="1" id="supply-{{ supply.id }}"
         name="supply-{{ supply.id }}" value="{{ values.get('supply-%d' % supply.id, count) if values is not none else count }}"
         class="form-control input-sm" style="width: 6em"></td>

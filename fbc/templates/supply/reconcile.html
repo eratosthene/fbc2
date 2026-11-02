@@ -1,0 +1,70 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+{% set action = url_for('ReconcileSuppliesView.reconcile', supply=highlight) %}
+<h3>Reconcile Supplies</h3>
+{% if changes %}
+<p>Check the differences, then save them. Each one is recorded on Supply Use.
+Purchase Orders aren't changed.</p>
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>Supply</th><th>The Supply List has</th><th>Counted</th><th>Difference</th></tr>
+  {% for c in changes %}
+  <tr>
+    <td>{{ c.supply.name }}</td>
+    <td>{{ c.before }}</td>
+    <td>{{ c.after }}</td>
+    <td>{{ c.difference }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<form method="post" action="{{ action }}">
+  {% for key, value in values.items() if key.startswith('on_hand-') or key.startswith('left-') %}
+  <input type="hidden" name="{{ key }}" value="{{ value }}">
+  {% endfor %}
+  {% for c in changes %}
+  <input type="hidden" name="seen-{{ c.supply.id }}" value="{{ c.seen }}">
+  {% endfor %}
+  <button class="btn btn-primary" name="action" value="save">Save</button>
+  <button class="btn btn-default" name="action" value="change">Change the counts</button>
+</form>
+{% elif supplies %}
+<p>Count what's on hand and enter it here to correct the Supply List in one
+go. Leave a supply blank to leave it as it is. For a supply that holds several
+uses, like a roll of labels, count the one in use too, and enter about how many
+uses are left on it.</p>
+<form method="post" action="{{ action }}">
+  <table class="table table-bordered table-condensed" style="width: auto">
+    <tr>
+      <th>Supply</th>
+      <th>Used For</th>
+      <th>The Supply List has</th>
+      <th>On hand</th>
+      <th>Uses left on the one in use</th>
+    </tr>
+    {% for supply in supplies %}
+    {% set on_hand = 'on_hand-%d' % supply.id %}
+    {% set left = 'left-%d' % supply.id %}
+    <tr id="supply-{{ supply.id }}"{% if supply.id in errors %} class="danger"{% elif supply.id == highlight %} class="warning"{% endif %}>
+      <td><label for="{{ on_hand }}">{{ supply.name }}</label>{% if supply.id in errors %}
+        <br><span class="text-danger">{{ errors[supply.id] }}</span>{% endif %}</td>
+      <td>{{ supply.fmt_used_for() }}</td>
+      <td>{{ supply.fmt_quantity() }}</td>
+      <td><input type="number" min="0" step="1" id="{{ on_hand }}" name="{{ on_hand }}"
+        value="{{ values.get(on_hand, '') if values is not none }}"
+        class="form-control input-sm" style="width: 6em"
+        {% if supply.id == highlight %}autofocus{% endif %}></td>
+      <td>{% if supply.pack_size > 1 %}
+        <input type="number" min="1" max="{{ supply.pack_size }}" step="1"
+          id="{{ left }}" name="{{ left }}" aria-label="Uses left on the one in use of {{ supply.name }}"
+          value="{{ values.get(left, '') if values is not none }}"
+          class="form-control input-sm" style="width: 6em; display: inline-block">
+        of {{ supply.pack_size }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <button class="btn btn-primary" name="action" value="review">Check the differences</button>
+</form>
+{% else %}
+<p>There are no supplies yet. Add them on the
+<a href="{{ url_for('SupplyModelView.list') }}">Supply List</a>.</p>
+{% endif %}
+{% endblock %}

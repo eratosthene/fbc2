@@ -508,3 +508,161 @@ def test_releases_without_units_lists_only_releases_with_no_unit(client):
 def test_related_views_leave_out_the_list_variants(view_class, related):
     inner = _view(view_class).get_init_inner_views()
     assert [type(view) for view in inner] == related
+
+
+def _reconcile_supplies():
+    """Mailers, a label roll and a supply only ever changed by hand."""
+    supplies = [
+        Supply(name="LP Mailers", quantity=51, used_for="shipping", per_units=5),
+        Supply(
+            name="Shipping Label Roll",
+            quantity=2,
+            used_for="shipping",
+            per_units=0,
+            pack_size=220,
+            pack_used=10,
+        ),
+        Supply(name="Record Brushes", quantity=3),
+    ]
+    fbc.db.session.add_all(supplies)
+    fbc.db.session.commit()
+    return supplies
+
+
+def _reconcile(client, **fields):
+    return client.post("/reconcilesupplies/", data=fields).get_data(as_text=True)
+
+
+def test_reconcile_supplies_lists_every_supply_with_its_stock(client):
+    mailers, labels, brushes = _reconcile_supplies()
+
+    html = _menu_list(client, "Reconcile Supplies")
+
+    for supply in (mailers, labels, brushes):
+        assert 'name="on_hand-' + str(supply.id) + '"' in html
+        assert supply.fmt_quantity() in html
+    assert "Only by hand" in html
+    # Only the roll asks for uses left on the one in use.
+    assert 'name="left-' + str(labels.id) + '"' in html
+    assert 'name="left-' + str(mailers.id) + '"' not in html
+
+
+def test_reconcile_supplies_shows_the_differences_before_saving(client):
+    mailers, labels, brushes = _reconcile_supplies()
+
+    html = _reconcile(
+        client,
+        action="review",
+        **{
+            "on_hand-" + str(mailers.id): "48",
+            "on_hand-" + str(labels.id): "2",
+            "left-" + str(labels.id): "150",
+        },
+    )
+
+    assert re.search(
+        r"<td>LP Mailers</td>\s*<td>51</td>\s*<td>48</td>\s*<td>−3</td>", html
+    )
+    assert "2 (150 of 220 left on the one in use)" in html
+    assert "−60 uses" in html
+    assert "Record Brushes" not in html
+    assert 'name="seen-' + str(mailers.id) + '" value="51/0"' in html
+    fbc.db.session.expire_all()
+    assert mailers.quantity == 51
+    assert fbc.db.session.query(SupplyUse).count() == 0
+
+
+def test_reconcile_supplies_saves_only_the_supplies_filled_in(client):
+    mailers, labels, brushes = _reconcile_supplies()
+
+    response = client.post(
+        "/reconcilesupplies/",
+        data={
+            "action": "save",
+            "on_hand-" + str(mailers.id): "48",
+            "seen-" + str(mailers.id): "51/0",
+            "on_hand-" + str(labels.id): "3",
+            "left-" + str(labels.id): "150",
+            "seen-" + str(labels.id): "2/10",
+            "on_hand-" + str(brushes.id): "",
+        },
+    )
+
+    assert response.status_code == 302
+    fbc.db.session.expire_all()
+    assert mailers.quantity == 48
+    assert (labels.quantity, labels.pack_used) == (3, 70)
+    assert brushes.quantity == 3
+    uses = fbc.db.session.query(SupplyUse).order_by(SupplyUse.supply_id).all()
+    # A count that found more than the Supply List had counts below 0.
+    assert [(u.supply, u.count, u.kind) for u in uses] == [
+        (mailers, 3, "reconcile"),
+        (labels, -160, "reconcile"),
+    ]
+    flashed = client.get(response.location).get_data(as_text=True)
+    assert "LP Mailers: 51 → 48" in flashed
+
+
+def test_reconcile_supplies_wont_save_if_stock_changed_since_the_review(client):
+    mailers, labels, brushes = _reconcile_supplies()
+
+    html = _reconcile(
+        client,
+        action="save",
+        **{"on_hand-" + str(mailers.id): "48", "seen-" + str(mailers.id): "52/0"},
+    )
+
+    assert "LP Mailers changed since you checked the differences" in html
+    assert 'name="seen-' + str(mailers.id) + '" value="51/0"' in html
+    fbc.db.session.expire_all()
+    assert mailers.quantity == 51
+    assert fbc.db.session.query(SupplyUse).count() == 0
+
+
+@pytest.mark.parametrize(
+    "fields, error",
+    [
+        ({"on_hand": "lots"}, "Enter whole numbers."),
+        ({"on_hand": "-1"}, "can&#39;t be below 0"),
+        ({"on_hand": "2"}, "how many uses are left"),
+        ({"on_hand": "2", "left": "0"}, "from 1 to 220"),
+        ({"on_hand": "2", "left": "221"}, "from 1 to 220"),
+        ({"on_hand": "0", "left": "5"}, "blank when none are on hand"),
+        ({"left": "5"}, "Enter how many are on hand too."),
+    ],
+)
+def test_reconcile_supplies_refuses_what_the_supply_form_would(client, fields, error):
+    mailers, labels, brushes = _reconcile_supplies()
+    data = {k + "-" + str(labels.id): v for k, v in fields.items()}
+
+    html = _reconcile(client, action="save", **data)
+
+    assert error in html
+    assert "Fix the counts marked below." in html
+    # The counts stay filled in to correct.
+    for value in fields.values():
+        assert 'value="' + value + '"' in html
+    fbc.db.session.expire_all()
+    assert (labels.quantity, labels.pack_used) == (2, 10)
+    assert fbc.db.session.query(SupplyUse).count() == 0
+
+
+def test_reconcile_supplies_picks_out_the_supply_it_was_linked_for(client):
+    mailers, labels, brushes = _reconcile_supplies()
+
+    html = client.get("/reconcilesupplies/?supply=" + str(labels.id)).get_data(
+        as_text=True
+    )
+
+    assert '<tr id="supply-' + str(labels.id) + '" class="warning">' in html
+    assert '<tr id="supply-' + str(mailers.id) + '">' in html
+
+
+def test_reorder_banner_links_to_reconcile_supplies(client):
+    fbc.db.session.add(Supply(name="LP Mailers", quantity=2, min_quantity=5))
+    fbc.db.session.commit()
+
+    html = client.get("/").get_data(as_text=True)
+
+    assert "Time to reorder" in html
+    assert 'href="/reconcilesupplies/"' in html

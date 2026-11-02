@@ -6,6 +6,7 @@ from fbc import db
 from fbc.models.supplies import (
     ADDING_UNIT,
     ADJUSTMENT,
+    RECONCILE,
     SHIPPING,
     PurchaseOrder,
     Supply,
@@ -213,3 +214,55 @@ def test_supply_fmt_cost_per_use_shows_dollars():
     assert Supply(name="Labels").fmt_cost_per_use() == ""
     assert Supply(name="Labels", cost_per_use=0.0455).fmt_cost_per_use() == "$0.0455"
     assert Supply(name="Mailers", cost_per_use=1.5).fmt_cost_per_use() == "$1.5"
+
+
+@pytest.mark.parametrize(
+    "on_hand, left, stock",
+    [
+        # 2 rolls, about 150 labels left on the open one.
+        (2, 150, (2, 70)),
+        # A fresh roll in use.
+        (1, 220, (1, 0)),
+        (3, 1, (3, 219)),
+        # None on hand, so none in use.
+        (0, None, (0, 0)),
+        (0, 0, (0, 0)),
+    ],
+)
+def test_stock_from_count_works_out_a_rolls_quantity_and_used(on_hand, left, stock):
+    supply = Supply(name="Shipping Label Roll", quantity=1, pack_size=220)
+    assert supply.stock_from_count(on_hand, left) == stock
+
+
+@pytest.mark.parametrize("on_hand, stock", [(48, (48, 0)), (0, (0, 0))])
+def test_stock_from_count_takes_on_hand_as_quantity_for_singles(on_hand, stock):
+    supply = Supply(name="LP Mailers", quantity=51, pack_size=1)
+    assert supply.stock_from_count(on_hand) == stock
+
+
+@pytest.mark.parametrize(
+    "on_hand, left, error",
+    [
+        (-1, None, "can't be below 0"),
+        (2, None, "how many uses are left"),
+        # Used up, so not on hand: Quantity would have gone down.
+        (2, 0, "from 1 to 220"),
+        (2, 221, "from 1 to 220"),
+        (0, 5, "blank when none are on hand"),
+    ],
+)
+def test_stock_from_count_refuses_what_the_supply_form_would(on_hand, left, error):
+    supply = Supply(name="Shipping Label Roll", quantity=1, pack_size=220)
+    with pytest.raises(ValueError, match=error):
+        supply.stock_from_count(on_hand, left)
+
+
+def test_record_adjustment_can_record_a_reconcile(db):
+    supply = Supply(name="LP Mailers", quantity=51)
+    db.session.add(supply)
+    db.session.commit()
+
+    supply.quantity = 48
+    use = supply.record_adjustment(RECONCILE)
+
+    assert (use.count, use.kind, use.fmt_kind()) == (3, RECONCILE, "Reconcile Supplies")
