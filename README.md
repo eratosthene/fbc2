@@ -58,6 +58,19 @@ docker/build.sh
 sudo docker compose -f docker/compose.yml up -d
 ```
 
+`docker/live-up.sh` does both. With `-n` it skips the build and starts the
+image that's already there:
+
+```bash
+docker/live-up.sh
+```
+
+To stop it and remove its container (it never removes volumes):
+
+```bash
+docker/live-down.sh
+```
+
 The Docker files are all in `docker/`. The build context is still the repo
 root, since the image copies `config.py`, `fbc/` and `migrations/`.
 
@@ -156,12 +169,27 @@ it, since Compose reads `.env` from the compose file's folder.
   It runs in the foreground, with the logs, until Ctrl-C. With `-d` it
   starts in the background, and says how to follow the logs and stop it.
 
-The database is kept in the `fbc2-dev_db` volume between sessions. To start
-again from the dumps, remove it:
+- To stop it and remove its containers:
+
+  ```bash
+  dev-scripts/compose-down.sh
+  ```
+
+The database is kept in the `fbc2-dev_db` volume between sessions, and
+`compose-down.sh` never removes it. To start again from the dumps in
+`docker/dev-db/`, empty the database and load them into it. It asks first,
+since it deletes the database you had; `-y` skips that:
 
 ```bash
-docker compose -f docker/compose.dev.yml down -v
+dev-scripts/compose-reset-db.sh
 ```
+
+It drops and recreates the database inside the dev MariaDB, so the volume
+stays. If the app is running, it stops it first and starts it again after.
+`compose-down.sh` and `compose-reset-db.sh` only act on a compose project of
+`docker/compose.dev.yml` on this machine: they refuse a remote `DOCKER_HOST`
+or docker context. `-p` points them at a throwaway project instead of
+`fbc2-dev`, such as `fbc2-test`.
 
 ### A copy of live data
 
@@ -236,11 +264,12 @@ so `flask setup-db` brings it up to date when the app starts.
    scp <live server>:fbc-dev-<date>.sql.gz docker/dev-db/
    ```
 
-3. Start from an empty database, so the dump is loaded. This removes the
-   database you had, and any changes made in it:
+3. Empty the database and load the dump into it. This removes the
+   database you had, and any changes made in it. Then start the app, if it
+   isn't running, to bring the dump up to date:
 
    ```bash
-   docker compose -f docker/compose.dev.yml down -v
+   dev-scripts/compose-reset-db.sh
    dev-scripts/compose-up.sh
    ```
 
