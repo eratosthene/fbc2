@@ -28,6 +28,11 @@ TRANSACTION_LABELS = {
     "ADJUSTMENT": "Adjustment",
 }
 
+# Transactions on an order that aren't earnings, which eBay's order page
+# leaves out too. A TRANSFER is the seller paying eBay for a charge, like a
+# label bought with a card on file: the charge is a line of its own.
+NOT_EARNINGS = {"TRANSFER"}
+
 # eBay's feeTypes, for fees taken out of a sale and charges of their own.
 # Anything else is shown by its own name, made readable.
 FEE_LABELS = {
@@ -214,6 +219,8 @@ def order_earnings(order_id):
     label = False
     for t in transactions:
         kind = t.get("transactionType")
+        if kind in NOT_EARNINGS:
+            continue
         lines = transaction_lines(t)
         for line in lines:
             line["ebay_order_id"] = line["ebay_order_id"] or order_id
@@ -500,16 +507,18 @@ def backfill_earnings(
     Where eBay's total differs from Net Sold (often a refund that wasn't
     recorded), Net Sold is kept and the difference becomes a manual
     adjustment line, unless `update_net`, which sets Net Sold to eBay's
-    total. Receipts eBay has no sale for are left alone. Stops at the first
-    error from eBay, since the rest would fail the same way.
+    total. Receipts eBay has no sale for are left alone, as are receipts
+    whose order is on other receipts too (see SalesReceipt.order_receipts).
+    Stops at the first error from eBay, since the rest would fail the same
+    way.
 
-    Returns {"saved", "differ", "skipped"}: counts, with differ the receipts
-    whose Net Sold didn't match.
+    Returns {"saved", "differ", "skipped", "shared"}: counts, with differ the
+    receipts whose Net Sold didn't match.
     """
     from fbc import db
     from fbc.models.sales import MANUAL, SalesReceipt
 
-    counts = {"saved": 0, "differ": 0, "skipped": 0}
+    counts = {"saved": 0, "differ": 0, "skipped": 0, "shared": 0}
     if devmode.on():
         echo(devmode.message("Backfilling earnings from eBay"))
         return counts
@@ -533,6 +542,17 @@ def backfill_earnings(
             + receipt.ebay_order_id
             + ")"
         )
+        shared = receipt.order_receipts()
+        if shared > 1:
+            echo(
+                name
+                + ": its order is on "
+                + str(shared)
+                + " receipts, and eBay's earnings can't be split between them;"
+                " left as it is."
+            )
+            counts["shared"] += 1
+            continue
         earnings = order_earnings(receipt.ebay_order_id)
         if earnings["errors"]:
             for e in earnings["errors"]:

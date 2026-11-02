@@ -80,6 +80,24 @@ class SalesReceipt(Model):
         order_by="SalesReceiptLine.id",
     )
 
+    def order_receipts(self):
+        """
+        How many Sales Receipts, this one included, are linked to its eBay
+        order. More than one when an order of several Units was split into
+        a receipt per Unit by hand. eBay's earnings are for the whole order
+        and can't be split between them, so those receipts get no lines
+        until a receipt can cover a whole order (#53).
+        """
+        from fbc import db
+
+        if not self.ebay_order_id:
+            return 0
+        return (
+            db.session.query(SalesReceipt)
+            .filter_by(ebay_order_id=self.ebay_order_id)
+            .count()
+        )
+
     def lines_total(self):
         return round(sum(line.amount for line in self.lines), 2)
 
