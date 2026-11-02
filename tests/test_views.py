@@ -254,6 +254,38 @@ def test_adding_a_unit_takes_its_supplies_out_of_stock(client):
     assert (use.supply, use.count, use.kind, use.unit) == (sleeves, 2, "unit", unit)
 
 
+def _flashes(client):
+    with client.session_transaction() as session:
+        return session.get("_flashes", [])
+
+
+def test_adding_a_unit_without_a_retail_price_saves_it_with_a_warning(client):
+    page = client.post(
+        "/unitmodelview/add", data={"name": "Some Unit", "unit_type": '12" LP'}
+    )
+
+    assert page.status_code == 302
+    unit = fbc.db.session.query(Unit).one()
+    assert unit.retail_price is None
+    warning = (
+        'Some Unit has no Retail Price. <a href="/unitmodelview/edit/'
+        + str(unit.id)
+        + '">Edit it</a> to add one.'
+    )
+    assert ("warning", warning) in _flashes(client)
+
+
+def test_adding_a_unit_with_a_retail_price_gives_no_warning(client):
+    page = client.post(
+        "/unitmodelview/add",
+        data={"name": "Some Unit", "unit_type": '12" LP', "retail_price": "12.50"},
+    )
+
+    assert page.status_code == 302
+    assert fbc.db.session.query(Unit).one().retail_price == 12.5
+    assert not any("Retail Price" in message for _, message in _flashes(client))
+
+
 def test_adding_a_unit_needs_whole_supply_counts(client):
     sleeves, mailers = _inner_sleeves()
 

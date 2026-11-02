@@ -1,4 +1,5 @@
 from fbc.util import CustomModelView
+from flask import flash, url_for
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
@@ -6,6 +7,7 @@ from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.models.supplies import ADDING_UNIT
 from fbc.util import CustomForm
 from fbc.widgets import SuppliesUsedField
+from markupsafe import Markup
 from wtforms import BooleanField, StringField
 from wtforms.validators import Length, Optional
 
@@ -115,6 +117,17 @@ class UnitModelBaseView(CustomModelView):
         # along with it.
         for supply, count in getattr(item, "supplies_used", {}).items():
             supply.use(count, ADDING_UNIT, unit=item)
+
+    def post_add(self, item):
+        # A Unit without a price is easy to miss and drops out of the lists
+        # filtered on price, but a few really have none, so it still saves.
+        if item.retail_price is None:
+            flash(
+                Markup(
+                    '{} has no Retail Price. <a href="{}">Edit it</a> to add one.'
+                ).format(item.name, url_for(self.endpoint + ".edit", pk=item.id)),
+                "warning",
+            )
 
 
 class UnitModelView(UnitModelBaseView):
