@@ -25,6 +25,16 @@ with Discogs and eBay. It's a Flask-AppBuilder app on MariaDB.
   can see which estimates drift. Purchase Orders aren't changed. Ship This's
   and Add Unit's "There aren't enough" messages and the home page's reorder
   banner link here.
+- **Expenses**: business costs that aren't Purchase Lots or Purchase Orders,
+  like an eBay Store subscription, equipment, booth fees or mileage, under
+  Supplies > Expenses. Each has a date, category and amount, and optionally
+  a vendor, note and a link to the receipt. The categories follow Schedule
+  C's lines; `EXPENSE_CATEGORIES` in `config.py` changes them. For mileage,
+  enter Miles and leave Amount blank: it's Miles × `MILEAGE_RATE`, and each
+  expense keeps the rate it was entered with. Packing supplies still go on a
+  Purchase Order, so the Supply List stays right. Equipment is recorded when
+  it's bought, and depreciating it is left to the accountant. The home page
+  takes expenses off the total net profit, with a total per category.
 
 ## Setting up
 
@@ -39,6 +49,8 @@ credentials. Copy `config.py.tpl` to start one, and fill in:
   and the listing defaults. The comments there say where each one comes from.
   Once the app is running, Sales > Connect eBay and Discogs > Connect Discogs
   sign in to each site, and keep the tokens in the database.
+- `MILEAGE_RATE`: the IRS standard mileage rate for the year, for expenses
+  entered as miles. Without it, each one needs its rate typed in.
 
 The app creates the database's tables, or brings them up to date, with:
 

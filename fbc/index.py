@@ -29,6 +29,7 @@ class MyIndexView(IndexView):
         from fbc import db
         from fbc.models.inventory import PurchaseLot, StorageBox, Unit
         from fbc.models.sales import SalesReceipt
+        from fbc.models.expenses import category_label, expense_totals
         from fbc.models.supplies import PurchaseOrder, Supply
 
         # Load just the columns the totals need, once, and do every count
@@ -184,7 +185,12 @@ class MyIndexView(IndexView):
             totals["feepc"] = 0.0
         if totals["capital"] > 0:
             totals["roi"] = round(totals["profit"] / totals["capital"] * 100, 2)
-        total_net_profit = totals["profit"] - supply_total
+        expenses = [
+            (category_label(category), amount)
+            for category, amount in expense_totals().items()
+        ]
+        expense_total = sum(amount for _, amount in expenses)
+        total_net_profit = totals["profit"] - supply_total - expense_total
         if totals["net"] != 0:
             profit_margin = total_net_profit / totals["net"] * 100
         else:
@@ -210,6 +216,8 @@ class MyIndexView(IndexView):
             lot_totals=lot_totals,
             totals=totals,
             supply_total=supply_total,
+            expenses=expenses,
+            expense_total=expense_total,
             total_net_profit=total_net_profit,
             profit_margin=profit_margin,
             supply_per_unit=supply_per_unit,

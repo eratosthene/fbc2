@@ -60,6 +60,28 @@
     "${:,.2f}".format(breakeven_per_unit|float) }}
   </p>
   {% endcall %}
+  <h2>Total other expenses: {{ "${:,.2f}".format(expense_total|float) }}</h2>
+  {% call lib.accordion_tag("expensedetails","Expense Details", False) %}
+  <table
+    class="table table-bordered table-condensed table-hover"
+    style="width: auto"
+  >
+    <tr>
+      <th>Category</th>
+      <th>Amount</th>
+    </tr>
+    {% for label, amount in expenses %}
+    <tr>
+      <td>{{ label }}</td>
+      <td>{{ "${:,.2f}".format(amount|float) }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="2">No expenses yet.</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endcall %}
   <h2>
     Total net profit: {% if (total_net_profit|float < 0) %}
     <span style="color: red">

@@ -116,6 +116,21 @@ IMG_UPLOAD_URL = "/static/uploads/"
 # is fbc-sync-jobs in the system temp folder.
 # SYNC_JOB_FOLDER = "/tmp/fbc-sync-jobs"
 
+# Supplies > Expenses. The categories an expense can have, as
+# {key: label}; the key is what's stored, so keep it once expenses use it.
+# Left out, the list in fbc/models/expenses.py is used, named after
+# Schedule C's lines. Check it with whoever does the taxes.
+# EXPENSE_CATEGORIES = {
+#     "advertising": "Advertising (line 8)",
+#     "car": "Car and truck (line 9)",
+#     "other": "Other (line 27a)",
+# }
+
+# The IRS standard mileage rate, in dollars per mile, for an expense entered
+# as Miles. It changes every year (irs.gov, "standard mileage rates"); each
+# expense keeps the rate it was entered with.
+MILEAGE_RATE = 0.725
+
 # Theme configuration
 # these are located on static/appbuilder/css/themes
 # you can create your own and easily use them placing them on the same dir structure to override
