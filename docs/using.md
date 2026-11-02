@@ -37,6 +37,11 @@ difference. A receipt with no lines from eBay (dev mode, eBay unreachable, or
 added by hand) has none at all, and reports count its fees as not broken
 down.
 
+So does a receipt whose eBay order is on other receipts too, from splitting
+an order of several Units into a receipt per Unit by hand. eBay's earnings
+are for the whole order and can't be split between them, so Refresh earnings
+and the backfill leave those receipts alone. Their page says so.
+
 A refund or a label bought after shipping changes an order's earnings. Refresh
 earnings from eBay, on the receipt's page, reads them again and shows what
 would change. Saving replaces the lines, and changes Net Sold to eBay's total

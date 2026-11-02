@@ -102,6 +102,8 @@ def backfill_earnings(apply, update_net, since, limit):
         + str(counts["differ"])
         + ", eBay had no sale for "
         + str(counts["skipped"])
+        + ", order on other receipts too for "
+        + str(counts["shared"])
         + "."
     )
 

@@ -966,7 +966,7 @@ def test_backfill_earnings_only_shows_without_apply(app, finances):
 
     counts = shipping.backfill_earnings(echo=said.append)
 
-    assert counts == {"saved": 0, "differ": 0, "skipped": 0}
+    assert counts == {"saved": 0, "differ": 0, "skipped": 0, "shared": 0}
     assert "2 lines, matches Net Sold" in said[0]
     assert "--apply" in said[-1]
     db.session.expire_all()
@@ -979,7 +979,7 @@ def test_backfill_earnings_saves_lines_and_keeps_net_sold(app, finances):
 
     counts = shipping.backfill_earnings(apply=True, echo=said.append)
 
-    assert counts == {"saved": 1, "differ": 1, "skipped": 0}
+    assert counts == {"saved": 1, "differ": 1, "skipped": 0, "shared": 0}
     assert "differs from Net Sold $20.00" in said[0]
     db.session.expire_all()
     receipt = db.session.get(SalesReceipt, receipt.id)
@@ -1011,7 +1011,7 @@ def test_backfill_earnings_leaves_receipts_with_lines_or_no_sale(app, finances):
     db.session.commit()
     finances.reply = _transactions(LABEL)
     counts = shipping.backfill_earnings(apply=True, echo=lambda _: None)
-    assert counts == {"saved": 0, "differ": 0, "skipped": 1}
+    assert counts == {"saved": 0, "differ": 0, "skipped": 1, "shared": 0}
 
 
 def test_backfill_earnings_stops_at_an_ebay_error(app, finances):
@@ -1037,7 +1037,10 @@ def test_backfill_earnings_command(app, finances):
     )
 
     assert result.exit_code == 0, result.output
-    assert "Saved 1, Net Sold differed on 0, eBay had no sale for 0." in result.output
+    assert (
+        "Saved 1, Net Sold differed on 0, eBay had no sale for 0, order on other"
+        " receipts too for 0." in result.output
+    )
     db.session.expire_all()
     assert len(db.session.get(SalesReceipt, receipt.id).lines) == 2
 
@@ -1204,3 +1207,51 @@ def test_order_earnings_leave_out_a_transfer_paying_for_a_label(app, finances):
         "SHIPPING_LABEL",
     ]
     assert earnings["net"] == 2.69
+
+
+def _split_order():
+    """The Carnaval order split by hand into two Sales Receipts."""
+    receipt = _shipped(net_sold=10.0)
+    other = SalesReceipt(
+        date=receipt.date,
+        ebay_order_id=receipt.ebay_order_id,
+        sold_price=12.0,
+        net_sold=6.5,
+    )
+    db.session.add(other)
+    db.session.commit()
+    return receipt, other
+
+
+def test_backfill_earnings_leaves_an_order_split_across_receipts(app, finances):
+    receipt, other = _split_order()
+    said = []
+
+    counts = shipping.backfill_earnings(apply=True, echo=said.append)
+
+    assert counts == {"saved": 0, "differ": 0, "skipped": 0, "shared": 2}
+    assert finances.calls == []
+    assert "its order is on 2 receipts" in said[0]
+    db.session.expire_all()
+    assert db.session.get(SalesReceipt, receipt.id).lines == []
+    assert db.session.get(SalesReceipt, other.id).lines == []
+
+
+def test_refresh_earnings_refuses_an_order_split_across_receipts(client, finances):
+    receipt, other = _split_order()
+
+    show = client.get("/salesreceiptmodelview/show/" + str(receipt.id))
+    page = client.post(
+        "/salesreceiptmodelview/earnings/" + str(other.id),
+        data={"total": "16.50", "update_net": "1"},
+        follow_redirects=True,
+    )
+
+    html = show.get_data(as_text=True)
+    assert "on other Sales Receipts too" in html
+    assert "Refresh earnings from eBay</a>" not in html
+    assert "on other Sales Receipts too" in page.get_data(as_text=True)
+    assert finances.calls == []
+    db.session.expire_all()
+    assert db.session.get(SalesReceipt, other.id).net_sold == 6.5
+    assert db.session.get(SalesReceipt, other.id).lines == []

@@ -28,6 +28,14 @@ from fbc.views.inventory import UnitModelView
 from fbc.util import CustomForm
 
 
+# Why a receipt whose eBay order is on other receipts gets no lines.
+SHARED_ORDER = (
+    "This Sales Receipt's eBay order is on other Sales Receipts too, so eBay's"
+    " earnings for the order can't be split between them. Its fees aren't"
+    " broken down."
+)
+
+
 def flash_adjustment(receipt):
     """Say so when a receipt keeps a manual adjustment line."""
     for line in receipt.lines:
@@ -88,6 +96,7 @@ class SalesReceiptModelView(CustomModelView):
             widgets=widgets,
             related_views=self._related_views,
             receipt=receipt,
+            shared_order=SHARED_ORDER if receipt.order_receipts() > 1 else None,
         )
 
     @expose("/earnings/<pk>", methods=["GET", "POST"])
@@ -105,6 +114,9 @@ class SalesReceiptModelView(CustomModelView):
         back = redirect(url_for("SalesReceiptModelView.show", pk=receipt.id))
         if not receipt.ebay_order_id:
             flash("This Sales Receipt isn't linked to an eBay order.", "warning")
+            return back
+        if receipt.order_receipts() > 1:
+            flash(SHARED_ORDER, "warning")
             return back
         earnings = order_earnings(receipt.ebay_order_id)
         if request.method == "POST":
