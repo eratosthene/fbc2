@@ -27,8 +27,9 @@ and Ship This turns an order into a Sales Receipt.
 A Sales Receipt keeps how its order's earnings add up to Net Sold, as eBay's
 Finances API gives them: the sale, each fee eBay took out of it (final value
 fee, regulatory fee and so on), the shipping label, refunds and other
-charges such as promoted listing fees. Ship This saves them with the receipt,
-and the receipt's page shows them.
+charges such as ad fees. A refund is the whole amount given back to the
+buyer, with any fees eBay credited back as lines of their own. Ship This
+saves them with the receipt, and the receipt's page shows them.
 
 The lines always add up to Net Sold. When Net Sold is typed in, or edited
 later, and differs from eBay's lines, a manual adjustment line makes up the
