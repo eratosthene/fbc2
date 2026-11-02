@@ -72,6 +72,40 @@ def setup_db():
         click.echo("Created a new database at the latest migration.")
 
 
+@app.cli.command("backfill-earnings")
+@click.option("--apply", is_flag=True, help="Save the lines; without it, only show.")
+@click.option(
+    "--update-net",
+    is_flag=True,
+    help="Set Net Sold to eBay's total where they differ, instead of keeping"
+    " the difference as a manual adjustment.",
+)
+@click.option(
+    "--since", type=click.DateTime(["%Y-%m-%d"]), help="Only receipts from this date."
+)
+@click.option("--limit", type=int, help="At most this many receipts, newest first.")
+def backfill_earnings(apply, update_net, since, limit):
+    """Give past Sales Receipts their earnings lines from eBay."""
+    from fbc.shipping import backfill_earnings
+
+    counts = backfill_earnings(
+        apply=apply,
+        update_net=update_net,
+        since=since.date() if since else None,
+        limit=limit,
+        echo=click.echo,
+    )
+    click.echo(
+        "Saved "
+        + str(counts["saved"])
+        + ", Net Sold differed on "
+        + str(counts["differ"])
+        + ", eBay had no sale for "
+        + str(counts["skipped"])
+        + "."
+    )
+
+
 # The views below import the models, which need `db` and `appbuilder` to exist
 # first, so these imports can't move to the top of the file.
 from fbc.views.discogs import (

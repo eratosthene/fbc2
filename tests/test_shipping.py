@@ -140,10 +140,13 @@ def test_order_earnings_adds_up_the_sale_and_the_label(app, finances):
     earnings = shipping.order_earnings("12-34567-89012")
 
     assert earnings["net"] == 16.50
-    assert earnings["lines"] == [
-        {"label": "Sale, less eBay's fees and taxes", "amount": 21.13},
-        {"label": "Shipping label", "amount": -4.63},
+    assert [
+        (line["kind"], line["label"], line["amount"]) for line in earnings["lines"]
+    ] == [
+        ("SALE", "Sale, less the taxes eBay collects", 21.13),
+        ("SHIPPING_LABEL", "Shipping label", -4.63),
     ]
+    assert {line["ebay_order_id"] for line in earnings["lines"]} == {"12-34567-89012"}
     assert earnings["items"] == 1
     assert earnings["errors"] == earnings["warnings"] == []
     url, kwargs = finances.calls[0]
@@ -668,3 +671,372 @@ def test_shipping_needs_whole_supply_counts(client, discogs, count):
     assert db.session.query(SalesReceipt).count() == 0
     assert supplies["mailers"].quantity == 10
     assert discogs.deleted == []
+
+
+SALE_WITH_FEES = {
+    "transactionId": "T-SALE",
+    "transactionDate": "2026-10-28T15:31:02.000Z",
+    "transactionType": "SALE",
+    "bookingEntry": "CREDIT",
+    "amount": {"value": "21.13", "currency": "USD"},
+    "totalFeeAmount": {"value": "4.17", "currency": "USD"},
+    "orderLineItems": [
+        {
+            "lineItemId": "1",
+            "marketplaceFees": [
+                {"feeType": "FINAL_VALUE_FEE", "amount": {"value": "3.27"}},
+                {
+                    "feeType": "FINAL_VALUE_FEE_FIXED_PER_ORDER",
+                    "amount": {"value": "0.40"},
+                },
+                {"feeType": "REGULATORY_OPERATING_FEE", "amount": {"value": "0.10"}},
+            ],
+        }
+    ],
+}
+AD_FEE = {
+    "transactionType": "NON_SALE_CHARGE",
+    "bookingEntry": "DEBIT",
+    "feeType": "AD_FEE",
+    "amount": {"value": "1.25", "currency": "USD"},
+}
+
+
+def _lines(earnings):
+    return [(line["kind"], line["label"], line["amount"]) for line in earnings["lines"]]
+
+
+def test_order_earnings_split_out_the_fees_in_the_sale(app, finances):
+    finances.reply = _transactions(SALE_WITH_FEES, LABEL, AD_FEE)
+
+    earnings = shipping.order_earnings("12-34567-89012")
+
+    assert _lines(earnings) == [
+        ("SALE", "Sale, less the taxes eBay collects", 25.30),
+        ("FEE", "Final value fee", -3.27),
+        ("FEE", "Final value fee per order", -0.40),
+        ("FEE", "Regulatory operating fee", -0.10),
+        # totalFeeAmount has 40 cents the per-fee list doesn't.
+        ("FEE", "eBay fees", -0.40),
+        ("SHIPPING_LABEL", "Shipping label", -4.63),
+        ("NON_SALE_CHARGE", "Ad fee", -1.25),
+    ]
+    assert earnings["net"] == 15.25
+    sale = earnings["lines"][0]
+    assert sale["transaction_id"] == "T-SALE"
+    assert sale["transaction_date"] == datetime.datetime(2026, 10, 28, 15, 31, 2)
+    assert earnings["lines"][1]["fee_type"] == "FINAL_VALUE_FEE"
+    assert earnings["lines"][-1]["fee_type"] == "AD_FEE"
+
+
+def test_order_earnings_add_up_fees_of_each_kind_across_items(app, finances):
+    fee = {"feeType": "FINAL_VALUE_FEE", "amount": {"value": "1.50"}}
+    finances.reply = _transactions(
+        dict(
+            SALE,
+            totalFeeAmount={"value": "3.00"},
+            orderLineItems=[{"marketplaceFees": [fee]}, {"marketplaceFees": [fee]}],
+        )
+    )
+
+    earnings = shipping.order_earnings("12-34567-89012")
+
+    assert _lines(earnings) == [
+        ("SALE", "Sale, less the taxes eBay collects", 24.13),
+        ("FEE", "Final value fee", -3.00),
+    ]
+
+
+def test_order_earnings_name_an_unknown_fee_readably(app, finances):
+    finances.reply = _transactions(
+        dict(
+            SALE,
+            totalFeeAmount={"value": "1.00"},
+            orderLineItems=[
+                {
+                    "marketplaceFees": [
+                        {"feeType": "BELOW_STANDARD_FEE", "amount": {"value": "1.00"}}
+                    ]
+                }
+            ],
+        )
+    )
+
+    earnings = shipping.order_earnings("12-34567-89012")
+
+    assert earnings["lines"][1]["label"] == "Below standard fee"
+
+
+def test_shipping_keeps_ebays_earnings_lines_with_the_receipt(client, finances):
+    order, unit = _order()
+    finances.reply = _transactions(SALE_WITH_FEES, LABEL)
+
+    client.post(
+        "/ebayordermodelview/ship/" + order.order_id, data={"net_sold": "16.50"}
+    )
+
+    db.session.expire_all()
+    receipt = db.session.query(SalesReceipt).one()
+    assert [(line.kind, line.amount) for line in receipt.lines] == [
+        ("SALE", 25.30),
+        ("FEE", -3.27),
+        ("FEE", -0.40),
+        ("FEE", -0.10),
+        ("FEE", -0.40),
+        ("SHIPPING_LABEL", -4.63),
+    ]
+    assert receipt.lines_total() == receipt.net_sold == 16.50
+    assert receipt.lines[0].ebay_order_id == order.order_id
+
+
+def test_shipping_keeps_a_different_net_sold_as_a_manual_adjustment(client, finances):
+    order, unit = _order()
+
+    page = client.post(
+        "/ebayordermodelview/ship/" + order.order_id,
+        data={"net_sold": "15.00"},
+        follow_redirects=True,
+    )
+
+    db.session.expire_all()
+    receipt = db.session.query(SalesReceipt).one()
+    assert [(line.kind, line.label, line.amount) for line in receipt.lines] == [
+        ("SALE", "Sale, less the taxes eBay collects", 21.13),
+        ("SHIPPING_LABEL", "Shipping label", -4.63),
+        ("MANUAL", "Manual adjustment", -1.50),
+    ]
+    assert receipt.lines_total() == 15.00
+    assert "differs from eBay&#39;s earnings by -$1.50" in page.get_data(as_text=True)
+
+
+def test_shipping_without_ebays_earnings_keeps_no_lines(client):
+    # Without the finances fixture eBay isn't connected, so there are no lines.
+    order, unit = _order()
+
+    client.post(
+        "/ebayordermodelview/ship/" + order.order_id, data={"net_sold": "16.50"}
+    )
+
+    db.session.expire_all()
+    receipt = db.session.query(SalesReceipt).one()
+    assert receipt.net_sold == 16.50
+    assert receipt.lines == []
+
+
+def _shipped(net_sold=16.50, lines=None):
+    """A Sales Receipt for the Carnaval order, with `lines` if given."""
+    order, unit = _order()
+    receipt = shipping.ship_order(order, unit, net_sold, lines=lines or [])
+    return receipt
+
+
+def test_refresh_earnings_page_shows_both_and_offers_ebays_net(client, finances):
+    receipt = _shipped(net_sold=16.50)
+    finances.reply = _transactions(
+        SALE, LABEL, {**LABEL, "transactionType": "REFUND", "amount": {"value": "5.00"}}
+    )
+
+    html = client.get("/salesreceiptmodelview/earnings/" + str(receipt.id)).get_data(
+        as_text=True
+    )
+
+    assert "No lines yet." in html
+    assert "Refund" in html
+    assert "Change Net Sold from $16.50 to eBay's $11.50" in html
+    assert 'name="total" value="11.50"' in html
+
+
+def test_refresh_earnings_saves_ebays_lines_and_net_sold(client, finances):
+    receipt = _shipped(net_sold=16.50)
+    refund = {**LABEL, "transactionType": "REFUND", "amount": {"value": "5.00"}}
+    finances.reply = _transactions(SALE, LABEL, refund)
+
+    page = client.post(
+        "/salesreceiptmodelview/earnings/" + str(receipt.id),
+        data={"total": "11.50", "update_net": "1"},
+    )
+
+    assert page.status_code == 302
+    db.session.expire_all()
+    receipt = db.session.get(SalesReceipt, receipt.id)
+    assert receipt.net_sold == 11.50
+    assert [line.kind for line in receipt.lines] == ["SALE", "SHIPPING_LABEL", "REFUND"]
+
+
+def test_refresh_earnings_can_keep_net_sold(client, finances):
+    receipt = _shipped(net_sold=16.50, lines=[])
+    refund = {**LABEL, "transactionType": "REFUND", "amount": {"value": "5.00"}}
+    finances.reply = _transactions(SALE, LABEL, refund)
+
+    client.post(
+        "/salesreceiptmodelview/earnings/" + str(receipt.id), data={"total": "11.50"}
+    )
+
+    db.session.expire_all()
+    receipt = db.session.get(SalesReceipt, receipt.id)
+    assert receipt.net_sold == 16.50
+    assert receipt.lines[-1].kind == "MANUAL"
+    assert receipt.lines[-1].amount == 5.00
+    assert receipt.lines_total() == 16.50
+
+
+def test_refresh_earnings_replaces_the_lines_it_had(client, finances):
+    receipt = _shipped(lines=shipping.order_earnings("12-34567-89012")["lines"])
+    finances.reply = _transactions(SALE, LABEL)
+
+    client.post(
+        "/salesreceiptmodelview/earnings/" + str(receipt.id),
+        data={"total": "16.50", "update_net": "1"},
+    )
+
+    db.session.expire_all()
+    assert len(db.session.get(SalesReceipt, receipt.id).lines) == 2
+
+
+def test_refresh_earnings_wont_save_what_changed_since_it_was_shown(client, finances):
+    receipt = _shipped()
+
+    html = client.post(
+        "/salesreceiptmodelview/earnings/" + str(receipt.id),
+        data={"total": "11.50", "update_net": "1"},
+    ).get_data(as_text=True)
+
+    assert "changed since this page was shown" in html
+    db.session.expire_all()
+    assert db.session.get(SalesReceipt, receipt.id).lines == []
+
+
+def test_refresh_earnings_is_off_in_dev_mode(client, finances, monkeypatch):
+    receipt = _shipped()
+    monkeypatch.setitem(fbc.app.config, "DEV_MODE", True)
+
+    show = client.get("/salesreceiptmodelview/show/" + str(receipt.id))
+    page = client.post(
+        "/salesreceiptmodelview/earnings/" + str(receipt.id), data={"total": "0.00"}
+    )
+
+    assert "refreshing earnings from eBay disabled" in show.get_data(as_text=True)
+    assert "Refresh earnings from eBay</a>" not in show.get_data(as_text=True)
+    assert finances.calls == []
+    assert page.status_code == 200
+    db.session.expire_all()
+    assert db.session.get(SalesReceipt, receipt.id).lines == []
+
+
+def test_receipt_page_shows_its_lines(client, finances):
+    receipt = _shipped(lines=shipping.order_earnings("12-34567-89012")["lines"])
+
+    html = client.get("/salesreceiptmodelview/show/" + str(receipt.id)).get_data(
+        as_text=True
+    )
+
+    assert "Shipping label" in html
+    assert "&minus;$4.63" in html
+    assert "Refresh earnings from eBay</a>" in html
+
+
+def test_receipt_page_says_when_there_are_no_lines(client):
+    receipt = _shipped()
+
+    html = client.get("/salesreceiptmodelview/show/" + str(receipt.id)).get_data(
+        as_text=True
+    )
+
+    assert "no earnings breakdown" in html
+
+
+def test_editing_net_sold_keeps_the_lines_adding_up(client, finances):
+    receipt = _shipped(lines=shipping.order_earnings("12-34567-89012")["lines"])
+
+    client.post(
+        "/salesreceiptmodelview/edit/" + str(receipt.id),
+        data={"date": "2026-10-28", "sold_price": "25.0", "net_sold": "14.00"},
+    )
+
+    db.session.expire_all()
+    receipt = db.session.get(SalesReceipt, receipt.id)
+    assert receipt.net_sold == 14.00
+    assert receipt.lines[-1].kind == "MANUAL"
+    assert receipt.lines_total() == 14.00
+
+
+def test_backfill_earnings_only_shows_without_apply(app, finances):
+    receipt = _shipped()
+    said = []
+
+    counts = shipping.backfill_earnings(echo=said.append)
+
+    assert counts == {"saved": 0, "differ": 0, "skipped": 0}
+    assert "2 lines, matches Net Sold" in said[0]
+    assert "--apply" in said[-1]
+    db.session.expire_all()
+    assert db.session.get(SalesReceipt, receipt.id).lines == []
+
+
+def test_backfill_earnings_saves_lines_and_keeps_net_sold(app, finances):
+    receipt = _shipped(net_sold=20.00)
+    said = []
+
+    counts = shipping.backfill_earnings(apply=True, echo=said.append)
+
+    assert counts == {"saved": 1, "differ": 1, "skipped": 0}
+    assert "differs from Net Sold $20.00" in said[0]
+    db.session.expire_all()
+    receipt = db.session.get(SalesReceipt, receipt.id)
+    assert receipt.net_sold == 20.00
+    assert [line.kind for line in receipt.lines] == ["SALE", "SHIPPING_LABEL", "MANUAL"]
+
+
+def test_backfill_earnings_can_set_net_sold_to_ebays(app, finances):
+    receipt = _shipped(net_sold=20.00)
+
+    shipping.backfill_earnings(apply=True, update_net=True, echo=lambda _: None)
+
+    db.session.expire_all()
+    receipt = db.session.get(SalesReceipt, receipt.id)
+    assert receipt.net_sold == 16.50
+    assert [line.kind for line in receipt.lines] == ["SALE", "SHIPPING_LABEL"]
+
+
+def test_backfill_earnings_leaves_receipts_with_lines_or_no_sale(app, finances):
+    _shipped(lines=shipping.order_earnings("12-34567-89012")["lines"])
+    finances.calls.clear()
+
+    counts = shipping.backfill_earnings(apply=True, echo=lambda _: None)
+
+    assert finances.calls == []
+    assert counts["saved"] == 0
+
+    db.session.query(SalesReceipt).one().lines = []
+    db.session.commit()
+    finances.reply = _transactions(LABEL)
+    counts = shipping.backfill_earnings(apply=True, echo=lambda _: None)
+    assert counts == {"saved": 0, "differ": 0, "skipped": 1}
+
+
+def test_backfill_earnings_stops_at_an_ebay_error(app, finances):
+    _shipped()
+    finances.reply = FakeHTTPResponse(403, {"errors": [{"message": "No access."}]})
+    said = []
+
+    counts = shipping.backfill_earnings(apply=True, echo=said.append)
+
+    assert counts["saved"] == 0
+    assert said[-2:] == [
+        "Receipt 1 (2026-10-28, order 12-34567-89012): Getting the order's"
+        " earnings: No access.",
+        "Stopped; nothing more was asked of eBay.",
+    ]
+
+
+def test_backfill_earnings_command(app, finances):
+    receipt = _shipped()
+
+    result = app.test_cli_runner().invoke(
+        args=["backfill-earnings", "--apply", "--since", "2026-10-01", "--limit", "5"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Saved 1, Net Sold differed on 0, eBay had no sale for 0." in result.output
+    db.session.expire_all()
+    assert len(db.session.get(SalesReceipt, receipt.id).lines) == 2

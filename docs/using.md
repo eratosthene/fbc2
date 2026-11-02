@@ -22,6 +22,40 @@ yet.
 eBay listings and orders, synced in. eBay Drafts turn a Unit into a listing,
 and Ship This turns an order into a Sales Receipt.
 
+### Earnings
+
+A Sales Receipt keeps how its order's earnings add up to Net Sold, as eBay's
+Finances API gives them: the sale, each fee eBay took out of it (final value
+fee, regulatory fee and so on), the shipping label, refunds and other
+charges such as promoted listing fees. Ship This saves them with the receipt,
+and the receipt's page shows them.
+
+The lines always add up to Net Sold. When Net Sold is typed in, or edited
+later, and differs from eBay's lines, a manual adjustment line makes up the
+difference. A receipt with no lines from eBay (dev mode, eBay unreachable, or
+added by hand) has none at all, and reports count its fees as not broken
+down.
+
+A refund or a label bought after shipping changes an order's earnings. Refresh
+earnings from eBay, on the receipt's page, reads them again and shows what
+would change. Saving replaces the lines, and changes Net Sold to eBay's total
+unless you untick that. It's off in dev mode.
+
+Receipts from before this was added have no lines. To fill them in from eBay,
+newest first:
+
+```bash
+flask --app fbc backfill-earnings
+```
+
+It only shows what it would do. Add `--apply` to save. Where eBay's total
+differs from Net Sold, often a refund that wasn't recorded, it keeps Net Sold
+and adds a manual adjustment; check those receipts with Refresh earnings, or
+add `--update-net` to take eBay's total for all of them. `--since 2025-01-01`
+and `--limit 50` run it in parts. eBay may no longer have older orders' sales,
+and those receipts are left as they are. Run it in the live container like
+`setup-db` (see [Running fbc in production](production.md)).
+
 ## Supplies
 
 The packing supplies sales use up, and Purchase Orders to restock them.
