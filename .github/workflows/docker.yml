@@ -21,18 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # config.py holds real credentials and isn't committed. The Dockerfile
-      # copies it into the image, so build with the template in its place.
-      - name: Use config.py.tpl as config.py
-        run: cp config.py.tpl config.py
-
       - uses: docker/setup-buildx-action@v4
 
       - name: Build image
         id: build
         uses: docker/build-push-action@v7
         with:
-          # A path context, so the config.py copied above is included.
           context: .
           file: docker/Dockerfile
           push: false
@@ -43,12 +37,14 @@ jobs:
 
       # The app (and the entrypoint's `flask setup-db`) needs a database,
       # so skip the entrypoint and just check the packages it runs on are
-      # installed and importable in the image.
+      # installed and importable in the image, and that config.py, which
+      # holds the live credentials, isn't in it.
       - name: Check the image's packages import
         id: smoke
         run: >-
           docker run --rm --entrypoint python fbc2:ci -c
-          "import flask_appbuilder, flask_migrate, gunicorn, pymysql, discogs_client, ebaysdk, PIL, dotenv"
+          "import os, flask_appbuilder, flask_migrate, gunicorn, pymysql, discogs_client, ebaysdk, PIL, dotenv;
+          assert not os.path.exists('/app/config.py'), 'config.py is in the image'"
 
       - name: Get image size
         id: size

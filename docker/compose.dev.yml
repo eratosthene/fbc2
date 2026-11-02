@@ -48,6 +48,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # As on the live server, any FBC_CONFIG_<KEY> in docker/.env overrides
+    # that setting in config.py (see fbc/settings.py).
+    env_file: .env
     environment:
       # config.py uses this in place of its own SQLALCHEMY_DATABASE_URI.
       SQLALCHEMY_DATABASE_URI: mysql+pymysql://fbc:${FBC_DEV_DB_PASSWORD}@db/fbc

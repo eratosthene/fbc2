@@ -65,21 +65,39 @@ WORDS = (
 LABELS = ["Fakeway Records", "Nowhere Sound", "Dev Null Music", "Placeholder"]
 
 
+def _settings():
+    """The app's settings, from fbc/settings.py loaded on its own: importing
+    it as fbc.settings would import the app first."""
+    import importlib.util
+
+    from flask import Config
+
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    path = os.path.join(root, "fbc", "settings.py")
+    spec = importlib.util.spec_from_file_location("_fbc_settings", path)
+    settings = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(settings)
+    config = Config(root)
+    settings.load(config)
+    return config
+
+
 def setup():
     """
     Load the app and push an app context, after checking the database is a
     dev one: config.py must set ALLOW_FAKE_DATA = True and point at a
     database on this machine or in docker/compose.dev.yml. Exits otherwise.
 
-    The check reads config.py itself, before the app is imported, because
+    The check reads the settings itself, before the app is imported, because
     importing the app already connects to the database and sets up its
-    security tables.
+    security tables. It reads them as the app does, FBC_CONFIG_* overrides
+    included, so it checks the database the app will use.
     """
     global app, db
-    import config
+    config = _settings()
 
-    url = make_url(config.SQLALCHEMY_DATABASE_URI)
-    if not getattr(config, "ALLOW_FAKE_DATA", False):
+    url = make_url(config["SQLALCHEMY_DATABASE_URI"])
+    if not config.get("ALLOW_FAKE_DATA", False):
         sys.exit(
             "Refusing to add fake records: config.py doesn't set"
             " ALLOW_FAKE_DATA = True. Only set it in a dev config."

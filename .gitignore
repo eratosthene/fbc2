@@ -67,6 +67,8 @@ instance/
 
 # Local app config (contains real DB/eBay/Discogs credentials); copy from config.py.tpl
 config.py
+# Backups scripts/move_secrets_to_env.py makes, which still hold the secrets.
+/config.py.bak-*
 
 # Database dumps for docker/compose.dev.yml to load (may be copies of live data);
 # /dev-db/ is where they were before the Docker files moved to docker/.

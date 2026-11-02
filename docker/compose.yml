@@ -1,6 +1,13 @@
 # The live server's container. Run from the repo root, after docker/build.sh:
 #
 #   sudo docker compose -f docker/compose.yml up -d
+#
+# Settings aren't in the image: config.py is mounted from the repo root, and
+# docker/.env, next to this file, can override any of them with
+# FBC_CONFIG_<KEY> variables (see "Settings from the
+# environment" in README.md). A change to
+# either needs the container recreated, not a rebuild: `docker/live-up.sh
+# -n`. Paths here are relative to this file's folder, docker/.
 name: fbc2
 
 services:
@@ -10,5 +17,16 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     restart: unless-stopped
+    # Required: the live server's Compose (2.20) can't make it optional. An
+    # empty one is fine; docker/live-up.sh makes one if it's missing.
+    env_file: .env
+    volumes:
+      - type: bind
+        source: ../config.py
+        target: /app/config.py
+        read_only: true
+        # Fail if it's missing, rather than make an empty folder in its place.
+        bind:
+          create_host_path: false
     ports:
       - "20000:20000"

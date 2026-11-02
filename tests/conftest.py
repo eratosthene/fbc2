@@ -48,8 +48,11 @@ logging.getLogger().setLevel(logging.ERROR)
 
 _install_fake_config()
 # The suite runs outside dev mode (fbc/devmode.py) even when a developer's
-# shell turns it on; its tests turn it on themselves.
+# shell turns it on; its tests turn it on themselves. Nor does a shell's
+# FBC_CONFIG_* override (fbc/settings.py) reach the fake config.
 os.environ.pop("FBC_DEV_MODE", None)
+for _name in [n for n in os.environ if n.startswith("FBC_CONFIG_")]:
+    del os.environ[_name]
 
 # A plain `import fbc` statement here must come after the fake config is
 # installed above, which a linter would flag as an out-of-order import

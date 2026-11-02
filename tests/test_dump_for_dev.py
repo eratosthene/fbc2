@@ -134,6 +134,51 @@ def test_database_uri_leaves_other_missing_modules_missing(tmp_path, monkeypatch
         sys.modules.pop("installed_pkg", None)
 
 
+def test_database_uri_from_docker_env(tmp_path, monkeypatch):
+    """The live container's override in docker/.env wins over config.py, and
+    one in the environment wins over both."""
+    monkeypatch.delenv(dump_for_dev.URI_OVERRIDE, raising=False)
+    (tmp_path / "config.py").write_text(
+        "SQLALCHEMY_DATABASE_URI = 'mysql://cfg@h/db'\n"
+    )
+    (tmp_path / "docker").mkdir()
+    (tmp_path / "docker" / ".env").write_text(
+        "# Secrets for the live container\n"
+        "FBC_CONFIG_SECRET_KEY=abc\n"
+        "FBC_CONFIG_SQLALCHEMY_DATABASE_URI='mysql://env@h/db#1'\n"
+    )
+    assert dump_for_dev.database_uri(str(tmp_path)) == "mysql://env@h/db#1"
+
+    monkeypatch.setenv(dump_for_dev.URI_OVERRIDE, '"mysql://shell@h/db"')
+    assert dump_for_dev.database_uri(str(tmp_path)) == "mysql://shell@h/db"
+
+
+def test_database_uri_override_needs_no_config(tmp_path, monkeypatch):
+    monkeypatch.setenv(dump_for_dev.URI_OVERRIDE, "mysql://env@h/db")
+    assert dump_for_dev.database_uri(str(tmp_path)) == "mysql://env@h/db"
+
+
+def test_env_file(tmp_path):
+    path = tmp_path / ".env"
+    path.write_text(
+        "# a comment\n"
+        "\n"
+        "PLAIN=value # trailing comment\n"
+        "export EXPORTED=1\n"
+        'DOUBLE="a # b"\n'
+        "SINGLE='c=d'\n"
+        "EMPTY=\n"
+        "not a variable\n"
+    )
+    assert dump_for_dev.env_file(str(path)) == {
+        "PLAIN": "value",
+        "EXPORTED": "1",
+        "DOUBLE": "a # b",
+        "SINGLE": "c=d",
+        "EMPTY": "",
+    }
+
+
 def test_database_uri_reports_a_broken_config(tmp_path):
     (tmp_path / "config.py").write_text("SQLALCHEMY_DATABASE_URI = undefined_name\n")
     with pytest.raises(dump_for_dev.Failed, match="Couldn't read config.py: NameError"):
