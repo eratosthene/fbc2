@@ -1164,3 +1164,43 @@ def test_earnings_lines_fit_their_columns(app, finances):
         for name, value in line.items():
             if isinstance(value, str):
                 assert len(value) <= columns[name].type.length, (name, value)
+
+
+def test_order_earnings_leave_out_a_transfer_paying_for_a_label(app, finances):
+    # A real order: its label was paid for with a transfer, which eBay's
+    # order page leaves out of the order's earnings of $2.69.
+    finances.reply = _transactions(
+        {
+            "transactionType": "SALE",
+            "bookingEntry": "CREDIT",
+            "amount": {"value": "7.08"},
+            "totalFeeAmount": {"value": "1.56"},
+            "orderLineItems": [
+                {
+                    "marketplaceFees": [
+                        {
+                            "feeType": "FINAL_VALUE_FEE_FIXED_PER_ORDER",
+                            "amount": {"value": "0.31"},
+                        },
+                        {"feeType": "FINAL_VALUE_FEE", "amount": {"value": "1.25"}},
+                    ]
+                }
+            ],
+        },
+        RETURN_LABEL,
+        {
+            "transactionType": "TRANSFER",
+            "bookingEntry": "CREDIT",
+            "amount": {"value": "4.39", "currency": "USD"},
+        },
+    )
+
+    earnings = shipping.order_earnings("12-34567-89012")
+
+    assert [line["kind"] for line in earnings["lines"]] == [
+        "SALE",
+        "FEE",
+        "FEE",
+        "SHIPPING_LABEL",
+    ]
+    assert earnings["net"] == 2.69

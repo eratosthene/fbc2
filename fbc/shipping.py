@@ -28,6 +28,11 @@ TRANSACTION_LABELS = {
     "ADJUSTMENT": "Adjustment",
 }
 
+# Transactions on an order that aren't earnings, which eBay's order page
+# leaves out too. A TRANSFER is the seller paying eBay for a charge, like a
+# label bought with a card on file: the charge is a line of its own.
+NOT_EARNINGS = {"TRANSFER"}
+
 # eBay's feeTypes, for fees taken out of a sale and charges of their own.
 # Anything else is shown by its own name, made readable.
 FEE_LABELS = {
@@ -214,6 +219,8 @@ def order_earnings(order_id):
     label = False
     for t in transactions:
         kind = t.get("transactionType")
+        if kind in NOT_EARNINGS:
+            continue
         lines = transaction_lines(t)
         for line in lines:
             line["ebay_order_id"] = line["ebay_order_id"] or order_id
