@@ -47,6 +47,12 @@ earnings from eBay, on the receipt's page, reads them again and shows what
 would change. Saving replaces the lines, and changes Net Sold to eBay's total
 unless you untick that. It's off in dev mode.
 
+While a return request or a payment dispute is open, eBay holds the sale's
+money, so its total is low until it closes. If the buyer never sends the item
+back, eBay releases the money and doesn't charge for the unused return label.
+Refresh earnings says when eBay is holding money, and leaves the Net Sold
+change unticked. Refresh again once it's closed.
+
 Receipts from before this was added have no lines. To fill them in from eBay,
 newest first:
 
@@ -59,7 +65,8 @@ differs from Net Sold, often a refund that wasn't recorded, it keeps Net Sold
 and adds a manual adjustment; check those receipts with Refresh earnings, or
 add `--update-net` to take eBay's total for all of them. `--since 2025-01-01`
 and `--limit 50` run it in parts. eBay may no longer have older orders' sales,
-and those receipts are left as they are. Run it in the live container like
+and those receipts are left as they are. So are receipts eBay is holding money
+on, until a later run. Run it in the live container like
 `setup-db` (see [Running fbc in production](production.md)).
 
 ## Supplies
