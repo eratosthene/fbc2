@@ -48,6 +48,7 @@ def home_totals():
             Unit.id,
             Unit.ebay_listing_id,
             Unit.sold_price,
+            Unit.retail_price,
             Unit.purchase_lot_id,
             Unit.storage_box_id,
             Unit.sales_receipt_id,
@@ -70,7 +71,7 @@ def home_totals():
     for u in units:
         if units_per_receipt[u.sales_receipt_id] > 1 and u.sales_receipt_id:
             receipt_units.setdefault(u.sales_receipt_id, []).append(
-                (u.id, u.ebay_listing_id, u.sold_price)
+                (u.id, u.ebay_listing_id, u.sold_price, u.retail_price)
             )
     # Two queries whatever the size, like the rest of the page.
     weights = {}

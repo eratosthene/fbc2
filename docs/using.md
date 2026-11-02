@@ -70,7 +70,8 @@ eBay.
 The home page splits a receipt of several Units between them by what each
 sold for, rather than evenly. That's the price on the order, or for a
 combined receipt the Unit's share of its old receipt. Failing that, it's the
-listing's asking price, or the average of the receipt's other Units.
+listing's asking price, then its Retail Price, and last the average of the
+receipt's other Units.
 
 ### Earnings
 

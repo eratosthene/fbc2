@@ -79,22 +79,23 @@ def item_prices(orders):
 def unit_weights(units, item_prices, listing_prices):
     """
     How a Sales Receipt's prices are split between its `units` ([(unit id,
-    listing id, Unit.sold_price)]): {unit id: weight}, each Unit's sold
-    price, or else its order's item price (`item_prices`, {listing id:
-    price}), or else its listing's asking price (`listing_prices`). A Unit
-    with none of them counts as the average of the others. None to split them evenly: for a single Unit, or when no
-    Unit has a price, as for orders synced before fbc kept every item.
+    listing id, Unit.sold_price, Unit.retail_price)]): {unit id: weight}.
+    Each Unit's weight is the first of these it has: its sold price, its
+    order's item price (`item_prices`, {listing id: price}), its listing's
+    asking price (`listing_prices`) or its Retail Price. A Unit with none of
+    them counts as the average of the others. None to split them evenly:
+    for a single Unit, or when no Unit has a price.
     """
     if len(units) <= 1:
         return None
-    prices = {
-        unit_id: (
-            sold_price
-            if sold_price is not None
-            else item_prices.get(listing_id, listing_prices.get(listing_id))
-        )
-        for unit_id, listing_id, sold_price in units
-    }
+    prices = {}
+    for unit_id, listing_id, sold_price, retail_price in units:
+        price = sold_price
+        if price is None:
+            price = item_prices.get(listing_id, listing_prices.get(listing_id))
+        if price is None:
+            price = retail_price
+        prices[unit_id] = price
     known = [p for p in prices.values() if p is not None]
     if not known or sum(known) <= 0:
         return None
@@ -193,7 +194,7 @@ class SalesReceipt(Model):
         if len(units) <= 1:
             return amount
         weights = unit_weights(
-            [(u.id, u.ebay_listing_id, u.sold_price) for u in units],
+            [(u.id, u.ebay_listing_id, u.sold_price, u.retail_price) for u in units],
             item_prices(self.ebay_orders),
             {u.ebay_listing_id: u.ebay_listing.price for u in units if u.ebay_listing},
         )

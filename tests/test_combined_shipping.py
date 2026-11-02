@@ -465,13 +465,22 @@ def test_backfill_earnings_fills_in_a_receipt_of_several_orders(app, finances):
 
 
 def test_unit_weights():
-    units = [(1, "a", None), (2, "b", None)]
+    units = [(1, "a", None, None), (2, "b", None, None)]
     assert unit_weights(units, {"a": 20.0, "b": 10.0}, {}) == {1: 20.0, 2: 10.0}
     assert unit_weights(units, {"a": 20.0}, {"b": 5.0}) == {1: 20.0, 2: 5.0}
     assert unit_weights(units, {"a": 20.0}, {}) == {1: 20.0, 2: 20.0}
     assert unit_weights(units, {}, {}) is None
-    assert unit_weights([(1, "a", None)], {"a": 20.0}, {}) is None
-    assert unit_weights([(1, "a", 3.0), (2, "b", None)], {"a": 20.0}, {"b": 5.0}) == {
+    # Retail Price, for a Unit with no listing, before the average.
+    assert unit_weights(
+        [(1, "a", None, None), (2, None, None, 8.0)], {"a": 20.0}, {}
+    ) == {
+        1: 20.0,
+        2: 8.0,
+    }
+    assert unit_weights([(1, "a", None, None)], {"a": 20.0}, {}) is None
+    assert unit_weights(
+        [(1, "a", 3.0, None), (2, "b", None, None)], {"a": 20.0}, {"b": 5.0}
+    ) == {
         1: 3.0,
         2: 5.0,
     }
