@@ -72,6 +72,21 @@ def setup_db():
         click.echo("Created a new database at the latest migration.")
 
 
+@app.cli.command("combine-receipts")
+@click.option("--apply", is_flag=True, help="Save the changes; without it, only show.")
+@click.option(
+    "--receipts",
+    help="Combine just these Sales Receipts, by id (e.g. 516,517), into one.",
+)
+def combine_receipts(apply, receipts):
+    """Combine Sales Receipts that stand for one shipment."""
+    from fbc.combine import combine_all
+
+    only = [int(i) for i in receipts.split(",")] if receipts else None
+    count = combine_all(apply=apply, only=only, echo=click.echo)
+    click.echo(("Combined " if apply else "Would combine ") + str(count) + " groups.")
+
+
 @app.cli.command("backfill-earnings")
 @click.option("--apply", is_flag=True, help="Save the lines; without it, only show.")
 @click.option(

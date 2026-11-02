@@ -3,11 +3,12 @@
 {% block content %}
 <h3>Refresh Earnings</h3>
 <p>eBay's earnings for an order change after it ships when there's a refund
-or a late charge. Saving replaces this Sales Receipt's lines with eBay's.</p>
+or a late charge. Saving replaces this Sales Receipt's lines with eBay's, for
+every order on it.</p>
 
 <table class="table table-bordered table-condensed" style="width: auto">
   <tr><th>Sales Receipt</th><td><a href="{{ url_for('SalesReceiptModelView.show', pk=receipt.id) }}">{{ receipt.date }}</a></td></tr>
-  <tr><th>Order</th><td>{{ receipt.fmt_ebay_order() }}{% if receipt.ebay_order %} {{ receipt.ebay_order.title }}{% endif %}</td></tr>
+  <tr><th>Order{% if receipt.ebay_orders|length > 1 %}s{% endif %}</th><td>{% for order in receipt.ebay_orders %}{% if not loop.first %}<br>{% endif %}{{ order.fmt_url() }} {{ order.title }} {{ order.fmt_price() }}{% endfor %}</td></tr>
   <tr><th>Sold Price</th><td>{{ receipt.fmt_sold_price() }}</td></tr>
   <tr><th>Net Sold</th><td>{{ receipt.fmt_net_sold() }}</td></tr>
 </table>

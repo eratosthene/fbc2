@@ -61,7 +61,9 @@ def clear():
             db.session.query(SalesReceipt).filter(
                 or_(
                     SalesReceipt.id.in_(receipt_ids),
-                    SalesReceipt.ebay_order_id.like(FAKE_ORDER_PREFIX + "%"),
+                    SalesReceipt.ebay_orders.any(
+                        EbayOrder.order_id.like(FAKE_ORDER_PREFIX + "%")
+                    ),
                 )
             ),
         ),

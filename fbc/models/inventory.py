@@ -43,9 +43,11 @@ class PurchaseLot(Model):
         ret["gross"] = 0.0
         ret["net"] = 0.0
         for unit in db.session.query(Unit).filter_by(purchase_lot=self).all():
+            # A receipt of several Units counts for its share of each.
             if unit.sales_receipt:
-                ret["gross"] += unit.sales_receipt.sold_price
-                ret["net"] += unit.sales_receipt.net_sold
+                receipt = unit.sales_receipt
+                ret["gross"] += receipt.unit_share(unit, receipt.sold_price)
+                ret["net"] += receipt.unit_share(unit, receipt.net_sold)
         ret["fees"] = round(ret["gross"] - ret["net"], 2)
         if ret["gross"] > 0:
             ret["feepc"] = round(ret["fees"] / ret["gross"], 2)
@@ -82,7 +84,9 @@ class PurchaseLot(Model):
                 total_price += unit.retail_price
             if unit.sold and unit.sales_receipt:
                 total_num_sold += 1
-                total_sold_price += unit.sales_receipt.sold_price
+                total_sold_price += unit.sales_receipt.unit_share(
+                    unit, unit.sales_receipt.sold_price
+                )
         ret["pprofit"] = total_price - (total_price * t["feepc"]) - self.price
         if total_num_sold > 0:
             ret["avgsoldprice"] = total_sold_price / total_num_sold
@@ -211,6 +215,11 @@ class Unit(Model):
     )
     sales_receipt_id = Column(Integer, ForeignKey("sales_receipt.id"), index=True)
     sales_receipt = relationship("SalesReceipt")
+    # What this Unit sold for, when its Sales Receipt covers several Units:
+    # its order item's price, or its share of a receipt combined from
+    # several. A receipt's prices are split between its Units by these
+    # (see unit_weights).
+    sold_price = Column(Float)
 
     def __unicode__(self):
         return (
@@ -237,11 +246,14 @@ class Unit(Model):
         from fbc import db
         from fbc.models.ebay import EbayOrder
 
-        if self.sales_receipt:
-            if self.sales_receipt.sold_price is not None:
-                return self.sales_receipt.sold_price
-            if self.sales_receipt.ebay_order:
-                return self.sales_receipt.ebay_order.price
+        receipt = self.sales_receipt
+        if receipt:
+            if receipt.sold_price is not None:
+                return receipt.unit_share(self, receipt.sold_price)
+            if receipt.ebay_orders:
+                return receipt.unit_share(
+                    self, sum(o.price or 0 for o in receipt.ebay_orders)
+                )
         if self.sold and self.ebay_listing_id:
             order = (
                 db.session.query(EbayOrder)
@@ -328,7 +340,7 @@ class Unit(Model):
                 + f"{self.sales_receipt.net_sold:.2f}"
                 + "</a><br/>"
             )
-            if self.sales_receipt.ebay_order:
+            if self.sales_receipt.ebay_orders:
                 ret = ret + self.sales_receipt.fmt_ebay_order(False)
         return Markup(ret)
 

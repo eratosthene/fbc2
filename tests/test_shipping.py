@@ -223,7 +223,7 @@ def test_ship_this_is_not_offered_once_there_is_a_sales_receipt(app):
     db.session.add(
         SalesReceipt(
             date=datetime.date(2026, 10, 28),
-            ebay_order=order,
+            ebay_orders=[order],
             sold_price=25.0,
             net_sold=16.5,
         )
@@ -355,7 +355,7 @@ def test_ship_page_blocks_an_order_of_several_items(client, finances):
         as_text=True
     )
 
-    assert "This order has 2 items" in html
+    assert "eBay says this order has\n2 items, and fbc only knows of 1" in html
     assert "disabled>Ship</button>" in html
 
 
@@ -366,7 +366,7 @@ def test_shipping_records_the_receipt_marks_sold_and_removes_from_discogs(
 
     page = client.post(
         "/ebayordermodelview/ship/" + order.order_id,
-        data={"net_sold": "16.50", "remove_discogs": "1"},
+        data={"net_sold": "16.50", "remove_discogs-" + str(unit.id): "1"},
     )
 
     assert page.status_code == 302
@@ -374,12 +374,12 @@ def test_shipping_records_the_receipt_marks_sold_and_removes_from_discogs(
     receipt = db.session.query(SalesReceipt).one()
     assert (
         receipt.date,
-        receipt.ebay_order_id,
+        receipt.order_ids(),
         receipt.sold_price,
         receipt.net_sold,
     ) == (
         datetime.date(2026, 10, 28),
-        "12-34567-89012",
+        ["12-34567-89012"],
         25.0,
         16.5,
     )
@@ -401,7 +401,7 @@ def test_shipping_without_discogs_connected_still_records_the_receipt(
 
     page = client.post(
         "/ebayordermodelview/ship/" + order.order_id,
-        data={"net_sold": "16.50", "remove_discogs": "1"},
+        data={"net_sold": "16.50", "remove_discogs-" + str(unit.id): "1"},
     )
 
     assert page.status_code == 302
@@ -629,7 +629,7 @@ def test_shipping_is_blocked_when_a_supply_would_run_out(client, discogs):
     assert '<a href="/reconcilesupplies/?supply=' + ids["sleeves 12"] in html
     assert 'name="supply-' + ids["sleeves 12"] + '" value="21"' in html
     # Remove from Discogs was left unticked, and stays that way.
-    assert re.search(r'name="remove_discogs" value="1"\s*>', html)
+    assert re.search(r'name="remove_discogs-' + str(unit.id) + r'" value="1"\s*>', html)
     db.session.expire_all()
     assert db.session.query(SalesReceipt).count() == 0
     assert (supplies["mailers"].quantity, supplies["sleeves 12"].quantity) == (10, 20)
@@ -1232,7 +1232,7 @@ def _split_order():
     receipt = _shipped(net_sold=10.0)
     other = SalesReceipt(
         date=receipt.date,
-        ebay_order_id=receipt.ebay_order_id,
+        ebay_orders=list(receipt.ebay_orders),
         sold_price=12.0,
         net_sold=6.5,
     )

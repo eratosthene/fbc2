@@ -236,7 +236,9 @@ docker compose -f docker/compose.dev.yml exec app python dev-scripts/fake_ebay.p
 ```
 
 - `fake_ebay.py orders N`: orders that each offer Ship This, with a listing
-  and an unsold Unit of a fake Discogs release.
+  and an unsold Unit of a fake Discogs release. `--items 3` puts three
+  items on each order, and `--buyer someone` gives every order the same
+  buyer, so Ship This offers to ship them combined.
 - `fake_ebay.py listings N`: listings with an unsold Unit and no order.
 - `fake_discogs.py releases N`: releases in the collection with no Units,
   each with an Add Unit link.

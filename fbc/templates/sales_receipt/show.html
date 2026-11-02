@@ -12,7 +12,7 @@ refund are only known together, as Sold Price less Net Sold.</p>
 {% endif %}
 {% if shared_order %}
 <p class="text-warning">{{ shared_order }}</p>
-{% elif receipt.ebay_order_id %}
+{% elif receipt.ebay_orders %}
 {% if dev_mode %}
 <p class="text-warning">Dev Mode is turned on, refreshing earnings from eBay disabled.</p>
 {% else %}

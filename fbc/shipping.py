@@ -146,52 +146,122 @@ def transaction_lines(t):
 
 def order_receipt(order):
     """The Sales Receipt already recorded for `order`, or None."""
-    from fbc import db
-    from fbc.models.sales import SalesReceipt
-
-    return (
-        db.session.query(SalesReceipt).filter_by(ebay_order_id=order.order_id).first()
-    )
+    return order.sales_receipts[0] if order.sales_receipts else None
 
 
-def order_unit(order):
+def shipment_units(orders):
     """
-    The Unit `order` sold: the only Unit on the order's listing, as long as
-    it isn't sold yet. None for anything less clear-cut, which is left to be
-    done by hand.
+    The Units shipping `orders` together sells, and []; or None and what
+    stops Ship This finding them, which is left to be done by hand. Each
+    listing on the orders needs exactly as many unsold Units on it as were
+    bought.
     """
     from fbc import db
     from fbc.models.inventory import Unit
 
-    if not order.ebay_listing_id:
-        return None
-    units = (
-        db.session.query(Unit).filter_by(ebay_listing_id=order.ebay_listing_id).all()
-    )
-    if len(units) != 1:
-        return None
-    unit = units[0]
-    if unit.sold or unit.sales_receipt_id:
-        return None
-    return unit
+    wanted = {}
+    for order in orders:
+        listings = order.listing_ids()
+        if not listings:
+            return None, ["Order " + order.order_id + " isn't linked to a listing."]
+        for listing_id, quantity in listings.items():
+            wanted[listing_id] = wanted.get(listing_id, 0) + quantity
+    units = []
+    problems = []
+    for listing_id, quantity in wanted.items():
+        unsold = (
+            db.session.query(Unit)
+            .filter_by(ebay_listing_id=listing_id, sold=False, sales_receipt_id=None)
+            .order_by(Unit.id)
+            .all()
+        )
+        if len(unsold) != quantity:
+            problems.append(
+                "Listing "
+                + listing_id
+                + " has "
+                + str(len(unsold))
+                + " unsold Unit"
+                + ("" if len(unsold) == 1 else "s")
+                + " on it, and "
+                + str(quantity)
+                + " "
+                + ("was" if quantity == 1 else "were")
+                + " bought."
+            )
+        units.extend(unsold)
+    if problems:
+        return None, problems
+    return units, []
+
+
+def order_unit(order):
+    """
+    The Unit `order` sold, when it's an order of one Unit and Ship This can
+    find it; None for anything else.
+    """
+    units, _ = shipment_units([order])
+    if units and len(units) == 1:
+        return units[0]
+    return None
 
 
 def can_ship(order):
     """Whether Ship This is offered for `order`."""
-    return order_receipt(order) is None and order_unit(order) is not None
+    return order_receipt(order) is None and shipment_units([order])[0] is not None
+
+
+# How far apart a buyer's orders can be and still be offered for shipping
+# together. Ship This lets you choose which go in the package.
+COMBINE_DAYS = 7
+
+
+def combinable_orders(order):
+    """
+    The buyer's other orders that could go in the same package as `order`:
+    placed within COMBINE_DAYS of it, with no Sales Receipt yet, and that
+    Ship This can find the Units for. Oldest first.
+    """
+    import datetime
+
+    from fbc import db
+    from fbc.models.ebay import EbayOrder
+
+    if not order.buyer or not order.created_time:
+        return []
+    window = datetime.timedelta(days=COMBINE_DAYS)
+    others = (
+        db.session.query(EbayOrder)
+        .filter(EbayOrder.buyer == order.buyer)
+        .filter(EbayOrder.order_id != order.order_id)
+        .filter(EbayOrder.created_time >= order.created_time - window)
+        .filter(EbayOrder.created_time <= order.created_time + window)
+        .filter(~EbayOrder.sales_receipts.any())
+        .order_by(EbayOrder.created_time, EbayOrder.order_id)
+        .all()
+    )
+    return [o for o in others if shipment_units([o])[0] is not None]
 
 
 def order_earnings(order_id):
+    """shipment_earnings for one order."""
+    return shipment_earnings([order_id])
+
+
+def shipment_earnings(order_ids):
     """
-    What the seller keeps from an order, as eBay's order page shows it under
-    Order earnings: every money movement eBay has tied to the order (the sale
-    less fees and taxes, the shipping label, refunds...) added up.
+    What the seller keeps from orders shipped together, as eBay's order
+    page shows it for each under Order earnings: every money movement eBay
+    has tied to the orders (the sale less fees and taxes, the shipping
+    label, refunds...) added up.
 
     Returns a dict with:
-      net       the earnings, or None if eBay has no sale for the order yet
+      net       the earnings, or None if eBay has no sale for one of the
+                orders yet
       lines     the lines making up net, as dicts of SalesReceiptLine's
-                columns (see transaction_lines)
-      items     how many line items the sale covers (0 if eBay didn't say)
+                columns (see transaction_lines), each with its order
+      items     how many line items the sales cover (0 if eBay didn't say)
+      labels    how many shipping labels were bought on the orders
       errors    why eBay couldn't be asked
       warnings  things to check before trusting net
       unsettled whether eBay is holding money while a return or dispute is
@@ -207,10 +277,12 @@ def order_earnings(order_id):
         oauth_token,
     )
 
+    several = len(order_ids) > 1
     result = {
         "net": None,
         "lines": [],
         "items": 0,
+        "labels": 0,
         "errors": [],
         "warnings": [],
         "unsettled": False,
@@ -225,56 +297,65 @@ def order_earnings(order_id):
     except OAuthError as e:
         result["errors"].append(str(e))
         return result
-    try:
-        r = requests.get(
-            FINANCES_URL,
-            headers={
-                "Authorization": "Bearer " + token,
-                "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-            },
-            params={"filter": "orderId:{" + order_id + "}", "limit": 200},
-            timeout=30,
-        )
-    except requests.RequestException as e:
-        logger.error(e)
-        result["errors"].append(
-            "Couldn't reach eBay for the order's earnings: " + str(e)
-        )
-        return result
-    if r.status_code != 200:
-        if r.status_code == 401:
-            forget_access_token(FINANCES_SCOPE)
-        result["errors"].extend(
-            "Getting the order's earnings: " + m for m in _rest_errors(r)
-        )
-        return result
+    no_sale = []
+    for order_id in order_ids:
+        which = " for order " + order_id if several else ""
+        try:
+            r = requests.get(
+                FINANCES_URL,
+                headers={
+                    "Authorization": "Bearer " + token,
+                    "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+                },
+                params={"filter": "orderId:{" + order_id + "}", "limit": 200},
+                timeout=30,
+            )
+        except requests.RequestException as e:
+            logger.error(e)
+            result["errors"].append(
+                "Couldn't reach eBay for the order's earnings" + which + ": " + str(e)
+            )
+            return result
+        if r.status_code != 200:
+            if r.status_code == 401:
+                forget_access_token(FINANCES_SCOPE)
+            result["errors"].extend(
+                "Getting the order's earnings" + which + ": " + m
+                for m in _rest_errors(r)
+            )
+            return result
 
-    transactions = r.json().get("transactions") or []
-    sale = False
-    label = False
-    for t in transactions:
-        kind = t.get("transactionType")
-        if kind in NOT_EARNINGS:
-            continue
-        lines = transaction_lines(t)
-        for line in lines:
-            line["ebay_order_id"] = line["ebay_order_id"] or order_id
-        result["lines"].extend(lines)
-        if kind == "SALE":
-            sale = True
-            result["items"] += len(t.get("orderLineItems") or [])
-        elif kind == "SHIPPING_LABEL":
-            label = True
+        sale = False
+        for t in r.json().get("transactions") or []:
+            kind = t.get("transactionType")
+            if kind in NOT_EARNINGS:
+                continue
+            lines = transaction_lines(t)
+            for line in lines:
+                line["ebay_order_id"] = line["ebay_order_id"] or order_id
+            result["lines"].extend(lines)
+            if kind == "SALE":
+                sale = True
+                result["items"] += len(t.get("orderLineItems") or [])
+            elif kind == "SHIPPING_LABEL" and t.get("bookingEntry") == "DEBIT":
+                result["labels"] += 1
+        if not sale:
+            no_sale.append(order_id)
 
     # eBay lists the newest first; oldest first reads as what happened. A
     # transaction's fees share its date, so they stay under it.
     if all(line["transaction_date"] for line in result["lines"]):
         result["lines"].sort(key=lambda line: line["transaction_date"])
 
-    if not sale:
+    if no_sale:
         result["warnings"].append(
-            "eBay doesn't show a sale for this order yet, so its earnings aren't"
-            " known. Enter Net Sold from the order page on eBay."
+            (
+                "eBay doesn't show a sale for order " + ", ".join(no_sale)
+                if several
+                else "eBay doesn't show a sale for this order"
+            )
+            + " yet, so its earnings aren't known. Enter Net Sold from the"
+            " order page on eBay."
         )
         return result
     result["net"] = round(sum(line["amount"] for line in result["lines"]), 2)
@@ -284,20 +365,63 @@ def order_earnings(order_id):
         result["warnings"].append(
             "eBay is holding $"
             + f"{-holding:.2f}"
-            + " of this order's money, as it does while a return request or a"
+            + (" of these orders' money" if several else " of this order's money")
+            + ", as it does while a return request or a"
             " payment dispute is open. These earnings will change when it"
             " closes: if the buyer never sends the item back, eBay releases the"
             " money and doesn't charge for an unused return label. Refresh"
             " again once it's closed. If it already has, and you lost a"
             " dispute, save as usual."
         )
-    if not label:
+    if not result["labels"]:
         result["warnings"].append(
-            "There's no eBay shipping label on this order yet, so these earnings"
-            " don't take one off. Buy the label first and reload this page, or"
-            " enter Net Sold yourself."
+            (
+                "There's no eBay shipping label on any of these orders yet"
+                if several
+                else "There's no eBay shipping label on this order yet"
+            )
+            + ", so these earnings don't take one off. Buy the label first and"
+            " reload this page, or enter Net Sold yourself."
+        )
+    elif several and result["labels"] > 1:
+        result["warnings"].append(
+            "There's a shipping label on more than one of these orders. If"
+            " they went in one package, check a label wasn't bought twice."
         )
     return result
+
+
+def combined_discount(orders, earnings):
+    """
+    The combined-shipping saving to pass on to the buyer of `orders`, when
+    they paid shipping on each order and went in one package: what they paid
+    for shipping less the label's cost and any refund already given, as
+    {"paid", "label", "refunded", "discount"}. None when there's nothing to
+    work out: one order, shipping fbc doesn't know, or no label yet.
+    """
+    if len(orders) < 2 or any(o.shipping is None for o in orders):
+        return None
+    if not earnings["labels"]:
+        return None
+    paid = round(sum(o.shipping for o in orders), 2)
+    label = round(
+        -sum(
+            line["amount"]
+            for line in earnings["lines"]
+            if line["kind"] == "SHIPPING_LABEL"
+        ),
+        2,
+    )
+    refunded = round(
+        -sum(line["amount"] for line in earnings["lines"] if line["kind"] == "REFUND"),
+        2,
+    )
+    return {
+        "paid": paid,
+        "label": label,
+        "refunded": refunded,
+        "discount": round(max(paid - label - refunded, 0), 2),
+    }
 
 
 def discogs_plan(unit):
@@ -507,36 +631,47 @@ def fmt_supplies(counts):
     return ", ".join(str(n) + " " + s.name for s, n in counts.items())
 
 
-def ship_order(order, unit, net_sold, supplies=None, lines=None):
+def ship_order(orders, units, net_sold, supplies=None, lines=None):
     """
-    Record the Sales Receipt for `order`, with its earnings `lines` (as
-    order_earnings gives them) and a manual adjustment if they don't add up
-    to `net_sold`. Mark `unit` sold with it and take `supplies` ({supply:
-    count}) out of stock. Returns the receipt.
+    Record one Sales Receipt for `orders` (one EbayOrder or several shipped
+    together), dated the first of them, with its earnings `lines` (as
+    shipment_earnings gives them) and a manual adjustment if they don't add
+    up to `net_sold`. Mark `units` (one Unit or several) sold with it and
+    take `supplies` ({supply: count}) out of stock. Returns the receipt.
     """
     from fbc import db
-    from fbc.models.sales import SalesReceipt
+    from fbc.models.sales import SalesReceipt, item_prices
     from fbc.models.supplies import SHIPPING
 
+    if not isinstance(orders, (list, tuple)):
+        orders = [orders]
+    if not isinstance(units, (list, tuple)):
+        units = [units]
     receipt = SalesReceipt(
-        date=order.created_time.date(),
-        ebay_order_id=order.order_id,
-        sold_price=order.price,
+        date=min(o.created_time for o in orders).date(),
+        ebay_orders=list(orders),
+        sold_price=round(sum(o.price for o in orders), 2),
         net_sold=net_sold,
     )
     receipt.set_lines(lines or [])
     db.session.add(receipt)
     db.session.flush()
-    unit.sold = True
-    unit.sales_receipt_id = receipt.id
+    prices = item_prices(orders)
+    for unit in units:
+        unit.sold = True
+        unit.sales_receipt_id = receipt.id
+        if len(units) > 1:
+            unit.sold_price = prices.get(unit.ebay_listing_id)
     for supply, count in (supplies or {}).items():
         supply.use(count, SHIPPING, receipt=receipt)
     db.session.commit()
     logger.info(
-        "Shipped order "
-        + order.order_id
-        + ": unit "
-        + str(unit.id)
+        "Shipped order"
+        + ("s " if len(orders) > 1 else " ")
+        + ", ".join(o.order_id for o in orders)
+        + ": unit"
+        + ("s " if len(units) > 1 else " ")
+        + ", ".join(str(u.id) for u in units)
         + ", receipt "
         + str(receipt.id)
         + (", used " + fmt_supplies(supplies) if supplies else "")
@@ -549,7 +684,7 @@ def backfill_earnings(
 ):
     """
     Give past Sales Receipts their earnings lines from eBay: every receipt
-    linked to an eBay order that has no lines yet, newest first, from
+    linked to eBay orders that has no lines yet, newest first, from
     `since` (a date) on, at most `limit` of them. Only saves when `apply`.
 
     Where eBay's total differs from Net Sold (often a refund that wasn't
@@ -574,7 +709,7 @@ def backfill_earnings(
         return counts
     query = (
         db.session.query(SalesReceipt)
-        .filter(SalesReceipt.ebay_order_id.isnot(None))
+        .filter(SalesReceipt.ebay_orders.any())
         .filter(~SalesReceipt.lines.any())
         .order_by(SalesReceipt.date.desc(), SalesReceipt.id.desc())
     )
@@ -583,13 +718,14 @@ def backfill_earnings(
     if limit:
         query = query.limit(limit)
     for receipt in query.all():
+        order_ids = receipt.order_ids()
         name = (
             "Receipt "
             + str(receipt.id)
             + " ("
             + str(receipt.date)
-            + ", order "
-            + receipt.ebay_order_id
+            + (", orders " if len(order_ids) > 1 else ", order ")
+            + ", ".join(order_ids)
             + ")"
         )
         shared = receipt.order_receipts()
@@ -599,11 +735,11 @@ def backfill_earnings(
                 + ": its order is on "
                 + str(shared)
                 + " receipts, and eBay's earnings can't be split between them;"
-                " left as it is."
+                " combine them first (combine-receipts). Left as it is."
             )
             counts["shared"] += 1
             continue
-        earnings = order_earnings(receipt.ebay_order_id)
+        earnings = shipment_earnings(order_ids)
         if earnings["errors"]:
             for e in earnings["errors"]:
                 echo(name + ": " + e)

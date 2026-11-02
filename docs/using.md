@@ -22,6 +22,56 @@ yet.
 eBay listings and orders, synced in. eBay Drafts turn a Unit into a listing,
 and Ship This turns an order into a Sales Receipt.
 
+### Ship This
+
+Once the label is bought on eBay, Ship This on an order records its Sales
+Receipt, marks its Units sold, takes the supplies used out of stock and
+removes each Unit's own copy from Discogs. An order can have several items:
+it finds every Unit on the order's listings, as many as were bought from
+each. Order syncs keep every item; an order synced before fbc did only knows
+its first, so Sync the orders again if Ship This says eBay has more.
+
+When a buyer has other orders without a Sales Receipt from the same week,
+the order list offers Ship This Combined and Ship This Alone. Ship This
+Combined ticks the buyer's other orders; tick the ones going in the package.
+They get one Sales Receipt, dated the first order, with every order's
+earnings, and the supplies for one package.
+
+eBay charges shipping on each order. Buy one label, on any of the orders,
+for the package. Ship This shows what the buyer paid for shipping, what the
+label cost, and how much to refund on one of the orders on eBay to pass on
+the saving. Reload the page once it's refunded, so the refund is in the
+earnings.
+
+### Combining old Sales Receipts
+
+Before Ship This handled several Units, such shipments were recorded by hand,
+as a Sales Receipt per Unit of one order, or a receipt per order of one
+package. Each is one Sales Receipt now. To find them and put them together:
+
+```bash
+flask --app fbc combine-receipts
+```
+
+It finds receipts that share an order, and orders that went in another
+order's package: eBay's lines show their sale but no label of their own,
+and the buyer has an order with a label within three days. It shows each
+group and how the home page's numbers change, and only saves with
+`--apply`. `--receipts 516,517` combines just those receipts. To combine
+receipts it doesn't find, select them in the Sales Receipts list and choose
+Combine.
+
+A combined receipt covers every order and Unit, and the supplies used. Its
+Sold Price is the orders' prices and its Net Sold the receipts' added up.
+It keeps the receipts' earnings lines when all of them had lines. Otherwise
+it has none: Refresh earnings, or run `backfill-earnings`, to get them from
+eBay.
+
+The home page splits a receipt of several Units between them by what each
+sold for, rather than evenly. That's the price on the order, or for a
+combined receipt the Unit's share of its old receipt. Failing that, it's the
+listing's asking price, or the average of the receipt's other Units.
+
 ### Earnings
 
 A Sales Receipt keeps how its order's earnings add up to Net Sold, as eBay's
@@ -40,7 +90,11 @@ down.
 So does a receipt whose eBay order is on other receipts too, from splitting
 an order of several Units into a receipt per Unit by hand. eBay's earnings
 are for the whole order and can't be split between them, so Refresh earnings
-and the backfill leave those receipts alone. Their page says so.
+and the backfill leave those receipts alone until they're combined (see
+Combining old Sales Receipts). Their page says so.
+
+A receipt of several orders keeps the earnings of all of them, and each
+line says which order it came from.
 
 A refund or a label bought after shipping changes an order's earnings. Refresh
 earnings from eBay, on the receipt's page, reads them again and shows what

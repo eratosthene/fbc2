@@ -1,5 +1,6 @@
 from flask import abort, flash, redirect, request, url_for
 from flask_appbuilder import expose, has_access
+from flask_appbuilder.actions import action
 from wtforms.validators import Optional
 
 from fbc.util import CustomModelView
@@ -10,10 +11,12 @@ from fbc.models.sales import MANUAL, SalesReceipt
 from fbc.shipping import (
     discogs_plan,
     fmt_supplies,
-    order_earnings,
+    combinable_orders,
+    combined_discount,
     order_receipt,
-    order_unit,
     remove_from_discogs,
+    shipment_earnings,
+    shipment_units,
     ship_order,
     stock_problems,
     supplies_plan,
@@ -32,7 +35,8 @@ from fbc.util import CustomForm
 SHARED_ORDER = (
     "This Sales Receipt's eBay order is on other Sales Receipts too, so eBay's"
     " earnings for the order can't be split between them. Its fees aren't"
-    " broken down."
+    " broken down until they're combined: select them in the Sales Receipts"
+    " list and choose Combine."
 )
 
 
@@ -46,6 +50,13 @@ def flash_adjustment(receipt):
                 + ", so the Sales Receipt keeps that as a manual adjustment.",
                 "info",
             )
+
+
+def unit_names(units):
+    """One Unit's name, or how many Units."""
+    if len(units) == 1:
+        return units[0].name
+    return str(len(units)) + " Units"
 
 
 def _lines_total(earnings):
@@ -63,10 +74,11 @@ class SalesReceiptModelView(CustomModelView):
         "link_column": "Order Link",
         "fmt_sold_price": "Sold Price",
         "fmt_net_sold": "Net Sold",
+        "ebay_orders": "eBay Orders",
     }
-    show_columns = ["date", "ebay_order", "sold_price", "net_sold"]
+    show_columns = ["date", "ebay_orders", "sold_price", "net_sold"]
     # Lines come from eBay (Ship This and Refresh Earnings), not the form.
-    add_columns = ["ebay_order", "old_id", "date", "sold_price", "net_sold"]
+    add_columns = ["ebay_orders", "old_id", "date", "sold_price", "net_sold"]
     edit_columns = add_columns
     search_columns = add_columns
 
@@ -77,6 +89,39 @@ class SalesReceiptModelView(CustomModelView):
     def pre_update(self, item):
         # Net Sold changed by hand: keep the lines adding up to it.
         item.balance_lines()
+
+    @action(
+        "combine",
+        "Combine",
+        "Combine the selected Sales Receipts into one, for a shipment recorded"
+        " as several?",
+        "fa-compress",
+        single=False,
+    )
+    def combine(self, items):
+        """
+        Put receipts that stand for one shipment together (see
+        combine.combine_receipts), for the ones flask combine-receipts
+        doesn't find by itself.
+        """
+        from fbc import db
+        from fbc.combine import combine_receipts
+
+        if not isinstance(items, list) or len(items) < 2:
+            flash("Select two or more Sales Receipts to combine.", "warning")
+            return redirect(url_for("SalesReceiptModelView.list"))
+        receipt = combine_receipts(items)
+        db.session.commit()
+        flash(
+            "Combined "
+            + str(len(items))
+            + " Sales Receipts into this one. Sold Price is the orders' total and"
+            " Net Sold the receipts'.",
+            "success",
+        )
+        if not receipt.lines:
+            flash("It has no earnings lines yet; refresh them from eBay below.", "info")
+        return redirect(url_for("SalesReceiptModelView.show", pk=receipt.id))
 
     def _receipt(self, pk):
         receipt = self.datamodel.get(pk)
@@ -112,13 +157,13 @@ class SalesReceiptModelView(CustomModelView):
 
         receipt = self._receipt(pk)
         back = redirect(url_for("SalesReceiptModelView.show", pk=receipt.id))
-        if not receipt.ebay_order_id:
+        if not receipt.ebay_orders:
             flash("This Sales Receipt isn't linked to an eBay order.", "warning")
             return back
         if receipt.order_receipts() > 1:
             flash(SHARED_ORDER, "warning")
             return back
-        earnings = order_earnings(receipt.ebay_order_id)
+        earnings = shipment_earnings(receipt.order_ids())
         if request.method == "POST":
             if not earnings["lines"]:
                 flash(
@@ -202,33 +247,44 @@ class EbayOrderModelView(CustomModelView):
     @has_access
     def ship(self, pk):
         """
-        Ship This: once the label is bought on eBay, record the Sales Receipt
-        for the order's earnings, mark its Unit sold, take the supplies it
-        used out of stock and remove the Unit's instance from Discogs. GET
-        shows what will happen; POST does it.
+        Ship This: once the label is bought on eBay, record one Sales Receipt
+        for the order, and any of the buyer's other orders going in the same
+        package (`combine`), for their earnings. Mark their Units sold, take
+        the supplies used out of stock and remove the Units' instances from
+        Discogs. GET shows what will happen; POST does it.
         """
         order = self._order(pk)
         back = redirect(url_for("EbayOrderModelView.list"))
         if order_receipt(order):
             flash("This order already has a Sales Receipt.", "warning")
             return back
-        unit = order_unit(order)
-        if not unit:
+        values = request.form if request.method == "POST" else None
+        others = combinable_orders(order)
+        combine = set((values or request.args).getlist("combine"))
+        orders = sorted(
+            [order] + [o for o in others if o.order_id in combine],
+            key=lambda o: (o.created_time, o.order_id),
+        )
+        units, problems = shipment_units(orders)
+        if units is None:
+            for problem in problems:
+                flash(problem, "warning")
             flash(
-                "This order doesn't have exactly one unsold Unit on its listing;"
-                " ship it by hand.",
+                "Ship This can't tell which Units these are; ship it by hand.",
                 "warning",
             )
             return back
 
-        supplies = supplies_plan([unit])
+        supplies = supplies_plan(units)
         # Asked for again on a POST, so the receipt keeps eBay's lines as
         # they are when it's saved.
-        earnings = order_earnings(order.order_id)
+        earnings = shipment_earnings([o.order_id for o in orders])
+        # Orders synced before fbc kept every item only know their first.
+        known_items = sum(len(o.items) or 1 for o in orders)
+        missing_items = earnings["items"] > known_items
         # A POST with anything wrong shows the page again with what was
         # entered, so it doesn't all need typing in again.
-        values = request.form if request.method == "POST" else None
-        if values is not None:
+        if values is not None and not missing_items:
             problems = []
             try:
                 net_sold = float(values.get("net_sold", "").strip().lstrip("$"))
@@ -240,34 +296,44 @@ class EbayOrderModelView(CustomModelView):
             except ValueError as e:
                 problems.append(str(e))
             if not problems:
-                receipt = ship_order(order, unit, net_sold, used, earnings["lines"])
+                receipt = ship_order(orders, units, net_sold, used, earnings["lines"])
                 flash(
                     "Recorded a Sales Receipt for $"
                     + f"{net_sold:.2f}"
+                    + (
+                        " for " + str(len(orders)) + " orders"
+                        if len(orders) > 1
+                        else ""
+                    )
                     + " and marked "
-                    + unit.name
+                    + (unit_names(units))
                     + " sold.",
                     "success",
                 )
                 flash_adjustment(receipt)
                 if used:
                     flash("Took " + fmt_supplies(used) + " out of supplies.", "success")
-                if values.get("remove_discogs"):
-                    message, category = remove_from_discogs(unit)
-                    flash(message, category)
+                for unit in units:
+                    if values.get("remove_discogs-" + str(unit.id)):
+                        message, category = remove_from_discogs(unit)
+                        flash(message, category)
                 return back
             for problem in problems:
                 flash(problem, "danger")
 
-        instance, discogs_problem = discogs_plan(unit)
+        discogs = [(unit,) + discogs_plan(unit) for unit in units]
         return self.render_template(
             "ebay_order/ship.html",
             title="Ship This",
             order=order,
-            unit=unit,
+            orders=orders,
+            others=others,
+            units=units,
             earnings=earnings,
-            instance=instance,
-            discogs_problem=discogs_problem,
+            missing_items=missing_items,
+            known_items=known_items,
+            discount=combined_discount(orders, earnings),
+            discogs=discogs,
             supplies=supplies,
             values=values,
         )

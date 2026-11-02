@@ -28,7 +28,10 @@ def test_repr_with_ebay_order_includes_order_details():
         title="A" * 50,
     )
     receipt = SalesReceipt(
-        date=datetime.date(2024, 1, 1), sold_price=25.5, net_sold=22.0, ebay_order=order
+        date=datetime.date(2024, 1, 1),
+        sold_price=25.5,
+        net_sold=22.0,
+        ebay_orders=[order],
     )
     text = repr(receipt)
     assert "111-222" in text
@@ -48,8 +51,7 @@ def test_fmt_ebay_order_renders_link_when_order_present(app):
         date=datetime.date(2024, 1, 1),
         sold_price=25.5,
         net_sold=22.0,
-        ebay_order_id="111-222",
-        ebay_order=order,
+        ebay_orders=[order],
     )
     html = receipt.fmt_ebay_order(markup=False)
     assert "111-222" in html
@@ -73,8 +75,7 @@ def test_link_column_delegates_to_fmt_ebay_order(app):
         date=datetime.date(2024, 1, 1),
         sold_price=10.0,
         net_sold=9.0,
-        ebay_order_id="333",
-        ebay_order=order,
+        ebay_orders=[order],
     )
     assert "333" in str(receipt.link_column())
 
