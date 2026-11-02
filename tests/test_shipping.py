@@ -572,14 +572,22 @@ def test_stock_problems_names_each_supply_short_of_what_its_used_for(app):
     )
 
     assert len(problems) == 2
-    assert problems[0].startswith(
-        "There aren't enough Vinyl Outer Sleeves, 12\" in stock for this: it uses"
-        " 21, and the Supply List has 20 left."
+    assert (
+        problems[0]
+        .striptags()
+        .startswith(
+            "There aren't enough Vinyl Outer Sleeves, 12\" in stock for this: it uses"
+            " 21, and the Supply List has 20 left."
+        )
     )
     # The label roll has the last label of one roll and all of another.
     assert "it uses 222, and the Supply List has 221 left" in problems[1]
-    assert "Used From The One In Use" in problems[1]
-    assert "Used From The One In Use" not in problems[0]
+    # Each links to Reconcile Supplies with its own supply picked out.
+    for problem, supply in zip(problems, [supplies["sleeves 12"], supplies["labels"]]):
+        assert (
+            '<a href="/reconcilesupplies/?supply={0}#supply-{0}">'.format(supply.id)
+            in problem
+        )
 
 
 def test_ship_page_warns_when_a_supply_is_short(client, finances):
@@ -593,6 +601,8 @@ def test_ship_page_warns_when_a_supply_is_short(client, finances):
     )
 
     assert html.count("Not enough for this") == 1
+    sleeves = supplies["sleeves 12"].id
+    assert "/reconcilesupplies/?supply={0}#supply-{0}".format(sleeves) in html
 
 
 def test_shipping_is_blocked_when_a_supply_would_run_out(client, discogs):
@@ -611,7 +621,9 @@ def test_shipping_is_blocked_when_a_supply_would_run_out(client, discogs):
 
     assert page.status_code == 200
     html = page.get_data(as_text=True)
-    assert "There aren&#39;t enough Vinyl Outer Sleeves, 12&#34; in stock" in html
+    assert "There aren't enough Vinyl Outer Sleeves, 12&#34; in stock" in html
+    # The link survives being flashed.
+    assert '<a href="/reconcilesupplies/?supply=' + ids["sleeves 12"] in html
     assert 'name="supply-' + ids["sleeves 12"] + '" value="21"' in html
     # Remove from Discogs was left unticked, and stays that way.
     assert re.search(r'name="remove_discogs" value="1"\s*>', html)

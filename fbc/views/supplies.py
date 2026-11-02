@@ -1,11 +1,21 @@
 from fbc.util import CustomModelView
+from flask import flash, redirect, request, url_for
+from flask_appbuilder import BaseView, expose, has_access
 from flask_appbuilder.fieldwidgets import Select2Widget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from wtforms import SelectField
 from wtforms.validators import NumberRange, Optional, ValidationError
 
 from fbc.listing import SIZES
-from fbc.models.supplies import USED_FOR_LABELS, PurchaseOrder, Supply, SupplyUse
+from fbc.models.supplies import (
+    RECONCILE,
+    USED_FOR_LABELS,
+    PurchaseOrder,
+    Supply,
+    SupplyUse,
+    fmt_stock,
+    uses_left,
+)
 
 USED_FOR_CHOICES = [(value or "", label) for value, label in USED_FOR_LABELS.items()]
 
@@ -88,7 +98,7 @@ class SupplyUseModelView(CustomModelView):
         "sales_receipt": "Sales Receipt",
     }
     description_columns = {
-        "count": "Below 0 when a Supply List edit added stock.",
+        "count": "Below 0 when a Supply List edit or Reconcile Supplies added stock.",
     }
 
 
@@ -177,3 +187,150 @@ class PurchaseOrderModelView(CustomModelView):
     datamodel = SQLAInterface(PurchaseOrder)
     list_columns = ["date", "purchase_price", "notes", "link"]
     label_columns = {"purchase_price": "Price"}
+
+
+def _whole(value):
+    """A form value as a whole number, or None when blank. Raises ValueError."""
+    value = (value or "").strip()
+    return int(value) if value else None
+
+
+def counted_stock(form, supplies):
+    """
+    {supply: (quantity, pack_used)} for each of `supplies` counted on
+    Reconcile Supplies, from its on_hand-<id> and left-<id> fields, and
+    {supply id: what to fix} for any that can't be. Supplies left blank
+    are in neither.
+    """
+    counts = {}
+    errors = {}
+    for supply in supplies:
+        key = str(supply.id)
+        try:
+            on_hand = _whole(form.get("on_hand-" + key))
+            left = _whole(form.get("left-" + key))
+        except ValueError:
+            errors[supply.id] = "Enter whole numbers."
+            continue
+        if (supply.pack_size or 1) <= 1:
+            left = None
+        if on_hand is None:
+            if left is not None:
+                errors[supply.id] = "Enter how many are on hand too."
+            continue
+        try:
+            counts[supply] = supply.stock_from_count(on_hand, left)
+        except ValueError as e:
+            errors[supply.id] = str(e)
+    return counts, errors
+
+
+def fmt_difference(supply, uses):
+    """A count's difference in `uses`, like "−3", or "+80 uses" for a roll."""
+    if not uses:
+        return "No change"
+    text = ("+" if uses > 0 else "−") + str(abs(uses))
+    return text + " uses" if (supply.pack_size or 1) > 1 else text
+
+
+def _seen(supply):
+    """What fbc had for `supply` when the differences were shown."""
+    return str(supply.quantity) + "/" + str(supply.pack_used)
+
+
+def stock_changes(counts):
+    """What saving `counts` (from counted_stock) would change, for showing."""
+    changes = []
+    for supply, (quantity, pack_used) in counts.items():
+        after = uses_left(quantity, supply.pack_size, pack_used)
+        changes.append(
+            {
+                "supply": supply,
+                "before": supply.fmt_quantity(),
+                "after": fmt_stock(quantity, supply.pack_size, pack_used),
+                "difference": fmt_difference(supply, after - supply.available()),
+                "seen": _seen(supply),
+            }
+        )
+    return changes
+
+
+class ReconcileSuppliesView(BaseView):
+    """
+    Reconcile Supplies, under Supplies: correct every supply's stock to a
+    count of what's on hand, after seeing the differences. Ship This, Add
+    Unit and the home page's reorder banner link here when the Supply List
+    looks wrong.
+    """
+
+    route_base = "/reconcilesupplies"
+    default_view = "reconcile"
+
+    @expose("/", methods=["GET", "POST"])
+    @has_access
+    def reconcile(self):
+        """
+        GET shows the counts to fill in, with ?supply=<id> highlighted. A
+        POST shows the differences; one with action=save saves them, and
+        action=change goes back to the counts.
+        """
+        from fbc import db
+
+        supplies = db.session.query(Supply).order_by(Supply.name).all()
+        highlight = request.args.get("supply", type=int)
+        values = request.form if request.method == "POST" else None
+        errors = {}
+        changes = None
+        if values is not None and values.get("action") != "change":
+            counts, errors = counted_stock(values, supplies)
+            if errors:
+                flash("Fix the counts marked below.", "danger")
+            elif not counts:
+                flash("Fill in what's on hand for at least one supply.", "warning")
+            else:
+                changes = stock_changes(counts)
+                if values.get("action") == "save":
+                    # Ship This or Add Unit in another tab may have used some
+                    # since the differences were shown.
+                    moved = [
+                        s.name
+                        for s in counts
+                        if values.get("seen-" + str(s.id)) != _seen(s)
+                    ]
+                    if moved:
+                        flash(
+                            ", ".join(moved)
+                            + " changed since you checked the differences."
+                            " Check them again before saving.",
+                            "warning",
+                        )
+                    else:
+                        return self._save(counts, changes)
+        return self.render_template(
+            "supply/reconcile.html",
+            title="Reconcile Supplies",
+            supplies=supplies,
+            highlight=highlight,
+            values=values,
+            errors=errors,
+            changes=changes,
+        )
+
+    def _save(self, counts, changes):
+        from fbc import db
+
+        for supply, (quantity, pack_used) in counts.items():
+            supply.quantity = quantity
+            supply.pack_used = pack_used
+            supply.record_adjustment(RECONCILE)
+        db.session.commit()
+        corrected = [
+            c["supply"].name + ": " + c["before"] + " → " + c["after"]
+            for c in changes
+            if c["before"] != c["after"]
+        ]
+        if corrected:
+            flash("Corrected " + "; ".join(corrected) + ".", "success")
+        else:
+            flash("The counts all matched; nothing needed correcting.", "info")
+        return redirect(url_for("SupplyModelView.list"))

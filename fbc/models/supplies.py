@@ -8,10 +8,13 @@ from sqlalchemy import inspect
 from sqlalchemy.orm import column_property, object_session, relationship
 
 # Supply.used_for: where a supply is taken out of stock on its own. A
-# SupplyUse's kind is one of these too, or ADJUSTMENT.
+# SupplyUse's kind is one of these too, or ADJUSTMENT or RECONCILE.
 SHIPPING = "shipping"
 ADDING_UNIT = "unit"
 ADJUSTMENT = "adjustment"
+# Kept apart from ADJUSTMENT, which includes restocks, so a count's
+# differences show how far the estimates drift.
+RECONCILE = "reconcile"
 USED_FOR_LABELS = {
     None: "Only by hand",
     SHIPPING: "Shipping an order",
@@ -21,6 +24,7 @@ KIND_LABELS = {
     SHIPPING: "Shipping an order",
     ADDING_UNIT: "Adding a Unit",
     ADJUSTMENT: "Supply List edit",
+    RECONCILE: "Reconcile Supplies",
 }
 
 
@@ -33,6 +37,22 @@ def uses_left(quantity, pack_size, pack_used):
         return 0
     size = pack_size or 1
     return max(0, quantity * size - (pack_used or 0))
+
+
+def fmt_stock(quantity, pack_size, pack_used):
+    """quantity, and what's left of the one in use when it holds several."""
+    size = pack_size or 1
+    if size <= 1 or not quantity:
+        return str(quantity)
+    left = size - (pack_used or 0)
+    return (
+        str(quantity)
+        + " ("
+        + str(left)
+        + " of "
+        + str(size)
+        + " left on the one in use)"
+    )
 
 
 class PurchaseOrder(Model):
@@ -116,19 +136,7 @@ class Supply(Model):
         return self.name + ": " + str(self.quantity)
 
     def fmt_quantity(self):
-        """quantity, and what's left of the one in use when it holds several."""
-        size = self.pack_size or 1
-        if size <= 1 or not self.quantity:
-            return str(self.quantity)
-        left = size - (self.pack_used or 0)
-        return (
-            str(self.quantity)
-            + " ("
-            + str(left)
-            + " of "
-            + str(size)
-            + " left on the one in use)"
-        )
+        return fmt_stock(self.quantity, self.pack_size, self.pack_used)
 
     def fmt_used_for(self):
         return USED_FOR_LABELS.get(self.used_for, self.used_for)
@@ -180,11 +188,37 @@ class Supply(Model):
         self.pack_used = used % size if self.quantity else 0
         return self._record(count, kind, receipt=receipt, unit=unit)
 
-    def record_adjustment(self):
+    def stock_from_count(self, on_hand, left=None):
+        """
+        (quantity, pack_used) for `on_hand` counted, counting the one in use,
+        with `left` uses left on that one when it holds several (pack_size).
+        Raises ValueError, with what to fix, for anything the Supply form
+        wouldn't take.
+        """
+        if on_hand < 0:
+            raise ValueError("On hand can't be below 0.")
+        size = self.pack_size or 1
+        if size <= 1:
+            return on_hand, 0
+        if not on_hand:
+            if left:
+                raise ValueError("Leave uses left blank when none are on hand.")
+            return 0, 0
+        if left is None:
+            raise ValueError("Enter about how many uses are left on the one in use.")
+        if not 1 <= left <= size:
+            raise ValueError(
+                "Uses left on the one in use must be from 1 to "
+                + str(size)
+                + ". One that's used up isn't on hand."
+            )
+        return on_hand, size - left
+
+    def record_adjustment(self, kind=ADJUSTMENT):
         """
         Record a change made by hand to quantity or pack_used, since it was
-        loaded, as an ADJUSTMENT: the uses it took out of stock, or fewer
-        than 0 for a restock. Both sides count at the pack_size it has now,
+        loaded, as a SupplyUse of `kind`: the uses it took out of stock, or
+        fewer than 0 for a restock. Both sides count at the pack_size it has now,
         so changing only that records nothing. Returns the SupplyUse, or None
         when stock didn't change.
         """
@@ -198,7 +232,7 @@ class Supply(Model):
         count = old - self.available()
         if not count:
             return None
-        return self._record(count, ADJUSTMENT)
+        return self._record(count, kind)
 
     def _record(self, count, kind, receipt=None, unit=None):
         use = SupplyUse(
@@ -238,8 +272,9 @@ class Supply(Model):
 
 class SupplyUse(Model):
     """
-    One time a supply's stock changed: by Ship This, Add Unit or an edit on
-    the Supply List. Recorded since this table was added; nothing before.
+    One time a supply's stock changed: by Ship This, Add Unit, an edit on
+    the Supply List or Reconcile Supplies. Recorded since this table was
+    added; nothing before.
     """
 
     __tablename__ = "supply_use"
@@ -249,8 +284,8 @@ class SupplyUse(Model):
         Integer, ForeignKey("supply.id", ondelete="CASCADE"), nullable=False, index=True
     )
     supply = relationship("Supply", back_populates="uses")
-    # Uses, as Supply.use takes them. An ADJUSTMENT that added stock is
-    # below 0.
+    # Uses, as Supply.use takes them. An ADJUSTMENT or RECONCILE that added
+    # stock is below 0.
     count = Column(Integer, nullable=False)
     kind = Column(String(10), nullable=False)
     sales_receipt_id = Column(

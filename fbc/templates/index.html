@@ -8,7 +8,9 @@
     <strong>Time to reorder:</strong>
     {% for supply in low_supplies %}<a
       href="{{ url_for('SupplyModelView.show', pk=supply.id) }}"
-      >{{ supply.name }}</a> ({{ supply.quantity }} left){{ ", " if not loop.last }}{% endfor %}
+      >{{ supply.name }}</a> ({{ supply.quantity }} left){{ ", " if not loop.last }}{% endfor %}.
+    Not what's on hand? Correct it on
+    <a href="{{ url_for('ReconcileSuppliesView.reconcile') }}">Reconcile Supplies</a>.
   </div>
   {% endif %}
   <h2>Total units in stock: {{ stock_total }}</h2>
