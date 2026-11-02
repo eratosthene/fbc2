@@ -192,7 +192,9 @@ class SalesReceiptLine(Model):
     # Not a foreign key: once a receipt covers several orders (#53), a line
     # can come from an order fbc hasn't synced.
     ebay_order_id = Column(String(20))
-    transaction_id = Column(String(40))
+    # eBay doesn't say how long these get; a dispute hold's release is
+    # DISPUTE_HOLD_REVERSE-<id>-<id>, 42 characters.
+    transaction_id = Column(String(100))
     transaction_date = Column(DateTime)
 
     def category(self):
