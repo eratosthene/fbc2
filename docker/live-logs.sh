@@ -1,6 +1,6 @@
 #!/bin/bash
 # Follow the logs of the app on the live server. See "Running on the live
-# server" in README.md.
+# server" in docs/production.md.
 #
 #   docker/live-logs.sh [-n | --tail LINES]
 #

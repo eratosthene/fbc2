@@ -1,6 +1,6 @@
 #!/bin/bash
 # Stop the dev compose setup and remove its containers, keeping its database.
-# See "Testing with Docker" in README.md.
+# See "Testing with Docker" in docs/development.md.
 #
 #   dev-scripts/compose-down.sh [-p | --project NAME]
 #

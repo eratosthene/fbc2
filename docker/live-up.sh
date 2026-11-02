@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build the image and start the app on the live server, from this checkout.
-# See "Running on the live server" in README.md.
+# See "Running on the live server" in docs/production.md.
 #
 #   docker/live-up.sh [-n | --no-build]
 #
@@ -41,7 +41,7 @@ fi
 # so only its owner can read it.
 if [ ! -f docker/.env ]; then
     (umask 077 && touch docker/.env)
-    echo "Made an empty docker/.env (see \"Settings from the environment\" in README.md)."
+    echo "Made an empty docker/.env (see \"Settings from the environment\" in docs/production.md)."
 fi
 
 if [ "$build" = true ]; then

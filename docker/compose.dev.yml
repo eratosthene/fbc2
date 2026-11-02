@@ -1,6 +1,6 @@
 # A local testing session: the app, run from this checkout's code by Flask's
 # reloading dev server, against a MariaDB like the live server's. See
-# "Testing with Docker" in README.md.
+# "Testing with Docker" in docs/development.md.
 #
 #   dev-scripts/compose-up.sh   (docker compose -f docker/compose.dev.yml up --build)
 #
@@ -26,7 +26,8 @@ services:
     volumes:
       - db:/var/lib/mysql
       # Any .sql or .sql.gz dumps in docker/dev-db are loaded the first time,
-      # into an empty volume. See "A copy of live data" in README.md.
+      # into an empty volume. See "A copy of live data"
+      # in docs/development.md.
       - ./dev-db:/docker-entrypoint-initdb.d:ro
     # 3307 so it doesn't clash with a MariaDB or MySQL already on 3306, and
     # so `flask run` on this machine can use it too.

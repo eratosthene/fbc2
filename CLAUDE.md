@@ -3,8 +3,8 @@
 A Flask-AppBuilder app on MariaDB that keeps a record shop's stock and sales
 in step with Discogs and eBay. One person runs it and works on it; most
 changes start from a GitHub issue and arrive as a PR from a `claude/` branch
-in its own worktree. `README.md` is the user-facing guide; this file is what
-it doesn't say.
+in its own worktree. `README.md` and `docs/` are the user-facing guide; this
+file is what they don't say.
 
 ## Commands
 
@@ -69,8 +69,11 @@ it doesn't say.
 - Docs, comments, UI text and PR descriptions are plain English, short
   sentences, in the app's own names: Units, Purchase Lots, Storage Boxes,
   eBay Drafts, Ship This, Sales Receipts. Comments say why, not what.
-- When behaviour or setup changes, update `README.md` in the same PR. Docs
-  are Markdown, with commands in fenced `bash` blocks.
+- When behaviour or setup changes, update the doc it belongs in, in the same
+  PR: `docs/using.md` for what the app does, `docs/development.md` for
+  working on it, `docs/production.md` for the live server. `README.md` is an
+  overview with links; change it only when that changes, such as a new area
+  of the app. Docs are Markdown, with commands in fenced `bash` blocks.
 - PR descriptions follow this shape: `Closes #N.`, a one-line summary, then
   sections as needed: How it works, Differences from the issue, and Testing,
   which says what was run, against what, and what *wasn't* run. CI writes its
