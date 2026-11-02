@@ -1,7 +1,7 @@
 """widen sales_receipt_line.transaction_id
 
 Revision ID: 8d1e5a3f7b62
-Revises: 6b2f8d4a1c73
+Revises: 3e7b2f9a6c15
 Create Date: 2026-11-02 00:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "8d1e5a3f7b62"
-down_revision = "6b2f8d4a1c73"
+down_revision = "3e7b2f9a6c15"
 branch_labels = None
 depends_on = None
 
