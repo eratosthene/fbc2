@@ -2,7 +2,8 @@
 Where the app's settings come from: config.py, then any environment
 variable named FBC_CONFIG_<KEY>, which overrides that key. On the live
 server they come from docker/.env, so secrets and per-deploy values can stay
-out of config.py. See "Settings from the environment" in README.md.
+out of config.py. See "Settings from the environment" in
+docs/production.md.
 
 - A value is read as JSON when it can be, so FBC_CONFIG_DEV_MODE=true is a
   boolean, and as a string otherwise.
