@@ -347,3 +347,34 @@ def test_index_takes_expenses_off_the_net_profit_by_category(app):
         html = client.get("/").get_data(as_text=True)
     assert "Total other expenses: $16.50" in html
     assert "Advertising (line 8)" in html
+
+
+def test_index_counts_expenses_on_a_purchase_order_as_expenses_not_supplies(app):
+    order = PurchaseOrder(date=datetime.date(2024, 1, 1), price=100.0, notes="Uline")
+    db.session.add(order)
+    db.session.add(
+        Expense(
+            date=datetime.date(2024, 1, 1),
+            category="supplies",
+            amount=40.0,
+            purchase_order=order,
+        )
+    )
+    db.session.commit()
+
+    captured = {}
+
+    class CapturingIndexView(MyIndexView):
+        def render_template(self, template, **kwargs):
+            captured.update(kwargs)
+            return "ok"
+
+    with app.test_request_context("/"):
+        view = CapturingIndexView()
+        view.appbuilder = app.extensions["appbuilder"]
+        view.index()
+
+    assert captured["supply_total"] == 60.0
+    assert captured["expense_total"] == 40.0
+    # The order's 100.0, counted once.
+    assert captured["total_net_profit"] == -100.0

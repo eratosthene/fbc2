@@ -9,7 +9,9 @@ from fbc.models.expenses import (
     categories,
     category_label,
     expense_totals,
+    purchase_order_expense_total,
 )
+from fbc.models.supplies import PurchaseOrder
 
 
 def _expenses(*rows):
@@ -87,3 +89,55 @@ def test_an_expense_without_miles_keeps_its_amount_and_no_rate():
 @pytest.mark.parametrize("amount, text", [(5.0, "$5.00"), (1234.5, "$1,234.50")])
 def test_fmt_amount(amount, text):
     assert Expense(amount=amount).fmt_amount() == text
+
+
+def _order(price=100.0, notes="Uline order"):
+    order = PurchaseOrder(date=datetime.date(2026, 4, 1), price=price, notes=notes)
+    db.session.add(order)
+    return order
+
+
+def test_a_purchase_orders_expenses_come_out_of_its_supply_cost():
+    order = _order()
+    for amount in (30.0, 12.5):
+        db.session.add(
+            Expense(
+                date=datetime.date(2026, 4, 1),
+                category="supplies",
+                amount=amount,
+                purchase_order=order,
+            )
+        )
+    _expenses(((2026, 4, 2), "fees", 21.95))
+
+    assert order.expense_total() == 42.5
+    assert order.supply_cost() == 57.5
+    assert order.fmt_supply_cost() == "$57.50"
+    assert purchase_order_expense_total() == 42.5
+
+
+def test_purchase_order_expense_total_is_0_with_none_on_orders():
+    _expenses(((2026, 4, 2), "fees", 21.95))
+
+    assert purchase_order_expense_total() == 0
+
+
+def test_deleting_a_purchase_order_keeps_its_expenses():
+    order = _order()
+    expense = Expense(
+        date=datetime.date(2026, 4, 1),
+        category="equipment",
+        amount=40.0,
+        purchase_order=order,
+    )
+    db.session.add(expense)
+    db.session.commit()
+
+    db.session.delete(order)
+    db.session.commit()
+
+    assert db.session.query(Expense).one().purchase_order_id is None
+
+
+def test_a_purchase_order_without_notes_still_shows():
+    assert repr(_order(price=5.0, notes=None)) == "2026-04-01:  $5.00"

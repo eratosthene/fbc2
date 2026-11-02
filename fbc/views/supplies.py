@@ -7,6 +7,7 @@ from wtforms import SelectField
 from wtforms.validators import NumberRange, Optional, ValidationError
 
 from fbc.listing import SIZES
+from fbc.views.expenses import ExpenseModelView
 from fbc.models.supplies import (
     RECONCILE,
     USED_FOR_LABELS,
@@ -183,10 +184,52 @@ class SupplyModelView(CustomModelView):
         item.record_adjustment()
 
 
+def covers_its_expenses(form, field):
+    """An order's price can't be less than the Expenses on it."""
+    from fbc import db
+
+    # FAB sets _id when editing; a new order has no Expenses yet.
+    pk = getattr(form, "_id", None)
+    if pk is None or field.data is None:
+        return
+    total = db.session.get(PurchaseOrder, pk).expense_total()
+    if round(field.data, 2) < round(total, 2):
+        raise ValidationError(
+            "The Expenses on it come to $"
+            + f"{total:,.2f}"
+            + ", so the price can't be less. Change them first."
+        )
+
+
 class PurchaseOrderModelView(CustomModelView):
     datamodel = SQLAInterface(PurchaseOrder)
+    related_views = [ExpenseModelView]
     list_columns = ["date", "purchase_price", "notes", "link"]
-    label_columns = {"purchase_price": "Price"}
+    add_columns = ["date", "price", "notes", "link", "supply"]
+    edit_columns = add_columns
+    show_columns = [
+        "date",
+        "purchase_price",
+        "fmt_supply_cost",
+        "notes",
+        "link",
+        "fmt_supplies",
+    ]
+    search_columns = ["date", "price", "notes", "supply"]
+    label_columns = {
+        "purchase_price": "Price",
+        "fmt_supply_cost": "Supply Cost",
+        "supply": "Supplies",
+        "fmt_supplies": "Supplies",
+    }
+    description_columns = {
+        "price": "What the whole order cost. Anything on it that isn't a"
+        " supply, like a record crate, is an Expense on it, under Expenses"
+        " below once it's saved. Those come out of this price, and the rest"
+        " is what the supplies cost.",
+        "supply": "Every supply this order restocked.",
+    }
+    validators_columns = {"price": [covers_its_expenses]}
 
 
 def _whole(value):

@@ -9,7 +9,7 @@ from fbc.models.discogs import DiscogsRelease
 from fbc.models.ebay import EbayListing
 from fbc.models.expenses import Expense
 from fbc.models.inventory import PurchaseLot, Unit
-from fbc.models.supplies import Supply, SupplyUse
+from fbc.models.supplies import PurchaseOrder, Supply, SupplyUse
 from fbc.views.discogs import ArtistModelView, DiscogsReleaseModelView, FolderModelView
 from fbc.views.inventory import (
     UNITS_WITHOUT_LISTING_FILTERS,
@@ -743,3 +743,90 @@ def test_expense_form_refuses_what_it_cant_save(client, fields, error):
 
     assert error in page.get_data(as_text=True)
     assert fbc.db.session.query(Expense).count() == 0
+
+
+def _order_with_two_supplies(client, price="100.00"):
+    """A Uline order for mailers and a label roll, through the form."""
+    mailers = Supply(name="LP Mailers", quantity=10)
+    labels = Supply(name="Shipping Label Roll", quantity=1)
+    fbc.db.session.add_all([mailers, labels])
+    fbc.db.session.commit()
+    client.post(
+        "/purchaseordermodelview/add",
+        data=MultiDict(
+            [
+                ("date", "2026-04-01"),
+                ("price", price),
+                ("notes", "Uline order"),
+                ("link", ""),
+                ("supply", str(mailers.id)),
+                ("supply", str(labels.id)),
+            ]
+        ),
+    )
+    return fbc.db.session.query(PurchaseOrder).one()
+
+
+def test_a_purchase_order_holds_several_supplies_and_expenses(client):
+    order = _order_with_two_supplies(client)
+    assert sorted(s.name for s in order.supply) == ["LP Mailers", "Shipping Label Roll"]
+
+    _add_expense(client, category="supplies", amount="30", purchase_order=str(order.id))
+    # From the order's page, which fills in the order itself.
+    client.post(
+        "/expensemodelview/add?_flt_0_purchase_order=" + str(order.id),
+        data={"date": "2026-04-01", "category": "equipment", "amount": "12.50"},
+    )
+
+    fbc.db.session.expire_all()
+    assert sorted(e.amount for e in order.expenses) == [12.5, 30.0]
+    assert order.supply_cost() == 57.5
+    show = client.get("/purchaseordermodelview/show/" + str(order.id))
+    html = show.get_data(as_text=True)
+    assert "$57.50" in html and "Equipment (line 13)" in html
+    assert "LP Mailers, Shipping Label Roll" in html
+
+
+def test_expenses_cant_come_to_more_than_their_purchase_orders_price(client):
+    order = _order_with_two_supplies(client)
+    _add_expense(client, amount="60", purchase_order=str(order.id))
+
+    page = _add_expense(client, amount="40.01", purchase_order=str(order.id))
+
+    assert "would come to $100.01, more than its price of $100.00" in (
+        page.get_data(as_text=True)
+    )
+    assert fbc.db.session.query(Expense).count() == 1
+
+
+def test_editing_an_expense_on_a_purchase_order_doesnt_count_it_twice(client):
+    order = _order_with_two_supplies(client)
+    _add_expense(client, amount="60", purchase_order=str(order.id))
+    expense = fbc.db.session.query(Expense).one()
+
+    client.post(
+        "/expensemodelview/edit/" + str(expense.id),
+        data={
+            "date": "2026-04-01",
+            "category": "supplies",
+            "amount": "100",
+            "purchase_order": str(order.id),
+        },
+    )
+
+    fbc.db.session.expire_all()
+    assert expense.amount == 100.0
+
+
+def test_a_purchase_orders_price_cant_go_below_its_expenses(client):
+    order = _order_with_two_supplies(client)
+    _add_expense(client, amount="60", purchase_order=str(order.id))
+
+    page = client.post(
+        "/purchaseordermodelview/edit/" + str(order.id),
+        data={"date": "2026-04-01", "price": "50", "notes": "Uline order"},
+    )
+
+    assert "The Expenses on it come to $60.00" in page.get_data(as_text=True)
+    fbc.db.session.expire_all()
+    assert order.price == 100.0

@@ -29,10 +29,19 @@ def upgrade():
         sa.Column("link", sa.String(length=255), nullable=True),
         sa.Column("miles", sa.Float(), nullable=True),
         sa.Column("mileage_rate", sa.Float(), nullable=True),
+        sa.Column("purchase_order_id", sa.Integer(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["purchase_order_id"], ["purchase_order.id"], ondelete="SET NULL"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("expense", schema=None) as batch_op:
         batch_op.create_index(batch_op.f("ix_expense_date"), ["date"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_expense_purchase_order_id"),
+            ["purchase_order_id"],
+            unique=False,
+        )
 
 
 def downgrade():

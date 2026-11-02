@@ -2,7 +2,8 @@ from flask import current_app
 from flask_appbuilder import Model
 from flask_appbuilder.models.decorators import renders
 
-from sqlalchemy import Column, Integer, String, Float, Date
+from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, func
+from sqlalchemy.orm import relationship
 
 # Expense.category: the key is stored, the label shown. EXPENSE_CATEGORIES in
 # config.py replaces this list. The labels follow Schedule C's lines, so a
@@ -61,12 +62,27 @@ def expense_totals(start=None, end=None):
     )
 
 
+def purchase_order_expense_total():
+    """
+    What the Expenses on Purchase Orders come to. They're part of those
+    orders' prices, so supply costs leave them out.
+    """
+    from fbc import db
+
+    total = (
+        db.session.query(func.sum(Expense.amount))
+        .filter(Expense.purchase_order_id.isnot(None))
+        .scalar()
+    )
+    return total or 0
+
+
 class Expense(Model):
     """
-    A business cost that isn't a Purchase Lot (records) or a Purchase
-    Order (packing supplies), like an eBay Store subscription, equipment
-    or mileage. Equipment is recorded when it's bought; depreciating it is
-    left to the accountant.
+    A business cost that isn't a Purchase Lot (records) or packing supplies,
+    like an eBay Store subscription, equipment or mileage. It can be on a
+    Purchase Order, as part of its price. Equipment is recorded when it's
+    bought; depreciating it is left to the accountant.
     """
 
     __tablename__ = "expense"
@@ -82,6 +98,14 @@ class Expense(Model):
     # entry, since the IRS changes it every year.
     miles = Column(Float)
     mileage_rate = Column(Float)
+    # Bought on a Purchase Order along with other things. amount is then this
+    # expense's part of the order's price.
+    purchase_order_id = Column(
+        Integer,
+        ForeignKey("purchase_order.id", ondelete="SET NULL"),
+        index=True,
+    )
+    purchase_order = relationship("PurchaseOrder", back_populates="expenses")
 
     def work_out_mileage(self, rate=None):
         """

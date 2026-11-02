@@ -29,7 +29,11 @@ class MyIndexView(IndexView):
         from fbc import db
         from fbc.models.inventory import PurchaseLot, StorageBox, Unit
         from fbc.models.sales import SalesReceipt
-        from fbc.models.expenses import category_label, expense_totals
+        from fbc.models.expenses import (
+            category_label,
+            expense_totals,
+            purchase_order_expense_total,
+        )
         from fbc.models.supplies import PurchaseOrder, Supply
 
         # Load just the columns the totals need, once, and do every count
@@ -103,6 +107,9 @@ class MyIndexView(IndexView):
                 lot_totals[lot.id]["perunit"] = 0
         for po in pos:
             supply_total += po.price
+        # Expenses on a Purchase Order are part of its price, and count as
+        # expenses, not supplies.
+        supply_total -= purchase_order_expense_total()
         for u in units:
             # A unit whose box no longer exists counts as having no box.
             box = box_totals[u.storage_box_id if u.storage_box_id in box_ids else 0]
