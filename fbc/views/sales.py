@@ -1,6 +1,7 @@
 from flask import abort, flash, redirect, request, url_for
 from flask_appbuilder import expose, has_access
 from flask_appbuilder.actions import action
+from markupsafe import Markup
 from wtforms.validators import Optional
 
 from fbc.util import CustomModelView
@@ -219,9 +220,21 @@ class EbayOrderModelView(CustomModelView):
     datamodel = SQLAInterface(EbayOrder)
     base_order = ("created_time", "desc")
     list_widget = EbayOrderListWidget
-    list_columns = ["created_time", "fmt_url", "title", "buyer", "fmt_price", "links"]
+    list_columns = [
+        "created_time",
+        "fmt_url",
+        "fmt_title",
+        "buyer",
+        "fmt_price",
+        "links",
+    ]
     search_columns = ["order_id", "price", "title", "buyer"]
-    label_columns = {"fmt_price": "Price", "fmt_url": "Order Id", "links": "Links"}
+    label_columns = {
+        "fmt_price": "Price",
+        "fmt_url": "Order Id",
+        "fmt_title": "Title",
+        "links": "Links",
+    }
     related_views = [SalesReceiptModelView]
     add_columns = [
         "order_id",
@@ -270,7 +283,11 @@ class EbayOrderModelView(CustomModelView):
             for problem in problems:
                 flash(problem, "warning")
             flash(
-                "Ship This can't tell which Units these are; ship it by hand.",
+                Markup(
+                    "Ship This can't tell which Units these are, so ship it by"
+                    ' hand: mark the Units sold and <a href="{0}">add its Sales'
+                    " Receipt</a>."
+                ).format(order.add_receipt_url()),
                 "warning",
             )
             return back

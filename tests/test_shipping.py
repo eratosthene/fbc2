@@ -212,14 +212,11 @@ def test_finances_token_is_minted_for_its_own_scope(app, monkeypatch):
     assert scopes == [listing.MEDIA_SCOPE, listing.FINANCES_SCOPE]
 
 
-def test_ship_this_is_offered_for_an_order_with_one_unsold_unit(app):
+def test_ship_this_is_offered_until_there_is_a_sales_receipt(app):
     order, unit = _order()
 
     assert "Ship&nbsp;This" in str(order.links())
 
-
-def test_ship_this_is_not_offered_once_there_is_a_sales_receipt(app):
-    order, unit = _order()
     db.session.add(
         SalesReceipt(
             date=datetime.date(2026, 10, 28),
@@ -230,16 +227,30 @@ def test_ship_this_is_not_offered_once_there_is_a_sales_receipt(app):
     )
     db.session.commit()
 
-    assert "Ship&nbsp;This" not in str(order.links())
+    links = str(order.links())
+    assert "Ship&nbsp;This" not in links
+    receipt = order.sales_receipts[0]
+    assert (
+        "/salesreceiptmodelview/show/" + str(receipt.id) + '">Sales&nbsp;Receipt'
+        in links
+    )
 
 
-def test_ship_this_is_not_offered_when_the_unit_is_unclear(app):
+def test_ship_this_says_how_to_ship_by_hand_when_the_unit_is_unclear(client):
     order, unit = _order()
     db.session.add(Unit(name="Another copy", ebay_listing_id="L1"))
     db.session.commit()
 
+    page = client.get(
+        "/ebayordermodelview/ship/" + order.order_id, follow_redirects=True
+    )
+
+    html = page.get_data(as_text=True)
     assert shipping.order_unit(order) is None
-    assert "Ship&nbsp;This" not in str(order.links())
+    assert "Listing L1 has 2 unsold Units on it, and 1 was bought." in html
+    assert "ship it by hand" in html
+    assert "/salesreceiptmodelview/add?sold_price=25.0&amp;ebay_orders=" in html
+    assert db.session.query(SalesReceipt).count() == 0
 
 
 def test_discogs_plan_needs_the_unit_linked_to_an_instance(app):

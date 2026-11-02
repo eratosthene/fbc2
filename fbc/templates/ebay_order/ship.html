@@ -20,9 +20,10 @@ come from eBay and only take the label off once it's bought.</p>
 <p>Buyer: {{ order.buyer }}</p>
 
 {% if others %}
-<form method="get" action="{{ url_for('EbayOrderModelView.ship', pk=order.order_id) }}">
-  <h4>Ship with the buyer's other orders</h4>
-  <p>Tick the orders going in the same package, for one Sales Receipt for all
+<form method="get" action="{{ url_for('EbayOrderModelView.ship', pk=order.order_id) }}"
+  class="alert alert-info">
+  <h4>The buyer has other orders to ship</h4>
+  <p>Tick the ones going in the same package, for one Sales Receipt for all
   of them, then press Update.</p>
   {% for o in others %}
   <div class="checkbox">

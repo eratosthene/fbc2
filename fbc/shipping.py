@@ -206,11 +206,6 @@ def order_unit(order):
     return None
 
 
-def can_ship(order):
-    """Whether Ship This is offered for `order`."""
-    return order_receipt(order) is None and shipment_units([order])[0] is not None
-
-
 # How far apart a buyer's orders can be and still be offered for shipping
 # together. Ship This lets you choose which go in the package.
 COMBINE_DAYS = 7

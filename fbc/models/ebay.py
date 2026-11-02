@@ -104,64 +104,53 @@ class EbayOrder(Model):
             return {self.ebay_listing_id: 1}
         return {}
 
-    def links(self):
-        retval = (
-            '<a href="'
-            + url_for(
-                "SalesReceiptModelView.add",
-                sold_price=self.price,
-                ebay_orders=self.order_id,
-                date=self.created_time.date(),
+    def fmt_title(self):
+        """The title, or for an order of several items, all of them."""
+        from markupsafe import escape
+
+        if len(self.items) <= 1 and not any(
+            (item.quantity or 1) > 1 for item in self.items
+        ):
+            return self.title
+        units = sum(item.quantity or 1 for item in self.items)
+        return Markup(
+            "<b>"
+            + str(units)
+            + " Units:</b><br>"
+            + "<br>".join(
+                str(escape(item.title or item.ebay_listing_id or ""))
+                + ("" if (item.quantity or 1) == 1 else " &times;" + str(item.quantity))
+                for item in self.items
             )
-            + '">Add&nbsp;SR</a>'
         )
-        from fbc.shipping import can_ship, combinable_orders
 
-        if can_ship(self):
-            others = combinable_orders(self)
-            if others:
-                retval = (
-                    retval
-                    + '<br><a href="'
-                    + url_for(
-                        "EbayOrderModelView.ship",
-                        pk=self.order_id,
-                        combine=[o.order_id for o in others],
-                    )
-                    + '">Ship&nbsp;This&nbsp;Combined</a> ('
-                    + str(len(others) + 1)
-                    + "&nbsp;orders)"
-                    + '<br><a href="'
-                    + url_for("EbayOrderModelView.ship", pk=self.order_id)
-                    + '">Ship&nbsp;This&nbsp;Alone</a>'
-                )
-            else:
-                retval = (
-                    retval
-                    + '<br><a href="'
-                    + url_for("EbayOrderModelView.ship", pk=self.order_id)
-                    + '">Ship&nbsp;This</a>'
-                )
-        if self.ebay_listing:
-            from fbc.models.inventory import Unit
-            from fbc import db
+    def add_receipt_url(self):
+        """Add SR with this order filled in, for an order shipped by hand."""
+        return url_for(
+            "SalesReceiptModelView.add",
+            sold_price=self.price,
+            ebay_orders=self.order_id,
+            date=self.created_time.date(),
+        )
 
-            o = (
-                db.session.query(Unit)
-                .filter_by(ebay_listing_id=self.ebay_listing_id)
-                .first()
+    def links(self):
+        """
+        Its Sales Receipt once it's shipped, and Ship This until then, which
+        also offers the buyer's other orders and says when it can't help.
+        """
+        if self.sales_receipts:
+            return Markup(
+                '<a href="'
+                + url_for(
+                    "SalesReceiptModelView.show", pk=str(self.sales_receipts[0].id)
+                )
+                + '">Sales&nbsp;Receipt</a>'
             )
-            if o:
-                retval = (
-                    retval
-                    + '<br><a href="'
-                    + url_for("UnitModelView.edit", pk=o.id)
-                    + '">Edit&nbsp;Unit</a>'
-                )
-                if o.discogs_release:
-                    retval = retval + "<br>" + o.discogs_release.release_show(False)
-
-        return Markup(retval)
+        return Markup(
+            '<a href="'
+            + url_for("EbayOrderModelView.ship", pk=self.order_id)
+            + '">Ship&nbsp;This</a>'
+        )
 
 
 class EbayOrderItem(Model):
