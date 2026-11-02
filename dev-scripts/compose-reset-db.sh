@@ -1,7 +1,7 @@
 #!/bin/bash
 # Empty the dev compose setup's database and load the dumps in docker/dev-db/
 # into it, such as a new copy of live data. See "A copy of live data" in
-# README.md.
+# docs/development.md.
 #
 #   dev-scripts/compose-reset-db.sh [-y | --yes] [-p | --project NAME]
 #

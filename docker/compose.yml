@@ -5,7 +5,7 @@
 # Settings aren't in the image: config.py is mounted from the repo root, and
 # docker/.env, next to this file, can override any of them with
 # FBC_CONFIG_<KEY> variables (see "Settings from the
-# environment" in README.md). A change to
+# environment" in docs/production.md). A change to
 # either needs the container recreated, not a rebuild: `docker/live-up.sh
 # -n`. Paths here are relative to this file's folder, docker/.
 name: fbc2

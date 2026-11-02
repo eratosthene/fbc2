@@ -1,6 +1,6 @@
 #!/bin/bash
 # Start the dev compose setup: the app from this checkout's code, against its
-# own MariaDB. See "Testing with Docker" in README.md.
+# own MariaDB. See "Testing with Docker" in docs/development.md.
 #
 #   dev-scripts/compose-up.sh [-d | --background]
 #
@@ -28,11 +28,11 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-see_readme='See "Testing with Docker" in README.md.'
+see_docs='See "Testing with Docker" in docs/development.md.'
 
 if [ ! -f config.py ]; then
     echo "config.py is missing; copy config.py.tpl to config.py and fill it in." >&2
-    echo "$see_readme" >&2
+    echo "$see_docs" >&2
     exit 1
 fi
 
@@ -47,7 +47,7 @@ if [ -z "${FBC_DEV_DB_PASSWORD:-}" ] &&
         echo "FBC_DEV_DB_PASSWORD isn't set in $env_file. To make one:" >&2
         echo "  echo \"FBC_DEV_DB_PASSWORD=\$(openssl rand -hex 16)\" >> $env_file" >&2
     fi
-    echo "$see_readme" >&2
+    echo "$see_docs" >&2
     exit 1
 fi
 
