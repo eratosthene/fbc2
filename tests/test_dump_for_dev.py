@@ -1,4 +1,5 @@
 import gzip
+import io
 import importlib.util
 import os
 import stat
@@ -214,3 +215,82 @@ def test_check_dump_finds_secrets(tmp_path):
         "it has a value from the live ab_user.email",
         "it has a value from the live ebay_oauth_token.refresh_token",
     ]
+
+
+class _Terminal(io.StringIO):
+    def isatty(self):
+        return True
+
+
+DUMP_LINES = [
+    b"-- MariaDB dump\n",
+    b"CREATE TABLE `ab_user` (\n",
+    b"  `id` int(11) NOT NULL\n",
+    b");\n",
+    b"CREATE SEQUENCE `ab_user_id_seq` start with 1;\n",
+    b"CREATE TABLE `odd``name` (\n",
+    b"INSERT INTO `odd``name` VALUES\n",
+    b"(1);\n",
+]
+
+
+def test_progress_in_a_log_is_a_line_per_table():
+    out = io.StringIO()
+    progress = dump_for_dev.Progress(3, out)
+    for line in DUMP_LINES:
+        progress.line(line)
+    progress.finish()
+    assert out.getvalue().splitlines() == [
+        "  table 1 of 3: ab_user, 0.0 MB",
+        "  table 2 of 3: ab_user_id_seq, 0.0 MB",
+        "  table 3 of 3: odd`name, 0.0 MB",
+    ]
+
+
+def test_progress_on_a_terminal_redraws_one_line(monkeypatch):
+    clock = iter(range(0, 100, 1))
+    monkeypatch.setattr(dump_for_dev.time, "monotonic", lambda: next(clock))
+    out = _Terminal()
+    progress = dump_for_dev.Progress(3, out)
+    for line in DUMP_LINES:
+        progress.line(line)
+    shown = out.getvalue()
+    assert "\n" not in shown
+    assert shown.split("\r")[-1].rstrip() == "  table 3 of 3: odd`name, 0.0 MB"
+    progress.finish()
+    # Cleared, so the next line starts on an empty one.
+    assert out.getvalue().endswith("\r" + " " * progress.width + "\r")
+
+
+def test_check_dump_shows_progress(tmp_path):
+    out = io.StringIO()
+    progress = dump_for_dev.Progress(1, out)
+    dump_for_dev.check_dump(_dump(tmp_path, *CLEAN), [], [], progress)
+    assert out.getvalue() == "  table 1 of 1: ab_user, 0.0 MB\n"
+
+
+@pytest.mark.parametrize(
+    "seconds, text", [(0.4, "0s"), (7, "7s"), (59.6, "1m 00s"), (125, "2m 05s")]
+)
+def test_duration(seconds, text):
+    assert dump_for_dev.duration(seconds) == text
+
+
+def test_check_dump_finds_a_table_twice_or_missing(tmp_path):
+    path = _dump(
+        tmp_path,
+        *CLEAN,
+        b"CREATE TABLE `ab_user` (",
+        b"CREATE TABLE `ebay_order` (",
+    )
+    assert dump_for_dev.check_dump(
+        path, [], [], expected={"ab_user", "ebay_order", "unit"}
+    ) == ["it has ab_user more than once", "it's missing unit"]
+
+
+def test_check_dump_with_every_table_once(tmp_path):
+    path = _dump(tmp_path, *CLEAN, b"CREATE SEQUENCE `ab_user_id_seq` start with 1;")
+    assert (
+        dump_for_dev.check_dump(path, [], [], expected={"ab_user", "ab_user_id_seq"})
+        == []
+    )
