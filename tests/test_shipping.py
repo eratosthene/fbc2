@@ -719,7 +719,7 @@ def test_order_earnings_split_out_the_fees_in_the_sale(app, finances):
         # totalFeeAmount has 40 cents the per-fee list doesn't.
         ("FEE", "eBay fees", -0.40),
         ("SHIPPING_LABEL", "Shipping label", -4.63),
-        ("NON_SALE_CHARGE", "Promoted listing fee", -1.25),
+        ("NON_SALE_CHARGE", "Ad fee", -1.25),
     ]
     assert earnings["net"] == 15.25
     sale = earnings["lines"][0]

@@ -35,7 +35,7 @@ FEE_LABELS = {
     "FINAL_VALUE_FEE_FIXED_PER_ORDER": "Final value fee per order",
     "REGULATORY_OPERATING_FEE": "Regulatory operating fee",
     "INTERNATIONAL_FEE": "International fee",
-    "AD_FEE": "Promoted listing fee",
+    "AD_FEE": "Ad fee",
 }
 
 

@@ -145,7 +145,7 @@ def test_earnings_totals_split_a_periods_receipts_by_kind_of_line(db):
             _receipt(
                 datetime.date(2026, 3, 1),
                 25.0,
-                10.0,
+                7.6,
                 [
                     _line("SALE", 25.3),
                     _line("FEE", -3.67, "FINAL_VALUE_FEE"),
@@ -153,6 +153,9 @@ def test_earnings_totals_split_a_periods_receipts_by_kind_of_line(db):
                     _line("SHIPPING_LABEL", -4.63),
                     _line("REFUND", -5.0),
                     _line("NON_SALE_CHARGE", -1.0),
+                    # Billed apart from the sale, but still eBay's fees.
+                    _line("NON_SALE_CHARGE", -0.4, "FINAL_VALUE_FEE_FIXED_PER_ORDER"),
+                    _line("NON_SALE_CHARGE", -2.0, "PREMIUM_AD_FEES"),
                 ],
             ),
             # No lines: its fees are only known as gross less net.
@@ -168,10 +171,10 @@ def test_earnings_totals_split_a_periods_receipts_by_kind_of_line(db):
     assert totals == {
         "receipts": 2,
         "gross": 55.0,
-        "net": 34.0,
+        "net": 31.6,
         "sales": 25.3,
-        "ebay_fees": -3.67,
-        "ad_fees": -1.0,
+        "ebay_fees": -4.07,
+        "ad_fees": -3.0,
         "labels": -4.63,
         "refunds": -5.0,
         "other_fees": -1.0,

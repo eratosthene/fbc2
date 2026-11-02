@@ -30,12 +30,30 @@ KIND_CATEGORIES = {
 }
 
 
+# eBay's feeTypes for ads, and for the fees it takes for selling an order.
+# eBay sometimes bills a selling fee as a NON_SALE_CHARGE of its own rather
+# than taking it out of the sale, and it's still an eBay fee then.
+AD_FEE_TYPES = {"AD_FEE", "PREMIUM_AD_FEES"}
+SELLING_FEE_TYPES = {
+    "FINAL_VALUE_FEE",
+    "FINAL_VALUE_FEE_FIXED_PER_ORDER",
+    "FINAL_VALUE_SHIPPING_FEE",
+    "BELOW_STANDARD_FEE",
+    "BELOW_STANDARD_SHIPPING_FEE",
+    "HIGH_ITEM_NOT_AS_DESCRIBED_FEE",
+    "HIGH_ITEM_NOT_AS_DESCRIBED_SHIPPING_FEE",
+    "INTERNATIONAL_FEE",
+    "REGULATORY_OPERATING_FEE",
+    "PAYMENT_PROCESSING_FEE",
+}
+
+
 def line_category(kind, fee_type=None):
     """Which of CATEGORY_LABELS a line of `kind` and `fee_type` counts in."""
-    # Promoted listing fees come either inside the sale or as a charge of
-    # their own; either way they're ad fees.
-    if fee_type == "AD_FEE":
+    if fee_type in AD_FEE_TYPES:
         return "ad_fees"
+    if kind == "NON_SALE_CHARGE" and fee_type in SELLING_FEE_TYPES:
+        return "ebay_fees"
     return KIND_CATEGORIES.get(kind, "other")
 
 
