@@ -265,6 +265,11 @@ class SupplyUse(Model):
     def fmt_kind(self):
         return KIND_LABELS.get(self.kind, self.kind)
 
+    def fmt_supply(self):
+        # Just the name: the supply's own repr has its quantity now, not
+        # what it was then.
+        return self.supply.name if self.supply else ""
+
     def __repr__(self):
         name = self.supply.name if self.supply else "?"
         return str(self.date) + ": " + str(self.count) + " " + name

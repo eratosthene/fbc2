@@ -70,11 +70,19 @@ class SupplyUseModelView(CustomModelView):
     show_title = "Supply Use"
     base_permissions = ["can_list", "can_show"]
     base_order = ("date", "desc")
-    list_columns = ["date", "supply", "count", "fmt_kind", "sales_receipt", "unit"]
+    list_columns = [
+        "date",
+        "fmt_supply",
+        "count",
+        "fmt_kind",
+        "sales_receipt",
+        "unit",
+    ]
     show_columns = list_columns
     search_columns = ["date", "supply", "count", "kind", "sales_receipt", "unit"]
     label_columns = {
         "count": "Uses",
+        "fmt_supply": "Supply",
         "fmt_kind": "For",
         "kind": "For",
         "sales_receipt": "Sales Receipt",

@@ -1,4 +1,5 @@
 import datetime
+import re
 
 import pytest
 from werkzeug.datastructures import MultiDict
@@ -445,6 +446,8 @@ def test_supply_page_and_supply_use_list_show_its_uses(client):
     for html in (show.get_data(as_text=True), uses):
         assert "Shipping an order" in html
         assert "<td>3</td>" in html or ">3<" in html
+    # The name alone: "Name: quantity" would be today's quantity.
+    assert re.search(r"<td>\s*Shipping Label Roll\s*</td>", uses)
 
 
 def test_supply_use_cant_be_added_or_changed(client):
