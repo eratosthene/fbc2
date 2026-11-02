@@ -8,6 +8,14 @@ from flask_appbuilder.security.manager import (
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
+# Any setting here can be overridden by an environment variable named
+# FBC_CONFIG_<KEY>. Its value is read as JSON when it can be (true, 3,
+# "text"), and a double underscore reaches into a dict. On the live server
+# they go in docker/.env, which keeps the secrets out of this file:
+#   FBC_CONFIG_SECRET_KEY='...'
+#   FBC_CONFIG_EBAY_SETTINGS__APP_ID='...'
+# See "Settings from the environment" in README.md.
+
 # Your App secret key
 SECRET_KEY = "1234567890"
 

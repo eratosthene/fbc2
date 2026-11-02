@@ -5,14 +5,16 @@ Make a sanitized dump of the live database, for docker/compose.dev.yml. See
 
   scripts/dump_for_dev.py [-o DIR] [--admin-user USER]
 
-Run it on the live server, from the repo root. It dumps the database in
-config.py's SQLALCHEMY_DATABASE_URI to DIR/fbc-dev-<date>.sql.gz, in three
-parts: the tables it keeps as they are, in one snapshot; the emptied tables'
-structure; and the tables whose values it rewrites (eBay orders), copied
-into a scratch database on the same server and scrubbed there first. The
+Run it on the live server, from the repo root. It dumps the database the
+app uses (FBC_CONFIG_SQLALCHEMY_DATABASE_URI in the environment or
+docker/.env, or else config.py's SQLALCHEMY_DATABASE_URI) to
+DIR/fbc-dev-<date>.sql.gz, in three parts: the tables it keeps as they are,
+in one snapshot; the emptied tables' structure; and the tables whose values
+it rewrites (eBay orders), copied into a scratch database on the same
+server and scrubbed there first. The
 fbc user can't create databases, so --admin-user names a MariaDB user that
 can; its password is asked for (or read from stdin, if that isn't a
-terminal). Without it, the config.py user makes the scratch database.
+terminal). Without it, the app's database user makes the scratch database.
 
 Before finishing it checks the dump has every table once, no rows of the
 emptied tables, and none of the live tokens, password hashes, API keys and
@@ -30,6 +32,7 @@ import getpass
 import gzip
 import importlib.abc
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -41,6 +44,10 @@ import types
 from urllib.parse import parse_qs, unquote, urlsplit
 
 REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+
+# The app's override for config.py's database URI (see fbc/settings.py,
+# which this script can't import without the app's packages).
+URI_OVERRIDE = "FBC_CONFIG_SQLALCHEMY_DATABASE_URI"
 
 # Kept as schema only, with no rows: tokens, API keys and the app's users.
 # The dev database gets an admin from `flask fab create-admin` instead.
@@ -200,9 +207,40 @@ def imported_modules(source):
     return names
 
 
+def env_file(path):
+    """The variables in a Compose .env file: KEY=VALUE lines, with # comments
+    and optional quotes. Python-dotenv isn't here to read it."""
+    values = {}
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip().removeprefix("export ").strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+                value = value[1:-1]
+            else:
+                value = value.split(" #", 1)[0].rstrip()
+            values[key] = value
+    return values
+
+
 def database_uri(repo=REPO):
-    """config.py's SQLALCHEMY_DATABASE_URI, which also honours the variable
-    of that name in the environment."""
+    """The database the app uses: FBC_CONFIG_SQLALCHEMY_DATABASE_URI from
+    the environment or docker/.env, as the live container gets it, or else
+    config.py's SQLALCHEMY_DATABASE_URI (which also honours the variable of
+    that name in the environment)."""
+    value = os.environ.get(URI_OVERRIDE)
+    env_path = os.path.join(repo, "docker", ".env")
+    if value is None and os.path.exists(env_path):
+        value = env_file(env_path).get(URI_OVERRIDE)
+    if value is not None:
+        # The app reads it as JSON when it can, so a quoted string works too.
+        with contextlib.suppress(ValueError):
+            value = json.loads(value)
+        return str(value)
     path = os.path.join(repo, "config.py")
     if not os.path.exists(path):
         raise Failed(f"There's no config.py in {os.path.abspath(repo)}.")

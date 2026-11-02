@@ -19,9 +19,9 @@ with Discogs and eBay. It's a Flask-AppBuilder app on MariaDB.
 
 ## Setting up
 
-Everything the app needs, apart from its code, is in `config.py`. It isn't
-in git, since it holds the live credentials. Copy `config.py.tpl` to start
-one, and fill in:
+Everything the app needs, apart from its code, is in `config.py`, or in
+the environment (below). It isn't in git, since it holds the live
+credentials. Copy `config.py.tpl` to start one, and fill in:
 
 - `SECRET_KEY`: a long random string, such as the output of
   `openssl rand -hex 32`.
@@ -46,6 +46,35 @@ flask --app fbc fab create-admin
 Both run in the app's container too
 (`sudo docker compose -f docker/compose.yml exec fbc flask ...`).
 The container runs `setup-db` itself each time it starts.
+
+### Settings from the environment
+
+An environment variable named `FBC_CONFIG_<KEY>` overrides that setting in
+`config.py`. It's meant for secrets and anything that differs per deploy,
+so they can stay out of `config.py`:
+
+- The value is read as JSON when it can be: `true` is a boolean and `3` a
+  number. Anything else is a string.
+- A double underscore reaches into a dict, and leaves its other keys alone:
+  `FBC_CONFIG_EBAY_SETTINGS__APP_ID` sets only `APP_ID` in `EBAY_SETTINGS`.
+- An override can turn dev mode on, but not off when `config.py` sets
+  `DEV_MODE = True`. `FBC_DEV_MODE` works as before.
+
+The live container reads them from `docker/.env`, next to
+`docker/compose.yml`. Only you should be able to read it:
+
+```bash
+FBC_CONFIG_SECRET_KEY='<a long random string>'
+FBC_CONFIG_SQLALCHEMY_DATABASE_URI='mysql+pymysql://fbc:<password>@<host>/fbc'
+FBC_CONFIG_EBAY_SETTINGS__APP_ID='...'
+FBC_CONFIG_EBAY_SETTINGS__CERT_ID='...'
+FBC_CONFIG_DISCOGS_SETTINGS__CONSUMER_SECRET='...'
+```
+
+Put each value in single quotes, so Compose leaves any `$` or `#` in it
+alone. A value that must stay a string but looks like a number, such as a
+postal code with a leading zero, needs double quotes inside those:
+`'"01234"'`.
 
 ## Running on the live server
 
@@ -79,10 +108,24 @@ docker/live-down.sh
 ```
 
 The Docker files are all in `docker/`. The build context is still the repo
-root, since the image copies `config.py`, `fbc/` and `migrations/`.
+root, since the image copies `fbc/` and `migrations/`.
 
-The image has `config.py` built into it, so a change to it needs a
-rebuild too.
+The image holds no settings or secrets. The container mounts `config.py`
+from the repo root, read-only, and reads `docker/.env` (see
+[Settings from the environment](#settings-from-the-environment)).
+`docker/live-up.sh` makes an empty `docker/.env` if there isn't one, since
+the container won't start without it. After changing either file, recreate
+the container, which needs no rebuild:
+
+```bash
+docker/live-up.sh -n
+```
+
+Keep both files readable only by you, since they hold the live credentials:
+
+```bash
+chmod 600 config.py docker/.env
+```
 
 ## Development
 
@@ -135,7 +178,8 @@ the machine it runs on, so build the live server's image there with
 it, since Compose reads `.env` from the compose file's folder.
 
 - Copy `config.py.tpl` to `config.py` if there isn't one. The app uses it
-  for everything but the database.
+  for everything but the database. `FBC_CONFIG_*` overrides in
+  `docker/.env` work here too.
 
 - The app runs in dev mode here, with a banner on every page saying so. It
   doesn't use the eBay and Discogs keys in `config.py` or the tokens saved
@@ -218,8 +262,9 @@ so `flask setup-db` brings it up to date when the app starts.
    scripts/dump_for_dev.py --admin-user fbc_dump
    ```
 
-   It dumps the database in `config.py`'s `SQLALCHEMY_DATABASE_URI` to
-   `fbc-dev-<date>.sql.gz`. The eBay orders, whose buyers it changes, are
+   It dumps the database the app uses, `FBC_CONFIG_SQLALCHEMY_DATABASE_URI`
+   from `docker/.env` if it's there, or else `config.py`'s
+   `SQLALCHEMY_DATABASE_URI`, to `fbc-dev-<date>.sql.gz`. The eBay orders, whose buyers it changes, are
    first copied into a scratch database (`fbc_dev_scrub`) on the same
    server and scrubbed there; everything else comes straight from live, in
    one snapshot taken just after. Each step says how long it took, and the

@@ -25,7 +25,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     && python -m pip install --upgrade -r /app/requirements.txt \
     && apk del .build-dependencies
 
-COPY ./config.py /app
+# config.py isn't copied in: it holds the live credentials, so the compose
+# files mount it instead, and a change to it needs no rebuild.
 COPY ./fbc /app/fbc
 COPY ./migrations /app/migrations
 COPY --chmod=755 ./docker/docker-entrypoint.sh /app/docker-entrypoint.sh

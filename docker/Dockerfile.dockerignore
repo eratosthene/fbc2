@@ -4,6 +4,8 @@
 **/*.pyc
 # Local-only files that hold credentials or copies of live data. The root
 # ones are where they were before the Docker files moved to docker/.
+# config.py is mounted into the container, never built into the image.
+config.py
 **/.env
 docker/dev-db/
 dev-db/
