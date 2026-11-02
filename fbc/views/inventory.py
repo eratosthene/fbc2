@@ -114,7 +114,7 @@ class UnitModelBaseView(CustomModelView):
         # The form left {supply: count} on the Unit; the supplies are saved
         # along with it.
         for supply, count in getattr(item, "supplies_used", {}).items():
-            supply.use(count)
+            supply.use(count, ADDING_UNIT, unit=item)
 
 
 class UnitModelView(UnitModelBaseView):

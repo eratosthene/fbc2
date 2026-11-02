@@ -372,6 +372,7 @@ def ship_order(order, unit, net_sold, supplies=None):
     """
     from fbc import db
     from fbc.models.sales import SalesReceipt
+    from fbc.models.supplies import SHIPPING
 
     receipt = SalesReceipt(
         date=order.created_time.date(),
@@ -384,7 +385,7 @@ def ship_order(order, unit, net_sold, supplies=None):
     unit.sold = True
     unit.sales_receipt_id = receipt.id
     for supply, count in (supplies or {}).items():
-        supply.use(count)
+        supply.use(count, SHIPPING, receipt=receipt)
     db.session.commit()
     logger.info(
         "Shipped order "
