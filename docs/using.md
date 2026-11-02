@@ -12,6 +12,9 @@ Discogs > Connect Discogs. The app keeps the tokens in the database.
 Units (one copy of a record each), the Purchase Lots they came in and the
 Storage Boxes they're kept in.
 
+Adding a Unit without a Retail Price still saves it, but warns, with a link to
+edit the Unit and add one.
+
 ## Discogs
 
 The Discogs collection, synced in, with Add Unit for releases that have none
