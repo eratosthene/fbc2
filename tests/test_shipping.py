@@ -14,7 +14,7 @@ from fbc.models.discogs import DiscogsInstance, DiscogsRelease
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit
 from fbc.models.sales import SalesReceipt
-from fbc.models.supplies import Supply
+from fbc.models.supplies import Supply, SupplyUse
 from fbc.util import forget_discogs_instance
 from test_listing import FakeHTTPResponse, _carnaval
 
@@ -550,6 +550,17 @@ def test_shipping_takes_the_supplies_used_out_of_stock(client, discogs):
         "labels": (1, 0),
         "tape": (2, 0),
         "inner": (50, 0),
+    }
+    receipt = db.session.query(SalesReceipt).one()
+    uses = {
+        (u.supply.name, u.count, u.kind, u.sales_receipt, u.unit)
+        for u in db.session.query(SupplyUse)
+    }
+    assert uses == {
+        ("LP Mailers", 1, "shipping", receipt, None),
+        ('Vinyl Outer Sleeves, 12"', 2, "shipping", receipt, None),
+        ("Shipping Label Roll", 1, "shipping", receipt, None),
+        ("Packing Tape Rolls", 1, "shipping", receipt, None),
     }
 
 

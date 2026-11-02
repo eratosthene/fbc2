@@ -10,7 +10,12 @@ with Discogs and eBay. It's a Flask-AppBuilder app on MariaDB.
 - **Sales**: eBay listings and orders, synced in. eBay Drafts turn a Unit into
   a listing, and Ship This turns an order into a Sales Receipt.
 - **Supplies**: the packing supplies sales use up, and Purchase Orders to
-  restock them.
+  restock them. Supply Use records each time stock changes, with its date:
+  Ship This, Add Unit, and edits to Quantity on the Supply List (a stock-take
+  or a restock, which counts below 0). Each supply's page lists its own. It
+  starts from when this was added, with nothing before. Cost Per Use on a
+  supply, set by hand, is what one use costs, for costing each sale's
+  supplies.
 
 ## Setting up
 

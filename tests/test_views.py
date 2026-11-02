@@ -1,4 +1,5 @@
 import datetime
+import re
 
 import pytest
 from werkzeug.datastructures import MultiDict
@@ -7,7 +8,7 @@ import fbc
 from fbc.models.discogs import DiscogsRelease
 from fbc.models.ebay import EbayListing
 from fbc.models.inventory import PurchaseLot, Unit
-from fbc.models.supplies import Supply
+from fbc.models.supplies import Supply, SupplyUse
 from fbc.views.discogs import ArtistModelView, DiscogsReleaseModelView, FolderModelView
 from fbc.views.inventory import (
     UNITS_WITHOUT_LISTING_FILTERS,
@@ -245,8 +246,11 @@ def test_adding_a_unit_takes_its_supplies_out_of_stock(client):
 
     assert page.status_code == 302
     fbc.db.session.expire_all()
-    assert fbc.db.session.query(Unit).one().name == "Some Unit"
+    unit = fbc.db.session.query(Unit).one()
+    assert unit.name == "Some Unit"
     assert (sleeves.quantity, mailers.quantity) == (48, 10)
+    use = fbc.db.session.query(SupplyUse).one()
+    assert (use.supply, use.count, use.kind, use.unit) == (sleeves, 2, "unit", unit)
 
 
 def test_adding_a_unit_needs_whole_supply_counts(client):
@@ -388,6 +392,67 @@ def test_supply_list_shows_used_for_by_its_label(client):
     assert "Shipping an order" in html and "Only by hand" in html
     assert "2 (1 of 220 left on the one in use)" in html
     assert ">shipping<" not in html and ">None<" not in html
+
+
+def _edit_labels(client, supply, **fields):
+    data = {
+        "name": supply.name,
+        "quantity": str(supply.quantity),
+        "min_quantity": "0",
+        "used_for": "shipping",
+        "record_size": "",
+        "per_units": "0",
+        "pack_size": "220",
+        "pack_used": str(supply.pack_used),
+        "cost_per_use": "",
+    }
+    data.update(fields)
+    return client.post("/supplymodelview/edit/" + str(supply.id), data=data)
+
+
+def test_supply_list_edit_records_a_stock_change(client):
+    _labels(client, pack_used="10")
+    supply = fbc.db.session.query(Supply).one()
+
+    _edit_labels(client, supply, quantity="1", pack_used="20")
+
+    fbc.db.session.expire_all()
+    use = fbc.db.session.query(SupplyUse).one()
+    assert (use.supply, use.count, use.kind) == (supply, 230, "adjustment")
+    assert (supply.quantity, supply.pack_used) == (1, 20)
+
+
+def test_supply_list_edit_records_nothing_when_stock_is_unchanged(client):
+    _labels(client, pack_used="10")
+    supply = fbc.db.session.query(Supply).one()
+
+    _edit_labels(client, supply, min_quantity="1", cost_per_use="0.05")
+
+    fbc.db.session.expire_all()
+    assert fbc.db.session.query(SupplyUse).count() == 0
+    assert (supply.min_quantity, supply.cost_per_use) == (1, 0.05)
+
+
+def test_supply_page_and_supply_use_list_show_its_uses(client):
+    _labels(client)
+    supply = fbc.db.session.query(Supply).one()
+    supply.use(3, "shipping")
+    fbc.db.session.commit()
+
+    show = client.get("/supplymodelview/show/" + str(supply.id))
+    uses = _menu_list(client, "Supply Use")
+
+    assert "Supply Use" in show.get_data(as_text=True)
+    for html in (show.get_data(as_text=True), uses):
+        assert "Shipping an order" in html
+        assert "<td>3</td>" in html or ">3<" in html
+    # The name alone: "Name: quantity" would be today's quantity.
+    assert re.search(r"<td>\s*Shipping Label Roll\s*</td>", uses)
+
+
+def test_supply_use_cant_be_added_or_changed(client):
+    assert client.get("/supplyusemodelview/add").status_code in (302, 403, 404)
+    assert client.get("/supplyusemodelview/list/").status_code == 200
 
 
 def test_rebox_units_lists_the_columns_for_choosing_a_box(client):

@@ -2,7 +2,15 @@ import datetime
 
 import pytest
 
-from fbc.models.supplies import PurchaseOrder, Supply
+from fbc import db
+from fbc.models.supplies import (
+    ADDING_UNIT,
+    ADJUSTMENT,
+    SHIPPING,
+    PurchaseOrder,
+    Supply,
+    SupplyUse,
+)
 
 
 def test_purchase_order_purchase_price_formats_currency():
@@ -22,29 +30,29 @@ def test_supply_repr_includes_name_and_quantity():
 
 def test_supply_use_takes_one_of_quantity_per_use():
     supply = Supply(name="LP Mailers", quantity=10, pack_size=1, pack_used=0)
-    supply.use(3)
+    supply.use(3, SHIPPING)
     assert (supply.quantity, supply.pack_used) == (7, 0)
 
 
 def test_supply_use_never_takes_quantity_below_zero():
     supply = Supply(name="LP Mailers", quantity=1, pack_size=1, pack_used=0)
-    supply.use(3)
+    supply.use(3, SHIPPING)
     assert supply.quantity == 0
 
 
 def test_supply_use_takes_a_roll_once_its_labels_run_out():
     supply = Supply(name="Shipping Label Roll", quantity=3, pack_size=220)
     supply.pack_used = 218
-    supply.use(1)
+    supply.use(1, SHIPPING)
     assert (supply.quantity, supply.pack_used) == (3, 219)
-    supply.use(2)
+    supply.use(2, SHIPPING)
     assert (supply.quantity, supply.pack_used) == (2, 1)
 
 
 def test_supply_use_leaves_none_in_use_once_the_last_one_runs_out():
     supply = Supply(name="Shipping Label Roll", quantity=1, pack_size=220)
     supply.pack_used = 219
-    supply.use(1)
+    supply.use(1, SHIPPING)
     assert (supply.quantity, supply.pack_used) == (0, 0)
 
 
@@ -70,7 +78,7 @@ def test_supply_available_counts_the_uses_left(
 def test_supply_use_works_on_a_supply_not_yet_saved():
     # pack_size and pack_used only get their defaults once saved.
     supply = Supply(name="LP Mailers", quantity=2)
-    supply.use(1)
+    supply.use(1, SHIPPING)
     assert (supply.quantity, supply.pack_used) == (1, 0)
 
 
@@ -130,3 +138,78 @@ def test_low_list_has_only_supplies_due_a_reorder(db):
 def test_supply_shipping_count(per_units, record_size, sizes, count):
     supply = Supply(name="S", per_units=per_units, record_size=record_size)
     assert supply.shipping_count(sizes) == count
+
+
+def test_supply_use_records_the_use():
+    supply = Supply(name="LP Mailers", quantity=10)
+    db.session.add(supply)
+    db.session.commit()
+
+    use = supply.use(2, ADDING_UNIT)
+    db.session.commit()
+
+    assert db.session.query(SupplyUse).one() is use
+    assert (use.supply, use.count, use.kind) == (supply, 2, ADDING_UNIT)
+    assert use.date is not None
+    assert use.fmt_kind() == "Adding a Unit"
+
+
+def _saved_labels():
+    supply = Supply(name="Shipping Label Roll", quantity=3, pack_size=220, pack_used=10)
+    db.session.add(supply)
+    db.session.commit()
+    return supply
+
+
+@pytest.mark.parametrize(
+    "changes, count",
+    [
+        # Two rolls short on a stock-take.
+        ({"quantity": 1}, 440),
+        # Five more labels gone than recorded.
+        ({"pack_used": 15}, 5),
+        # A restock of two rolls.
+        ({"quantity": 5}, -440),
+    ],
+)
+def test_record_adjustment_records_the_uses_a_change_made(changes, count):
+    supply = _saved_labels()
+    for name, value in changes.items():
+        setattr(supply, name, value)
+
+    use = supply.record_adjustment()
+
+    assert (use.count, use.kind) == (count, ADJUSTMENT)
+    db.session.commit()
+    assert db.session.query(SupplyUse).count() == 1
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{}, {"quantity": 3, "pack_used": 10}, {"pack_size": 200}, {"name": "Labels"}],
+)
+def test_record_adjustment_records_nothing_when_stock_didnt_change(changes):
+    supply = _saved_labels()
+    for name, value in changes.items():
+        setattr(supply, name, value)
+
+    assert supply.record_adjustment() is None
+    db.session.commit()
+    assert db.session.query(SupplyUse).count() == 0
+
+
+def test_deleting_a_supply_deletes_its_uses():
+    supply = _saved_labels()
+    supply.use(1, SHIPPING)
+    db.session.commit()
+
+    db.session.delete(supply)
+    db.session.commit()
+
+    assert db.session.query(SupplyUse).count() == 0
+
+
+def test_supply_fmt_cost_per_use_shows_dollars():
+    assert Supply(name="Labels").fmt_cost_per_use() == ""
+    assert Supply(name="Labels", cost_per_use=0.0455).fmt_cost_per_use() == "$0.0455"
+    assert Supply(name="Mailers", cost_per_use=1.5).fmt_cost_per_use() == "$1.5"
