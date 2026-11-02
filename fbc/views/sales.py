@@ -6,7 +6,7 @@ from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from fbc.models.ebay import EbayListing, EbayOrder
-from fbc.models.sales import SalesReceipt
+from fbc.models.sales import MANUAL, SalesReceipt
 from fbc.shipping import (
     discogs_plan,
     fmt_supplies,
@@ -28,9 +28,27 @@ from fbc.views.inventory import UnitModelView
 from fbc.util import CustomForm
 
 
+def flash_adjustment(receipt):
+    """Say so when a receipt keeps a manual adjustment line."""
+    for line in receipt.lines:
+        if line.kind == MANUAL:
+            flash(
+                "Net Sold differs from eBay's earnings by "
+                + line.fmt_amount()
+                + ", so the Sales Receipt keeps that as a manual adjustment.",
+                "info",
+            )
+
+
+def _lines_total(earnings):
+    """eBay's lines' total as the earnings page shows it, to compare on POST."""
+    return f"{sum(line['amount'] for line in earnings['lines']):.2f}"
+
+
 class SalesReceiptModelView(CustomModelView):
     datamodel = SQLAInterface(SalesReceipt)
     related_views = [UnitModelView]
+    show_template = "sales_receipt/show.html"
     base_order = ("date", "desc")
     list_columns = ["date", "link_column", "fmt_sold_price", "fmt_net_sold"]
     label_columns = {
@@ -39,10 +57,89 @@ class SalesReceiptModelView(CustomModelView):
         "fmt_net_sold": "Net Sold",
     }
     show_columns = ["date", "ebay_order", "sold_price", "net_sold"]
+    # Lines come from eBay (Ship This and Refresh Earnings), not the form.
+    add_columns = ["ebay_order", "old_id", "date", "sold_price", "net_sold"]
+    edit_columns = add_columns
+    search_columns = add_columns
 
     def _init_forms(self):
         super(CustomModelView, self)._init_forms()
         self.add_form = type("CustomForm", (CustomForm, self.add_form), {})
+
+    def pre_update(self, item):
+        # Net Sold changed by hand: keep the lines adding up to it.
+        item.balance_lines()
+
+    def _receipt(self, pk):
+        receipt = self.datamodel.get(pk)
+        if not receipt:
+            abort(404)
+        return receipt
+
+    @expose("/show/<pk>", methods=["GET"])
+    @has_access
+    def show(self, pk):
+        receipt = self._receipt(pk)
+        widgets = self._show(pk)
+        return self.render_template(
+            self.show_template,
+            pk=pk,
+            title=self.show_title,
+            widgets=widgets,
+            related_views=self._related_views,
+            receipt=receipt,
+        )
+
+    @expose("/earnings/<pk>", methods=["GET", "POST"])
+    @has_access
+    def earnings(self, pk):
+        """
+        Refresh Earnings: read the order's transactions from eBay again, for
+        a refund or a charge that came after shipping, and replace the
+        receipt's lines with them. GET shows what will change; POST saves
+        it, and sets Net Sold to eBay's total if that's ticked.
+        """
+        from fbc import db
+
+        receipt = self._receipt(pk)
+        back = redirect(url_for("SalesReceiptModelView.show", pk=receipt.id))
+        if not receipt.ebay_order_id:
+            flash("This Sales Receipt isn't linked to an eBay order.", "warning")
+            return back
+        earnings = order_earnings(receipt.ebay_order_id)
+        if request.method == "POST":
+            if not earnings["lines"]:
+                flash(
+                    "eBay didn't give any earnings for this order, so nothing"
+                    " was changed.",
+                    "warning",
+                )
+            elif request.form.get("total") != _lines_total(earnings):
+                flash(
+                    "eBay's earnings for this order changed since this page was"
+                    " shown. Check them again before saving.",
+                    "warning",
+                )
+            else:
+                if request.form.get("update_net") and earnings["net"] is not None:
+                    receipt.net_sold = earnings["net"]
+                receipt.set_lines(earnings["lines"])
+                db.session.commit()
+                flash(
+                    "Saved eBay's earnings. Net Sold is "
+                    + receipt.fmt_net_sold()
+                    + ".",
+                    "success",
+                )
+                flash_adjustment(receipt)
+                return back
+        return self.render_template(
+            "sales_receipt/earnings.html",
+            title="Refresh Earnings",
+            receipt=receipt,
+            earnings=earnings,
+            total=_lines_total(earnings),
+        )
 
 
 class EbayListingModelView(CustomModelView):
@@ -113,6 +210,9 @@ class EbayOrderModelView(CustomModelView):
             return back
 
         supplies = supplies_plan([unit])
+        # Asked for again on a POST, so the receipt keeps eBay's lines as
+        # they are when it's saved.
+        earnings = order_earnings(order.order_id)
         # A POST with anything wrong shows the page again with what was
         # entered, so it doesn't all need typing in again.
         values = request.form if request.method == "POST" else None
@@ -128,7 +228,7 @@ class EbayOrderModelView(CustomModelView):
             except ValueError as e:
                 problems.append(str(e))
             if not problems:
-                ship_order(order, unit, net_sold, used)
+                receipt = ship_order(order, unit, net_sold, used, earnings["lines"])
                 flash(
                     "Recorded a Sales Receipt for $"
                     + f"{net_sold:.2f}"
@@ -137,6 +237,7 @@ class EbayOrderModelView(CustomModelView):
                     + " sold.",
                     "success",
                 )
+                flash_adjustment(receipt)
                 if used:
                     flash("Took " + fmt_supplies(used) + " out of supplies.", "success")
                 if values.get("remove_discogs"):
@@ -146,7 +247,6 @@ class EbayOrderModelView(CustomModelView):
             for problem in problems:
                 flash(problem, "danger")
 
-        earnings = order_earnings(order.order_id)
         instance, discogs_problem = discogs_plan(unit)
         return self.render_template(
             "ebay_order/ship.html",

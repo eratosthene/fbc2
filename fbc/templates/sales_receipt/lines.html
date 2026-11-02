@@ -1,0 +1,16 @@
+{# Earnings lines, as SalesReceiptLines or shipping.order_earnings' dicts. #}
+{% macro money(amount) %}{% if amount < 0 %}&minus;{% endif %}${{ "%.2f"|format(amount|abs) }}{% endmacro %}
+
+{% macro lines_table(lines, total_label=None, total=None) %}
+<table class="table table-bordered table-condensed" style="width: auto">
+  {% for line in lines %}
+  <tr>
+    <td{% if line.kind == "FEE" %} style="padding-left: 2em"{% endif %}>{{ line.label }}</td>
+    <td class="text-right">{{ money(line.amount) }}</td>
+  </tr>
+  {% endfor %}
+  {% if total is not none %}
+  <tr><th>{{ total_label }}</th><th class="text-right">{{ money(total) }}</th></tr>
+  {% endif %}
+</table>
+{% endmacro %}

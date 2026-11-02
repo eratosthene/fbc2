@@ -1,4 +1,5 @@
 {% extends "appbuilder/base.html" %}
+{% from "sales_receipt/lines.html" import lines_table %}
 {% block content %}
 <h3>Ship This</h3>
 <p>Buy the shipping label on eBay before shipping this here; the earnings below
@@ -20,17 +21,7 @@ come from eBay and only take the label off once it's bought.</p>
 only handles orders of one Unit. Ship it by hand.</div>
 {% endif %}
 {% if earnings.lines %}
-<table class="table table-bordered table-condensed" style="width: auto">
-  {% for line in earnings.lines %}
-  <tr>
-    <td>{{ line.label }}</td>
-    <td class="text-right">{% if line.amount < 0 %}&minus;{% endif %}${{ "%.2f"|format(line.amount|abs) }}</td>
-  </tr>
-  {% endfor %}
-  {% if earnings.net is not none %}
-  <tr><th>Order earnings</th><th class="text-right">${{ "%.2f"|format(earnings.net) }}</th></tr>
-  {% endif %}
-</table>
+{{ lines_table(earnings.lines, "Order earnings", earnings.net) }}
 {% endif %}
 
 <form method="post" action="{{ url_for('EbayOrderModelView.ship', pk=order.order_id) }}">
@@ -74,7 +65,8 @@ only handles orders of one Unit. Ship it by hand.</div>
   {% elif discogs_problem %}
   <div class="alert alert-warning">{{ discogs_problem }}</div>
   {% endif %}
-  <p>Shipping records a Sales Receipt for Net Sold, marks the Unit sold with it,
+  <p>Shipping records a Sales Receipt for Net Sold, with eBay's earnings lines
+  (and a manual adjustment line if Net Sold differs from them), marks the Unit sold with it,
   takes the supplies used out of stock{% if instance %}
   and removes only this Unit's copy from Discogs{% endif %}.</p>
   <button class="btn btn-primary" {% if earnings["items"] > 1 %}disabled{% endif %}>Ship</button>

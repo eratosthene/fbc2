@@ -16,9 +16,10 @@ logger = logging.getLogger()
 FINANCES_URL = "https://apiz.ebay.com/sell/finances/v1/transaction"
 
 # How each kind of Finances API transaction is shown in the earnings
-# breakdown. Anything else is shown by its own name.
+# breakdown. Anything else is shown by its own name. A sale is shown before
+# the fees eBay took out of it, which follow it as lines of their own.
 TRANSACTION_LABELS = {
-    "SALE": "Sale, less eBay's fees and taxes",
+    "SALE": "Sale, less the taxes eBay collects",
     "SHIPPING_LABEL": "Shipping label",
     "REFUND": "Refund",
     "NON_SALE_CHARGE": "Other fee",
@@ -26,6 +27,87 @@ TRANSACTION_LABELS = {
     "DISPUTE": "Dispute",
     "ADJUSTMENT": "Adjustment",
 }
+
+# eBay's feeTypes, for fees taken out of a sale and charges of their own.
+# Anything else is shown by its own name, made readable.
+FEE_LABELS = {
+    "FINAL_VALUE_FEE": "Final value fee",
+    "FINAL_VALUE_FEE_FIXED_PER_ORDER": "Final value fee per order",
+    "REGULATORY_OPERATING_FEE": "Regulatory operating fee",
+    "INTERNATIONAL_FEE": "International fee",
+    "AD_FEE": "Promoted listing fee",
+}
+
+
+def fee_label(fee_type):
+    if not fee_type:
+        return "eBay fees"
+    return FEE_LABELS.get(fee_type) or fee_type.replace("_", " ").capitalize()
+
+
+def _cents(money):
+    """An amount from eBay ({"value": "4.63"}) in whole cents."""
+    return round(float((money or {}).get("value") or 0) * 100)
+
+
+def _date(text):
+    """eBay's 2026-10-28T15:30:00.000Z as a datetime, in UTC; None if not."""
+    import datetime
+
+    try:
+        return datetime.datetime.strptime(text, "%Y-%m-%dT%H:%M:%S.%fZ")
+    except (TypeError, ValueError):
+        return None
+
+
+def transaction_lines(t):
+    """
+    The earnings lines for one Finances API transaction, as dicts of
+    SalesReceiptLine's columns, credits above 0. A sale becomes the sale
+    before fees and one line per kind of fee eBay took out of it, so they
+    add up to what eBay paid for it.
+    """
+    from fbc.models.sales import FEE
+
+    kind = t.get("transactionType")
+    sign = -1 if t.get("bookingEntry") == "DEBIT" else 1
+    cents = sign * _cents(t.get("amount"))
+    base = {
+        "kind": kind,
+        "fee_type": t.get("feeType"),
+        "ebay_order_id": t.get("orderId"),
+        "transaction_id": t.get("transactionId"),
+        "transaction_date": _date(t.get("transactionDate")),
+    }
+    if kind == "NON_SALE_CHARGE" and t.get("feeType"):
+        label = fee_label(t["feeType"])
+    else:
+        label = TRANSACTION_LABELS.get(kind, kind)
+
+    fees = {}
+    if kind == "SALE" and sign > 0:
+        for item in t.get("orderLineItems") or []:
+            for fee in item.get("marketplaceFees") or []:
+                fee_type = fee.get("feeType")
+                fees[fee_type] = fees.get(fee_type, 0) + _cents(fee.get("amount"))
+        # Whatever totalFeeAmount has that the per-fee list doesn't.
+        rest = _cents(t.get("totalFeeAmount")) - sum(fees.values())
+        if rest > 0:
+            fees[None] = fees.get(None, 0) + rest
+    fees = {fee_type: c for fee_type, c in fees.items() if c}
+
+    lines = [dict(base, label=label, amount=(cents + sum(fees.values())) / 100)]
+    for fee_type, c in fees.items():
+        lines.append(
+            dict(
+                base,
+                kind=FEE,
+                fee_type=fee_type,
+                label=fee_label(fee_type),
+                amount=-c / 100,
+            )
+        )
+    return lines
 
 
 def order_receipt(order):
@@ -73,7 +155,8 @@ def order_earnings(order_id):
 
     Returns a dict with:
       net       the earnings, or None if eBay has no sale for the order yet
-      lines     [{"label", "amount"}] making up net, credits positive
+      lines     the lines making up net, as dicts of SalesReceiptLine's
+                columns (see transaction_lines)
       items     how many line items the sale covers (0 if eBay didn't say)
       errors    why eBay couldn't be asked
       warnings  things to check before trusting net
@@ -124,18 +207,14 @@ def order_earnings(order_id):
         return result
 
     transactions = r.json().get("transactions") or []
-    net = 0.0
     sale = False
     label = False
     for t in transactions:
         kind = t.get("transactionType")
-        amount = float((t.get("amount") or {}).get("value") or 0)
-        if t.get("bookingEntry") == "DEBIT":
-            amount = -amount
-        net += amount
-        result["lines"].append(
-            {"label": TRANSACTION_LABELS.get(kind, kind), "amount": round(amount, 2)}
-        )
+        lines = transaction_lines(t)
+        for line in lines:
+            line["ebay_order_id"] = line["ebay_order_id"] or order_id
+        result["lines"].extend(lines)
         if kind == "SALE":
             sale = True
             result["items"] += len(t.get("orderLineItems") or [])
@@ -148,7 +227,7 @@ def order_earnings(order_id):
             " known. Enter Net Sold from the order page on eBay."
         )
         return result
-    result["net"] = round(net, 2)
+    result["net"] = round(sum(line["amount"] for line in result["lines"]), 2)
     if not label:
         result["warnings"].append(
             "There's no eBay shipping label on this order yet, so these earnings"
@@ -365,10 +444,12 @@ def fmt_supplies(counts):
     return ", ".join(str(n) + " " + s.name for s, n in counts.items())
 
 
-def ship_order(order, unit, net_sold, supplies=None):
+def ship_order(order, unit, net_sold, supplies=None, lines=None):
     """
-    Record the Sales Receipt for `order`, mark `unit` sold with it and take
-    `supplies` ({supply: count}) out of stock. Returns the receipt.
+    Record the Sales Receipt for `order`, with its earnings `lines` (as
+    order_earnings gives them) and a manual adjustment if they don't add up
+    to `net_sold`. Mark `unit` sold with it and take `supplies` ({supply:
+    count}) out of stock. Returns the receipt.
     """
     from fbc import db
     from fbc.models.sales import SalesReceipt
@@ -380,6 +461,7 @@ def ship_order(order, unit, net_sold, supplies=None):
         sold_price=order.price,
         net_sold=net_sold,
     )
+    receipt.set_lines(lines or [])
     db.session.add(receipt)
     db.session.flush()
     unit.sold = True
@@ -397,3 +479,97 @@ def ship_order(order, unit, net_sold, supplies=None):
         + (", used " + fmt_supplies(supplies) if supplies else "")
     )
     return receipt
+
+
+def backfill_earnings(
+    apply=False, update_net=False, since=None, limit=None, echo=print
+):
+    """
+    Give past Sales Receipts their earnings lines from eBay: every receipt
+    linked to an eBay order that has no lines yet, newest first, from
+    `since` (a date) on, at most `limit` of them. Only saves when `apply`.
+
+    Where eBay's total differs from Net Sold (often a refund that wasn't
+    recorded), Net Sold is kept and the difference becomes a manual
+    adjustment line, unless `update_net`, which sets Net Sold to eBay's
+    total. Receipts eBay has no sale for are left alone. Stops at the first
+    error from eBay, since the rest would fail the same way.
+
+    Returns {"saved", "differ", "skipped"}: counts, with differ the receipts
+    whose Net Sold didn't match.
+    """
+    from fbc import db
+    from fbc.models.sales import MANUAL, SalesReceipt
+
+    counts = {"saved": 0, "differ": 0, "skipped": 0}
+    if devmode.on():
+        echo(devmode.message("Backfilling earnings from eBay"))
+        return counts
+    query = (
+        db.session.query(SalesReceipt)
+        .filter(SalesReceipt.ebay_order_id.isnot(None))
+        .filter(~SalesReceipt.lines.any())
+        .order_by(SalesReceipt.date.desc(), SalesReceipt.id.desc())
+    )
+    if since is not None:
+        query = query.filter(SalesReceipt.date >= since)
+    if limit:
+        query = query.limit(limit)
+    for receipt in query.all():
+        name = (
+            "Receipt "
+            + str(receipt.id)
+            + " ("
+            + str(receipt.date)
+            + ", order "
+            + receipt.ebay_order_id
+            + ")"
+        )
+        earnings = order_earnings(receipt.ebay_order_id)
+        if earnings["errors"]:
+            for e in earnings["errors"]:
+                echo(name + ": " + e)
+            echo("Stopped; nothing more was asked of eBay.")
+            break
+        if earnings["net"] is None:
+            echo(name + ": eBay has no sale for it; left as it is.")
+            counts["skipped"] += 1
+            continue
+        difference = round(earnings["net"] - receipt.net_sold, 2)
+        if difference:
+            counts["differ"] += 1
+            if update_net:
+                what = (
+                    "Net Sold "
+                    + receipt.fmt_net_sold()
+                    + " set to eBay's $"
+                    + f"{earnings['net']:.2f}"
+                )
+                receipt.net_sold = earnings["net"]
+            else:
+                what = (
+                    "eBay's total $"
+                    + f"{earnings['net']:.2f}"
+                    + " differs from Net Sold "
+                    + receipt.fmt_net_sold()
+                    + "; kept as a manual adjustment"
+                )
+        else:
+            what = "matches Net Sold"
+        receipt.set_lines(earnings["lines"])
+        echo(
+            name
+            + ": "
+            + str(len([line for line in receipt.lines if line.kind != MANUAL]))
+            + " lines, "
+            + what
+            + "."
+        )
+        if apply:
+            db.session.commit()
+            counts["saved"] += 1
+        else:
+            db.session.rollback()
+    if not apply:
+        echo("Nothing was saved. Run it again with --apply to save these.")
+    return counts
