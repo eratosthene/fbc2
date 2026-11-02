@@ -21,7 +21,7 @@ FINANCES_URL = "https://apiz.ebay.com/sell/finances/v1/transaction"
 TRANSACTION_LABELS = {
     "SALE": "Sale, less the taxes eBay collects",
     "SHIPPING_LABEL": "Shipping label",
-    "REFUND": "Refund",
+    "REFUND": "Refund to the buyer",
     "NON_SALE_CHARGE": "Other fee",
     "CREDIT": "Credit",
     "DISPUTE": "Dispute",
@@ -64,8 +64,10 @@ def transaction_lines(t):
     """
     The earnings lines for one Finances API transaction, as dicts of
     SalesReceiptLine's columns, credits above 0. A sale becomes the sale
-    before fees and one line per kind of fee eBay took out of it, so they
-    add up to what eBay paid for it.
+    before fees and one line per kind of fee eBay took out of it. A refund
+    becomes the whole refund and one line per fee eBay credited back, since
+    eBay takes those credits off the refund's amount. Either way they add up
+    to the transaction's amount.
     """
     from fbc.models.sales import FEE
 
@@ -85,26 +87,27 @@ def transaction_lines(t):
         label = TRANSACTION_LABELS.get(kind, kind)
 
     fees = {}
-    if kind == "SALE" and sign > 0:
+    if (kind, sign) in (("SALE", 1), ("REFUND", -1)):
         for item in t.get("orderLineItems") or []:
             for fee in item.get("marketplaceFees") or []:
                 fee_type = fee.get("feeType")
-                fees[fee_type] = fees.get(fee_type, 0) + _cents(fee.get("amount"))
+                fees[fee_type] = fees.get(fee_type, 0) + abs(_cents(fee.get("amount")))
         # Whatever totalFeeAmount has that the per-fee list doesn't.
-        rest = _cents(t.get("totalFeeAmount")) - sum(fees.values())
+        rest = abs(_cents(t.get("totalFeeAmount"))) - sum(fees.values())
         if rest > 0:
             fees[None] = fees.get(None, 0) + rest
     fees = {fee_type: c for fee_type, c in fees.items() if c}
 
-    lines = [dict(base, label=label, amount=(cents + sum(fees.values())) / 100)]
+    # A sale's fees are taken off it, and a refund's are credited back.
+    lines = [dict(base, label=label, amount=(cents + sign * sum(fees.values())) / 100)]
     for fee_type, c in fees.items():
         lines.append(
             dict(
                 base,
                 kind=FEE,
                 fee_type=fee_type,
-                label=fee_label(fee_type),
-                amount=-c / 100,
+                label=fee_label(fee_type) + (" credited back" if sign < 0 else ""),
+                amount=-sign * c / 100,
             )
         )
     return lines
@@ -220,6 +223,11 @@ def order_earnings(order_id):
             result["items"] += len(t.get("orderLineItems") or [])
         elif kind == "SHIPPING_LABEL":
             label = True
+
+    # eBay lists the newest first; oldest first reads as what happened. A
+    # transaction's fees share its date, so they stay under it.
+    if all(line["transaction_date"] for line in result["lines"]):
+        result["lines"].sort(key=lambda line: line["transaction_date"])
 
     if not sale:
         result["warnings"].append(
