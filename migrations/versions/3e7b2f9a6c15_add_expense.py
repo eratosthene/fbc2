@@ -1,7 +1,7 @@
 """add expense table
 
 Revision ID: 3e7b2f9a6c15
-Revises: 512014df862a
+Revises: 6b2f8d4a1c73
 Create Date: 2026-11-01 00:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "3e7b2f9a6c15"
-down_revision = "512014df862a"
+down_revision = "6b2f8d4a1c73"
 branch_labels = None
 depends_on = None
 
