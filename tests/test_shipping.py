@@ -966,7 +966,13 @@ def test_backfill_earnings_only_shows_without_apply(app, finances):
 
     counts = shipping.backfill_earnings(echo=said.append)
 
-    assert counts == {"saved": 0, "differ": 0, "skipped": 0, "shared": 0}
+    assert counts == {
+        "saved": 0,
+        "differ": 0,
+        "skipped": 0,
+        "shared": 0,
+        "unsettled": 0,
+    }
     assert "2 lines, matches Net Sold" in said[0]
     assert "--apply" in said[-1]
     db.session.expire_all()
@@ -979,7 +985,13 @@ def test_backfill_earnings_saves_lines_and_keeps_net_sold(app, finances):
 
     counts = shipping.backfill_earnings(apply=True, echo=said.append)
 
-    assert counts == {"saved": 1, "differ": 1, "skipped": 0, "shared": 0}
+    assert counts == {
+        "saved": 1,
+        "differ": 1,
+        "skipped": 0,
+        "shared": 0,
+        "unsettled": 0,
+    }
     assert "differs from Net Sold $20.00" in said[0]
     db.session.expire_all()
     receipt = db.session.get(SalesReceipt, receipt.id)
@@ -1011,7 +1023,13 @@ def test_backfill_earnings_leaves_receipts_with_lines_or_no_sale(app, finances):
     db.session.commit()
     finances.reply = _transactions(LABEL)
     counts = shipping.backfill_earnings(apply=True, echo=lambda _: None)
-    assert counts == {"saved": 0, "differ": 0, "skipped": 1, "shared": 0}
+    assert counts == {
+        "saved": 0,
+        "differ": 0,
+        "skipped": 1,
+        "shared": 0,
+        "unsettled": 0,
+    }
 
 
 def test_backfill_earnings_stops_at_an_ebay_error(app, finances):
@@ -1039,7 +1057,7 @@ def test_backfill_earnings_command(app, finances):
     assert result.exit_code == 0, result.output
     assert (
         "Saved 1, Net Sold differed on 0, eBay had no sale for 0, order on other"
-        " receipts too for 0." in result.output
+        " receipts too for 0, return or dispute open for 0." in result.output
     )
     db.session.expire_all()
     assert len(db.session.get(SalesReceipt, receipt.id).lines) == 2
@@ -1229,7 +1247,13 @@ def test_backfill_earnings_leaves_an_order_split_across_receipts(app, finances):
 
     counts = shipping.backfill_earnings(apply=True, echo=said.append)
 
-    assert counts == {"saved": 0, "differ": 0, "skipped": 0, "shared": 2}
+    assert counts == {
+        "saved": 0,
+        "differ": 0,
+        "skipped": 0,
+        "shared": 2,
+        "unsettled": 0,
+    }
     assert finances.calls == []
     assert "its order is on 2 receipts" in said[0]
     db.session.expire_all()
@@ -1255,3 +1279,87 @@ def test_refresh_earnings_refuses_an_order_split_across_receipts(client, finance
     db.session.expire_all()
     assert db.session.get(SalesReceipt, other.id).net_sold == 6.5
     assert db.session.get(SalesReceipt, other.id).lines == []
+
+
+# The returned order as it stood while its return was open: sold, shipped,
+# and eBay holding the sale's money.
+RETURN_OPEN = RETURNED[:3]
+
+
+def test_order_earnings_say_when_ebay_is_holding_money(app, finances):
+    finances.reply = _transactions(*reversed(RETURN_OPEN))
+
+    earnings = shipping.order_earnings("12-34567-89012")
+
+    assert earnings["unsettled"] is True
+    assert earnings["net"] == -6.44
+    assert "eBay is holding $10.89" in earnings["warnings"][0]
+
+
+def test_order_earnings_are_settled_once_ebay_releases_the_hold(app, finances):
+    finances.reply = _transactions(*reversed(RETURNED))
+
+    earnings = shipping.order_earnings("12-34567-89012")
+
+    assert earnings["unsettled"] is False
+    assert earnings["warnings"] == []
+
+
+def test_order_earnings_name_a_refunded_label(app, finances):
+    # A label bought for a return the buyer never sent, then refunded.
+    finances.reply = _transactions(
+        SALE, LABEL, RETURN_LABEL, dict(RETURN_LABEL, bookingEntry="CREDIT")
+    )
+
+    earnings = shipping.order_earnings("12-34567-89012")
+
+    assert _lines(earnings)[-1] == (
+        "SHIPPING_LABEL",
+        "Shipping label refunded",
+        4.39,
+    )
+    assert earnings["net"] == 16.50
+
+
+def test_refresh_earnings_leaves_net_sold_unticked_while_ebay_holds_money(
+    client, finances
+):
+    receipt = _shipped(net_sold=6.50)
+    finances.reply = _transactions(*reversed(RETURN_OPEN))
+
+    html = client.get("/salesreceiptmodelview/earnings/" + str(receipt.id)).get_data(
+        as_text=True
+    )
+
+    assert "eBay is holding $10.89" in html
+    assert 'name="update_net" value="1" >' in html
+
+    finances.reply = _transactions(*reversed(RETURNED))
+    html = client.get("/salesreceiptmodelview/earnings/" + str(receipt.id)).get_data(
+        as_text=True
+    )
+    assert 'name="update_net" value="1" checked>' in html
+
+
+def test_backfill_earnings_leaves_an_open_return_for_a_later_run(app, finances):
+    receipt = _shipped(net_sold=6.50)
+    finances.reply = _transactions(*reversed(RETURN_OPEN))
+    said = []
+
+    counts = shipping.backfill_earnings(apply=True, update_net=True, echo=said.append)
+
+    assert counts == {
+        "saved": 0,
+        "differ": 0,
+        "skipped": 0,
+        "shared": 0,
+        "unsettled": 1,
+    }
+    assert "holding $10.89 while a return or dispute is open" in said[0]
+    db.session.expire_all()
+    receipt = db.session.get(SalesReceipt, receipt.id)
+    assert (receipt.net_sold, receipt.lines) == (6.50, [])
+
+    finances.reply = _transactions(*reversed(RETURNED))
+    counts = shipping.backfill_earnings(apply=True, update_net=True, echo=said.append)
+    assert counts["saved"] == 1

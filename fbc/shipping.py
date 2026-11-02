@@ -33,6 +33,30 @@ TRANSACTION_LABELS = {
 # label bought with a card on file: the charge is a line of its own.
 NOT_EARNINGS = {"TRANSFER"}
 
+# eBay holds a sale's money while a return request or a payment dispute is
+# open, as a DISPUTE whose transactionId is DISPUTE_HOLD-<id>, and releases it
+# as a CREDIT whose transactionId starts DISPUTE_HOLD_REVERSE-<id>.
+HOLD_RELEASE = "DISPUTE_HOLD_REVERSE-"
+
+
+def held(lines):
+    """
+    What eBay is still holding out of `lines` (order_earnings' lines): its
+    disputes less the holds it has released. Below 0 while a return or
+    dispute is open, and 0 once it's settled either way, unless the seller
+    lost a dispute, when it stays below 0.
+    """
+    return round(
+        sum(
+            line["amount"]
+            for line in lines
+            if line["kind"] == "DISPUTE"
+            or (line["transaction_id"] or "").startswith(HOLD_RELEASE)
+        ),
+        2,
+    )
+
+
 # eBay's feeTypes, for fees taken out of a sale and charges of their own.
 # Anything else is shown by its own name, made readable.
 FEE_LABELS = {
@@ -88,6 +112,8 @@ def transaction_lines(t):
     }
     if kind == "NON_SALE_CHARGE" and t.get("feeType"):
         label = fee_label(t["feeType"])
+    elif kind == "SHIPPING_LABEL" and sign > 0:
+        label = "Shipping label refunded"
     else:
         label = TRANSACTION_LABELS.get(kind, kind)
 
@@ -168,6 +194,8 @@ def order_earnings(order_id):
       items     how many line items the sale covers (0 if eBay didn't say)
       errors    why eBay couldn't be asked
       warnings  things to check before trusting net
+      unsettled whether eBay is holding money while a return or dispute is
+                open (see held), so net will change once it closes
     """
     import requests
 
@@ -179,7 +207,14 @@ def order_earnings(order_id):
         oauth_token,
     )
 
-    result = {"net": None, "lines": [], "items": 0, "errors": [], "warnings": []}
+    result = {
+        "net": None,
+        "lines": [],
+        "items": 0,
+        "errors": [],
+        "warnings": [],
+        "unsettled": False,
+    }
     if devmode.on():
         result["warnings"].append(
             devmode.message("eBay earnings lookup") + " Enter Net Sold yourself."
@@ -243,6 +278,19 @@ def order_earnings(order_id):
         )
         return result
     result["net"] = round(sum(line["amount"] for line in result["lines"]), 2)
+    holding = held(result["lines"])
+    if holding:
+        result["unsettled"] = True
+        result["warnings"].append(
+            "eBay is holding $"
+            + f"{-holding:.2f}"
+            + " of this order's money, as it does while a return request or a"
+            " payment dispute is open. These earnings will change when it"
+            " closes: if the buyer never sends the item back, eBay releases the"
+            " money and doesn't charge for an unused return label. Refresh"
+            " again once it's closed. If it already has, and you lost a"
+            " dispute, save as usual."
+        )
     if not label:
         result["warnings"].append(
             "There's no eBay shipping label on this order yet, so these earnings"
@@ -508,17 +556,19 @@ def backfill_earnings(
     recorded), Net Sold is kept and the difference becomes a manual
     adjustment line, unless `update_net`, which sets Net Sold to eBay's
     total. Receipts eBay has no sale for are left alone, as are receipts
-    whose order is on other receipts too (see SalesReceipt.order_receipts).
+    whose order is on other receipts too (see SalesReceipt.order_receipts),
+    and receipts whose order eBay is holding money on (see held), until a
+    later run.
     Stops at the first error from eBay, since the rest would fail the same
     way.
 
-    Returns {"saved", "differ", "skipped", "shared"}: counts, with differ the
-    receipts whose Net Sold didn't match.
+    Returns {"saved", "differ", "skipped", "shared", "unsettled"}: counts,
+    with differ the receipts whose Net Sold didn't match.
     """
     from fbc import db
     from fbc.models.sales import MANUAL, SalesReceipt
 
-    counts = {"saved": 0, "differ": 0, "skipped": 0, "shared": 0}
+    counts = {"saved": 0, "differ": 0, "skipped": 0, "shared": 0, "unsettled": 0}
     if devmode.on():
         echo(devmode.message("Backfilling earnings from eBay"))
         return counts
@@ -562,6 +612,16 @@ def backfill_earnings(
         if earnings["net"] is None:
             echo(name + ": eBay has no sale for it; left as it is.")
             counts["skipped"] += 1
+            continue
+        if earnings["unsettled"]:
+            # Left without lines, so the next run picks it up again.
+            echo(
+                name
+                + ": eBay is holding $"
+                + f"{-held(earnings['lines']):.2f}"
+                + " while a return or dispute is open; left until it closes."
+            )
+            counts["unsettled"] += 1
             continue
         difference = round(earnings["net"] - receipt.net_sold, 2)
         if difference:

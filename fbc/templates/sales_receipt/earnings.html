@@ -37,7 +37,7 @@ or a late charge. Saving replaces this Sales Receipt's lines with eBay's.</p>
   {% if earnings.net is not none and "%.2f"|format(earnings.net) != "%.2f"|format(receipt.net_sold) %}
   <div class="checkbox">
     <label>
-      <input type="checkbox" name="update_net" value="1" checked>
+      <input type="checkbox" name="update_net" value="1" {% if not earnings.unsettled %}checked{% endif %}>
       Change Net Sold from {{ receipt.fmt_net_sold() }} to eBay's {{ money(earnings.net) }}
     </label>
   </div>

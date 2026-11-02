@@ -104,6 +104,8 @@ def backfill_earnings(apply, update_net, since, limit):
         + str(counts["skipped"])
         + ", order on other receipts too for "
         + str(counts["shared"])
+        + ", return or dispute open for "
+        + str(counts["unsettled"])
         + "."
     )
 
