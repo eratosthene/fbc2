@@ -14,4 +14,7 @@ if ! sudo docker buildx version >/dev/null 2>&1; then
     exit 1
 fi
 
-sudo docker buildx build --load -f docker/Dockerfile -t fbc2:latest .
+# The commit it's built from, so docker/live-up.sh -n can tell whether the
+# image still matches this checkout's code.
+sudo docker buildx build --load -f docker/Dockerfile -t fbc2:latest \
+    --label "fbc2.revision=$(git rev-parse HEAD)" .

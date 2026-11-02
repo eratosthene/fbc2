@@ -614,7 +614,7 @@ def main():
 Done. The old config.py is in {os.path.basename(backup)}; it still holds
 the secrets, so delete it once the app runs with the new one. Next:
 
-  docker/live-up.sh -n      # recreate the container with the new settings
+  docker/live-up.sh         # rebuild, and recreate the container
   docker/live-logs.sh       # check it started"""
     )
 

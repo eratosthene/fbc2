@@ -88,8 +88,11 @@ Then make the changes, and recreate the container:
 
 ```bash
 scripts/move_secrets_to_env.py --apply
-docker/live-up.sh -n
+docker/live-up.sh
 ```
+
+Without `-n`, so the image is rebuilt: one built before settings came from
+the environment ignores `docker/.env`.
 
 The new `config.py` is `config.py.tpl` with your values in it. Settings
 only the template has are left commented out, and settings only your
@@ -142,6 +145,9 @@ the container, which needs no rebuild:
 ```bash
 docker/live-up.sh -n
 ```
+
+`-n` refuses to start an image built from other code than the checkout's,
+since it may not read `docker/.env`; run it without `-n` then.
 
 Keep both files readable only by you, since they hold the live credentials:
 

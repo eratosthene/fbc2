@@ -8,14 +8,17 @@
 # up -d --force-recreate`, which replaces the running container. The
 # container brings the database up to date itself as it starts. -n skips the
 # build and starts the image already there, which is all a change to
-# config.py or docker/.env needs. It makes an empty docker/.env if there
-# isn't one.
+# config.py or docker/.env needs; it refuses an image built from other code
+# than this checkout's. It makes an empty docker/.env if there isn't one.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 compose_file=docker/compose.yml
+image=fbc2:latest
 build=true
+# What goes into the image, apart from config.py and docker/.env.
+image_inputs=(fbc migrations docker/Dockerfile docker/docker-entrypoint.sh Pipfile Pipfile.lock)
 
 usage() {
     sed -n '2,12s/^# \{0,1\}//p' "$0"
@@ -43,6 +46,17 @@ fi
 
 if [ "$build" = true ]; then
     docker/build.sh
+else
+    # An image from older code may not read docker/.env at all, and would
+    # start with config.py alone. docker/build.sh labels the commit it built.
+    revision=$(sudo docker image inspect --format \
+        '{{ index .Config.Labels "fbc2.revision" }}' "$image" 2>/dev/null || true)
+    if [ -z "$revision" ] || [ "$revision" = "<no value>" ] ||
+        ! git diff --quiet "$revision" -- "${image_inputs[@]}" 2>/dev/null; then
+        echo "The $image image wasn't built from this checkout's code." >&2
+        echo "Run docker/live-up.sh without -n to rebuild it." >&2
+        exit 1
+    fi
 fi
 
 # Recreated even when nothing in the compose file changed, since `up -d`
