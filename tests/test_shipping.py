@@ -13,7 +13,7 @@ from fbc.discogs import DiscogsAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsRelease
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit
-from fbc.models.sales import SalesReceipt
+from fbc.models.sales import SalesReceipt, earnings_totals
 from fbc.models.supplies import Supply, SupplyUse
 from fbc.util import forget_discogs_instance
 from test_listing import FakeHTTPResponse, _carnaval
@@ -1040,3 +1040,107 @@ def test_backfill_earnings_command(app, finances):
     assert "Saved 1, Net Sold differed on 0, eBay had no sale for 0." in result.output
     db.session.expire_all()
     assert len(db.session.get(SalesReceipt, receipt.id).lines) == 2
+
+
+def _at(when, transaction):
+    return dict(transaction, transactionDate="2026-09-" + when + ":00.000Z")
+
+
+# A real order that was returned. eBay's order page shows earnings of
+# -$9.19: the sale's $10.89 (item and shipping), less fees of $0.41, labels
+# of $8.78 and a refund of $10.89, with a dispute and credit that cancel out.
+# The refund's amount, $9.25, already has the final value fee eBay credited
+# back taken off.
+RETURN_LABEL = dict(LABEL, amount={"value": "4.39", "currency": "USD"})
+RETURNED = [
+    _at(
+        "25T10:00",
+        {
+            "transactionType": "SALE",
+            "bookingEntry": "CREDIT",
+            "amount": {"value": "8.84"},
+            "totalFeeAmount": {"value": "2.05"},
+            "orderLineItems": [
+                {
+                    "marketplaceFees": [
+                        {
+                            "feeType": "FINAL_VALUE_FEE_FIXED_PER_ORDER",
+                            "amount": {"value": "0.41"},
+                        },
+                        {"feeType": "FINAL_VALUE_FEE", "amount": {"value": "1.64"}},
+                    ]
+                }
+            ],
+        },
+    ),
+    _at("25T11:00", RETURN_LABEL),
+    _at(
+        "29T09:00",
+        {
+            "transactionType": "DISPUTE",
+            "bookingEntry": "DEBIT",
+            "amount": {"value": "10.89"},
+        },
+    ),
+    _at(
+        "30T09:00",
+        {
+            "transactionType": "REFUND",
+            "bookingEntry": "DEBIT",
+            "amount": {"value": "9.25"},
+            "totalFeeAmount": {"value": "1.64"},
+            "orderLineItems": [
+                {
+                    "marketplaceFees": [
+                        {"feeType": "FINAL_VALUE_FEE", "amount": {"value": "1.64"}}
+                    ]
+                }
+            ],
+        },
+    ),
+    _at("30T10:00", RETURN_LABEL),
+    _at(
+        "30T11:00",
+        {
+            "transactionType": "CREDIT",
+            "bookingEntry": "CREDIT",
+            "amount": {"value": "10.89"},
+        },
+    ),
+]
+
+
+def test_order_earnings_split_out_the_fees_a_refund_credits_back(app, finances):
+    # eBay lists the newest first; the lines are oldest first.
+    finances.reply = _transactions(*reversed(RETURNED))
+
+    earnings = shipping.order_earnings("12-34567-89012")
+
+    assert _lines(earnings) == [
+        ("SALE", "Sale, less the taxes eBay collects", 10.89),
+        ("FEE", "Final value fee per order", -0.41),
+        ("FEE", "Final value fee", -1.64),
+        ("SHIPPING_LABEL", "Shipping label", -4.39),
+        ("DISPUTE", "Dispute", -10.89),
+        ("REFUND", "Refund to the buyer", -10.89),
+        ("FEE", "Final value fee credited back", 1.64),
+        ("SHIPPING_LABEL", "Shipping label", -4.39),
+        ("CREDIT", "Credit", 10.89),
+    ]
+    assert earnings["net"] == -9.19
+
+
+def test_a_returned_orders_totals_match_ebays_order_page(app, finances):
+    finances.reply = _transactions(*reversed(RETURNED))
+    _shipped(net_sold=-9.19, lines=shipping.order_earnings("12-34567-89012")["lines"])
+
+    totals = earnings_totals()
+
+    assert (
+        totals["sales"],
+        totals["ebay_fees"],
+        totals["labels"],
+        totals["refunds"],
+        totals["other"],
+        totals["adjustments"],
+    ) == (10.89, -0.41, -8.78, -10.89, 0.0, 0.0)
