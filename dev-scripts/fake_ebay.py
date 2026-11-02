@@ -7,8 +7,8 @@ Add fake eBay records to a dev database, in place of a sync from eBay.
               from Discogs, unless --no-discogs.
   listings N  N listings, each with an unsold Unit on it, and no order.
 
---no-unit leaves the Unit out, for orders Ship This can't handle (they
-should only offer Add SR). --items puts several items on each order, each
+--no-unit leaves the Unit out, for orders Ship This can't handle (it says
+to ship them by hand). --items puts several items on each order, each
 with its listing and Unit. --buyer gives every order the same buyer, so Ship
 This offers to ship them combined. --size picks the record size, which decides the
 outer sleeve Ship This suggests. Remove everything fake with clear_fake.py.

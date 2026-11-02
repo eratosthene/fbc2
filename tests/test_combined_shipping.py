@@ -228,7 +228,6 @@ def test_an_order_of_several_units_finds_them_all(app):
         "Record 222 #0",
         "Record 222 #1",
     ]
-    assert shipping.can_ship(order)
 
 
 def test_units_must_match_how_many_were_bought(app):
@@ -242,7 +241,6 @@ def test_units_must_match_how_many_were_bought(app):
     assert problems == [
         "Listing 222 has 3 unsold Units on it, and 2 were bought.",
     ]
-    assert not shipping.can_ship(order)
 
 
 def test_an_order_synced_before_items_were_kept_uses_its_listing(app):
@@ -275,21 +273,20 @@ def test_combinable_orders_are_the_buyers_others_without_a_receipt(app):
     assert shipping.combinable_orders(second) == [first]
 
 
-def test_order_list_offers_shipping_combined_or_alone(client):  # noqa: F811
+def test_ship_this_offers_the_buyers_other_orders(client):  # noqa: F811
     _listing("1", 5.0)
     _listing("2", 5.0)
     _listing("3", 5.0)
     first = _order("O-1", [("1", 1, 5.0)])
     _order("O-2", [("2", 1, 5.0)])
-    alone = _order("O-3", [("3", 1, 5.0)], buyer="someone else")
+    _order("O-3", [("3", 1, 5.0)], buyer="someone else")
 
-    links = first.links()
+    page = client.get("/ebayordermodelview/ship/O-1").get_data(as_text=True)
 
-    assert "Ship&nbsp;This&nbsp;Combined</a> (2&nbsp;orders)" in links
-    assert "/ebayordermodelview/ship/O-1?combine=O-2" in links
-    assert "Ship&nbsp;This&nbsp;Alone</a>" in links
-    assert "Ship&nbsp;This</a>" in alone.links()
-    assert "Combined" not in alone.links()
+    assert "Ship&nbsp;This</a>" in first.links()
+    assert "The buyer has other orders to ship" in page
+    assert 'name="combine" value="O-2"' in page
+    assert "O-3" not in page
 
 
 # Shipping one order of several Units

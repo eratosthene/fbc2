@@ -1,7 +1,7 @@
 """
 Remove every fake record the dev-scripts added from a dev database, along
 with what testing made from them: Units added from fake releases, Sales
-Receipts for fake orders (Ship This or Add SR) and drafts for fake Units.
+Receipts for fake orders (from Ship This or by hand) and drafts for fake Units.
 Supplies Ship This or Add Unit took out of stock aren't put back.
 
 Run from the repo root, on this machine or in docker/compose.dev.yml's app:

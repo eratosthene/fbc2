@@ -32,11 +32,14 @@ Receipt, marks its Units sold, takes the supplies used out of stock and
 removes each Unit's own copy from Discogs. An order can have several items:
 it finds every Unit on the order's listings, as many as were bought from
 each. Order syncs keep every item; an order synced before fbc did only knows
-its first, so Sync the orders again if Ship This says eBay has more.
+its first, so Sync the orders again if Ship This says eBay has more. When
+it can't tell which Units an order sold, it says why and links to adding
+the Sales Receipt by hand.
 
-When a buyer has other orders without a Sales Receipt from the same week,
-the order list offers Ship This Combined and Ship This Alone. Ship This
-Combined ticks the buyer's other orders; tick the ones going in the package.
+The order list has a Ship This link for each order not shipped yet, and a
+link to its Sales Receipt once it is. The Title shows every item on an order
+of several. When the buyer has other orders without a Sales Receipt from the
+same week, Ship This lists them; tick the ones going in the package.
 They get one Sales Receipt, dated the first order, with every order's
 earnings, and the supplies for one package.
 
