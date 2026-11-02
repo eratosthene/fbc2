@@ -35,6 +35,6 @@ sudo docker compose -f "$compose_file" up -d
 cat <<MSG
 
 Started; the app is on port 20000 once it's up.
-  Follow the logs: sudo docker compose -f $compose_file logs -f
+  Follow the logs: docker/live-logs.sh
   Stop it:         docker/live-down.sh
 MSG

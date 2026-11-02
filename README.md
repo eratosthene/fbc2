@@ -65,6 +65,13 @@ image that's already there:
 docker/live-up.sh
 ```
 
+To follow its logs, from the last 100 lines (`-n` picks another number, or
+`all`). Ctrl-C stops following, and leaves the app running:
+
+```bash
+docker/live-logs.sh
+```
+
 To stop it and remove its container (it never removes volumes):
 
 ```bash
