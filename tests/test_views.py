@@ -862,3 +862,75 @@ def test_a_purchase_orders_price_cant_go_below_its_expenses(client):
     assert "The Expenses on it come to $60.00" in page.get_data(as_text=True)
     fbc.db.session.expire_all()
     assert order.price == 100.0
+
+
+# Search by id (#99)
+
+
+def _every_model_view():
+    from fbc.util import CustomModelView
+
+    return [v for v in fbc.appbuilder.baseviews if isinstance(v, CustomModelView)]
+
+
+def test_every_model_view_searches_by_id():
+    views = _every_model_view()
+    assert views
+    for view in views:
+        pk = view.datamodel.get_pk_name()
+        assert pk in view.search_columns, view.__class__.__name__
+        assert pk in view._filters.get_search_filters(), view.__class__.__name__
+
+
+def test_integer_ids_get_the_range_filter_first():
+    from fbc.util import FilterIdMatches
+
+    for view in _every_model_view():
+        pk = view.datamodel.get_pk_name()
+        first = view._filters.get_search_filters()[pk][0]
+        if view.datamodel.is_integer(pk):
+            assert isinstance(first, FilterIdMatches), view.__class__.__name__
+        else:
+            assert not isinstance(first, FilterIdMatches), view.__class__.__name__
+
+
+def test_id_filter_parse():
+    from fbc.util import FilterIdMatches
+
+    parse = FilterIdMatches.parse
+    assert parse("5") == [(5, 5)]
+    assert parse("100-200") == [(100, 200)]
+    assert parse("200 - 100") == [(100, 200)]
+    assert parse("5, 7-9") == [(5, 5), (7, 9)]
+    for bad in ("", "a", "1-2-3", "-5", "1,,2", "1.5"):
+        assert parse(bad) is None, bad
+
+
+def test_id_filter_applies():
+    from fbc import db
+    from fbc.util import FilterIdMatches
+
+    view = _view(PurchaseLotModelView)
+    model = view.datamodel.obj
+    ids = [r.id for r in db.session.query(model).all()]
+    f = FilterIdMatches("id", view.datamodel)
+    assert db.session.query(model).count() == len(ids)
+    assert f.apply(db.session.query(model), "nonsense").count() == 0
+    if ids:
+        got = [r.id for r in f.apply(db.session.query(model), f"{min(ids)}-{max(ids)}")]
+        assert sorted(got) == sorted(ids)
+
+
+def test_unit_list_filters_by_id_and_range(client):
+    _units(a={}, b={}, c={}, d={})
+    ids = sorted(u.id for u in Unit.query.all())
+
+    def listed(value):
+        response = client.get(f"/unitmodelview/list/?_flt_0_id={value}")
+        assert response.status_code == 200
+        text = response.get_data(as_text=True)
+        return [i for i in ids if f"/unitmodelview/show/{i}" in text]
+
+    assert listed(ids[1]) == [ids[1]]
+    assert listed(f"{ids[1]}-{ids[2]}") == ids[1:3]
+    assert listed("nonsense") == []
