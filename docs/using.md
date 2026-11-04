@@ -7,6 +7,13 @@ see [Running fbc in production](production.md).
 Before syncing, sign in to each site once: Sales > Connect eBay and
 Discogs > Connect Discogs. The app keeps the tokens in the database.
 
+## Searching by id
+
+Every list can be searched by its id (for eBay Listings and Orders, the item
+or order id; for Discogs Releases, the release id). Where the id is a plain
+number, "Matches id" is the first choice, and it takes a single id (`42`), a
+range (`100-200`) or a mix (`5, 100-200`).
+
 ## Inventory
 
 Units (one copy of a record each), the Purchase Lots they came in and the

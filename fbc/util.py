@@ -4,6 +4,9 @@ import datetime
 from flask import request
 from flask_wtf import FlaskForm
 from flask_appbuilder import ModelView
+from flask_appbuilder.models.filters import BaseFilter
+from flask_appbuilder.models.sqla.filters import get_field_setup_query
+from sqlalchemy import or_
 
 logger = logging.getLogger()
 
@@ -406,3 +409,62 @@ class CustomModelView(ModelView):
     edit_template = "crud/edit.html"
     add_template = "crud/add.html"
     show_template = "crud/show.html"
+
+    def _init_properties(self):
+        """
+        Makes every view searchable by its primary key. Flask-AppBuilder
+        leaves primary keys out of the default search, and views that list
+        their own search_columns mostly forgot the id. An integer id also
+        gets FilterIdMatches, so a range like 100-200 works.
+        """
+        super()._init_properties()
+        pk = self.datamodel.get_pk_name()
+        if not isinstance(pk, str) or pk not in self.datamodel.list_columns:
+            return
+        if pk not in self.search_columns:
+            self.search_columns = [pk] + list(self.search_columns)
+            self._filters = self.datamodel.get_filters(self.search_columns)
+        if self.datamodel.is_integer(pk):
+            for table in (self._filters._search_filters, self._filters._all_filters):
+                table[pk] = [FilterIdMatches] + [
+                    f for f in table[pk] if f is not FilterIdMatches
+                ]
+
+
+class FilterIdMatches(BaseFilter):
+    """
+    Matches an integer id typed as "42", a range "100-200", or a
+    comma-separated mix of both ("5, 100-200"). Anything that doesn't parse
+    matches nothing, the same as Flask-AppBuilder's own integer filters.
+    """
+
+    name = "Matches id"
+    arg_name = "idm"
+
+    @staticmethod
+    def parse(text):
+        """Returns [(low, high), ...], or None if the text isn't valid."""
+        spans = []
+        for part in str(text).split(","):
+            bounds = [b.strip() for b in part.split("-")]
+            if len(bounds) > 2 or not all(b.isdigit() for b in bounds):
+                return None
+            low, high = int(bounds[0]), int(bounds[-1])
+            spans.append((min(low, high), max(low, high)))
+        return spans
+
+    def apply(self, query, value):
+        query, field = get_field_setup_query(query, self.model, self.column_name)
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else ""
+        spans = self.parse(value)
+        if not spans:
+            return query.filter(False)
+        return query.filter(
+            or_(
+                *[
+                    field == low if low == high else field.between(low, high)
+                    for low, high in spans
+                ]
+            )
+        )
