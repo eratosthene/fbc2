@@ -1,4 +1,5 @@
 # ruff: noqa: E402
+import importlib
 import logging
 import os
 from urllib.parse import urlencode
@@ -30,20 +31,42 @@ app.config.setdefault("FAB_BASE_TEMPLATE", "layout.html")
 # its metadata (ours and the ab_* tables) on db.
 db = SQLAlchemy(app, model_class=Model)
 migrate = Migrate(app, db)
-# Flask-AppBuilder reads the config and sets up its security tables through
-# current_app, so it needs an app context, here and when adding views below.
-with app.app_context():
-    appbuilder = AppBuilder(app, db.session, indexview=MyIndexView)
+# FBC_SKIP_VIEWS=1 is for scripts and commands that only need `app` and `db`.
+# Flask-AppBuilder's security setup and the views' registration run a few
+# hundred database queries on every import, which is most of the startup time.
+# Anything that serves pages or needs `appbuilder` must not set it. See
+# "Writing scripts" in docs/development.md.
+SKIP_VIEWS = os.environ.get("FBC_SKIP_VIEWS", "").lower() in ("1", "true", "yes")
 
+if SKIP_VIEWS:
+    # The views would have imported the models, and a relationship names its
+    # target by string, so a query fails unless every model is loaded.
+    # (import_module, so the names don't replace fbc.discogs and the like.)
+    for _model_module in (
+        "discogs",
+        "ebay",
+        "expenses",
+        "inventory",
+        "sales",
+        "supplies",
+    ):
+        importlib.import_module("fbc.models." + _model_module)
+else:
+    # Flask-AppBuilder reads the config and sets up its security tables through
+    # current_app, so it needs an app context, here and when adding views below.
+    with app.app_context():
+        appbuilder = AppBuilder(app, db.session, indexview=MyIndexView)
 
-@app.errorhandler(404)
-def page_not_found(e):
-    return (
-        render_template(
-            "404.html", base_template=appbuilder.base_template, appbuilder=appbuilder
-        ),
-        404,
-    )
+    @app.errorhandler(404)
+    def page_not_found(e):
+        return (
+            render_template(
+                "404.html",
+                base_template=appbuilder.base_template,
+                appbuilder=appbuilder,
+            ),
+            404,
+        )
 
 
 @app.route("/favicon.ico")
@@ -58,6 +81,10 @@ def favicon():
 @app.cli.command("setup-db")
 def setup_db():
     """Create a new database from the models, or migrate an existing one."""
+    if SKIP_VIEWS:
+        raise click.ClickException(
+            "Run this without FBC_SKIP_VIEWS: it needs Flask-AppBuilder's tables."
+        )
     # Importing the app has already created Flask-AppBuilder's ab_* tables, so
     # look for our own. A database from before migrations were added has
     # `unit` but no `alembic_version`, and still needs every migration.
@@ -125,79 +152,87 @@ def backfill_earnings(apply, update_net, since, limit):
     )
 
 
-# The views below import the models, which need `db` and `appbuilder` to exist
-# first, so these imports can't move to the top of the file.
-from fbc.views.discogs import (
-    DiscogsReleaseModelView,
-    DiscogsReleaseModelNoUnitView,
-    ArtistModelView,
-    GenreModelView,
-    StyleModelView,
-    FolderModelView,
-)
-from fbc.views.sales import (
-    EbayOrderModelView,
-    EbayListingModelView,
-    SalesReceiptModelView,
-)
-from fbc.views.listing import EbayDraftModelView
-from fbc.views.connect import ConnectDiscogsView, ConnectEbayView
-from fbc.views.supplies import (
-    ReconcileSuppliesView,
-    SupplyModelView,
-    SupplyUseModelView,
-    PurchaseOrderModelView,
-)
-from fbc.views.expenses import ExpenseModelView
-from fbc.views.inventory import (
-    UnitModelView,
-    PurchaseLotModelView,
-    StorageBoxModelView,
-    UnitModelReboxView,
-    UNSOLD_UNITS_OVER_2_FILTERS,
-    UNITS_WITHOUT_LISTING_FILTERS,
-    UNITS_WITHOUT_MASTER_FILTERS,
-)
+def _register_views():
+    """Import and add every view and menu entry (about 460 database queries)."""
+    # The views below import the models, which need `db` and `appbuilder` to exist
+    # first, so these imports can't move to the top of the file.
+    from fbc.views.discogs import (
+        DiscogsReleaseModelView,
+        DiscogsReleaseModelNoUnitView,
+        ArtistModelView,
+        GenreModelView,
+        StyleModelView,
+        FolderModelView,
+    )
+    from fbc.views.sales import (
+        EbayOrderModelView,
+        EbayListingModelView,
+        SalesReceiptModelView,
+    )
+    from fbc.views.listing import EbayDraftModelView
+    from fbc.views.connect import ConnectDiscogsView, ConnectEbayView
+    from fbc.views.supplies import (
+        ReconcileSuppliesView,
+        SupplyModelView,
+        SupplyUseModelView,
+        PurchaseOrderModelView,
+    )
+    from fbc.views.expenses import ExpenseModelView
+    from fbc.views.inventory import (
+        UnitModelView,
+        PurchaseLotModelView,
+        StorageBoxModelView,
+        UnitModelReboxView,
+        UNSOLD_UNITS_OVER_2_FILTERS,
+        UNITS_WITHOUT_LISTING_FILTERS,
+        UNITS_WITHOUT_MASTER_FILTERS,
+    )
 
-with app.app_context():
-    units = appbuilder.add_view(UnitModelView, "Units", category="Inventory")
-    units_list = units.route_base + "/list/?"
-    appbuilder.add_link(
-        "Units w/out Listings",
-        href=units_list + urlencode(UNITS_WITHOUT_LISTING_FILTERS),
-        category="Inventory",
-    )
-    rebox = appbuilder.add_view_no_menu(UnitModelReboxView)
-    appbuilder.add_link(
-        "Rebox Units",
-        href=rebox.route_base + "/list/?" + urlencode(UNSOLD_UNITS_OVER_2_FILTERS),
-        category="Inventory",
-    )
-    appbuilder.add_link(
-        "Units w/out Master",
-        href=units_list + urlencode(UNITS_WITHOUT_MASTER_FILTERS),
-        category="Inventory",
-    )
-    appbuilder.add_view(PurchaseLotModelView, "Purchase Lots", category="Inventory")
-    appbuilder.add_view(StorageBoxModelView, "Storage Boxes", category="Inventory")
-    appbuilder.add_view(DiscogsReleaseModelView, "Releases", category="Discogs")
-    appbuilder.add_view(
-        DiscogsReleaseModelNoUnitView, "Releases w/out Units", category="Discogs"
-    )
-    appbuilder.add_view(ArtistModelView, "Artists", category="Discogs")
-    appbuilder.add_view(GenreModelView, "Genres", category="Discogs")
-    appbuilder.add_view(StyleModelView, "Styles", category="Discogs")
-    appbuilder.add_view(FolderModelView, "Folders", category="Discogs")
-    appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Discogs")
-    appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
-    appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
-    appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
-    appbuilder.add_view(EbayDraftModelView, "eBay Drafts", category="Sales")
-    appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Sales")
-    appbuilder.add_view(SupplyModelView, "Supply List", category="Supplies")
-    appbuilder.add_view(
-        ReconcileSuppliesView, "Reconcile Supplies", category="Supplies"
-    )
-    appbuilder.add_view(PurchaseOrderModelView, "Purchase Orders", category="Supplies")
-    appbuilder.add_view(SupplyUseModelView, "Supply Use", category="Supplies")
-    appbuilder.add_view(ExpenseModelView, "Expenses", category="Supplies")
+    with app.app_context():
+        units = appbuilder.add_view(UnitModelView, "Units", category="Inventory")
+        units_list = units.route_base + "/list/?"
+        appbuilder.add_link(
+            "Units w/out Listings",
+            href=units_list + urlencode(UNITS_WITHOUT_LISTING_FILTERS),
+            category="Inventory",
+        )
+        rebox = appbuilder.add_view_no_menu(UnitModelReboxView)
+        appbuilder.add_link(
+            "Rebox Units",
+            href=rebox.route_base + "/list/?" + urlencode(UNSOLD_UNITS_OVER_2_FILTERS),
+            category="Inventory",
+        )
+        appbuilder.add_link(
+            "Units w/out Master",
+            href=units_list + urlencode(UNITS_WITHOUT_MASTER_FILTERS),
+            category="Inventory",
+        )
+        appbuilder.add_view(PurchaseLotModelView, "Purchase Lots", category="Inventory")
+        appbuilder.add_view(StorageBoxModelView, "Storage Boxes", category="Inventory")
+        appbuilder.add_view(DiscogsReleaseModelView, "Releases", category="Discogs")
+        appbuilder.add_view(
+            DiscogsReleaseModelNoUnitView, "Releases w/out Units", category="Discogs"
+        )
+        appbuilder.add_view(ArtistModelView, "Artists", category="Discogs")
+        appbuilder.add_view(GenreModelView, "Genres", category="Discogs")
+        appbuilder.add_view(StyleModelView, "Styles", category="Discogs")
+        appbuilder.add_view(FolderModelView, "Folders", category="Discogs")
+        appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Discogs")
+        appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
+        appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
+        appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
+        appbuilder.add_view(EbayDraftModelView, "eBay Drafts", category="Sales")
+        appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Sales")
+        appbuilder.add_view(SupplyModelView, "Supply List", category="Supplies")
+        appbuilder.add_view(
+            ReconcileSuppliesView, "Reconcile Supplies", category="Supplies"
+        )
+        appbuilder.add_view(
+            PurchaseOrderModelView, "Purchase Orders", category="Supplies"
+        )
+        appbuilder.add_view(SupplyUseModelView, "Supply Use", category="Supplies")
+        appbuilder.add_view(ExpenseModelView, "Expenses", category="Supplies")
+
+
+if not SKIP_VIEWS:
+    _register_views()

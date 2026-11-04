@@ -53,6 +53,43 @@ ln -s "$(git rev-parse --git-common-dir)/../config.py" .
   pipenv run flask --app fbc db migrate -m "Describe the change"
   ```
 
+## Writing scripts
+
+`import fbc` builds the whole web app: Flask-AppBuilder sets up its security
+tables and registers every view, which is the pile of `Registering route ...`
+lines. That is about 550 database queries, and it takes most of the startup
+time. A script that only reads or writes the database, or calls the sync code,
+doesn't need any of it.
+
+Set `FBC_SKIP_VIEWS=1` and `import fbc` skips the views. `app`, `db`, the
+models and everything outside `fbc/views/` still work; `fbc.appbuilder` and
+the pages don't exist.
+
+```bash
+FBC_SKIP_VIEWS=1 pipenv run python scripts/clean_ebay_listings.py
+FBC_SKIP_VIEWS=1 pipenv run flask --app fbc backfill-earnings
+docker compose -f docker/compose.dev.yml exec -e FBC_SKIP_VIEWS=1 app python scripts/clean_ebay_listings.py
+```
+
+Timings, in dev mode on a Mac against SQLite, with extra delay per query to
+stand in for a database over a network:
+
+| Delay per query | Full import | `FBC_SKIP_VIEWS=1` |
+| --------------- | ----------- | ------------------ |
+| none            | 0.6 s       | 0.3 s              |
+| 1 ms            | 1.5 s       | 0.3 s              |
+| 3 ms            | 3.2 s       | 0.3 s              |
+
+So the saving is the queries: more on the live server's MariaDB than here.
+What is left is importing Flask, SQLAlchemy and Flask-AppBuilder.
+
+Don't set it for the web server, `flask setup-db` (it refuses; it needs
+Flask-AppBuilder's tables) or `flask db migrate` (it needs them to compare).
+New command-line jobs, such as sync commands and `flask set-listing-skus`,
+should be written for it: take `app` and `db` from `fbc`, and don't touch
+`appbuilder`. A script that needs the web app, such as a test client, leaves
+it off.
+
 ## Testing with Docker
 
 `docker/compose.dev.yml` runs the app from this checkout's code, with
