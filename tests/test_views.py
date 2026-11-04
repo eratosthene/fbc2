@@ -889,9 +889,9 @@ def test_integer_ids_get_the_range_filter_first():
         pk = view.datamodel.get_pk_name()
         first = view._filters.get_search_filters()[pk][0]
         if view.datamodel.is_integer(pk):
-            assert first is FilterIdMatches, view.__class__.__name__
+            assert isinstance(first, FilterIdMatches), view.__class__.__name__
         else:
-            assert first is not FilterIdMatches, view.__class__.__name__
+            assert not isinstance(first, FilterIdMatches), view.__class__.__name__
 
 
 def test_id_filter_parse():
@@ -919,3 +919,18 @@ def test_id_filter_applies():
     if ids:
         got = [r.id for r in f.apply(db.session.query(model), f"{min(ids)}-{max(ids)}")]
         assert sorted(got) == sorted(ids)
+
+
+def test_unit_list_filters_by_id_and_range(client):
+    _units(a={}, b={}, c={}, d={})
+    ids = sorted(u.id for u in Unit.query.all())
+
+    def listed(value):
+        response = client.get(f"/unitmodelview/list/?_flt_0_id={value}")
+        assert response.status_code == 200
+        text = response.get_data(as_text=True)
+        return [i for i in ids if f"/unitmodelview/show/{i}" in text]
+
+    assert listed(ids[1]) == [ids[1]]
+    assert listed(f"{ids[1]}-{ids[2]}") == ids[1:3]
+    assert listed("nonsense") == []

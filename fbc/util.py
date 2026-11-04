@@ -425,9 +425,11 @@ class CustomModelView(ModelView):
             self.search_columns = [pk] + list(self.search_columns)
             self._filters = self.datamodel.get_filters(self.search_columns)
         if self.datamodel.is_integer(pk):
+            # The tables hold filter instances, not classes.
+            mine = FilterIdMatches(pk, self.datamodel)
             for table in (self._filters._search_filters, self._filters._all_filters):
-                table[pk] = [FilterIdMatches] + [
-                    f for f in table[pk] if f is not FilterIdMatches
+                table[pk] = [mine] + [
+                    f for f in table[pk] if not isinstance(f, FilterIdMatches)
                 ]
 
 
