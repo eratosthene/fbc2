@@ -79,7 +79,7 @@ class SalesReceiptModelView(CustomModelView):
     }
     show_columns = ["date", "ebay_orders", "sold_price", "net_sold"]
     # Lines come from eBay (Ship This and Refresh Earnings), not the form.
-    add_columns = ["ebay_orders", "old_id", "date", "sold_price", "net_sold"]
+    add_columns = ["ebay_orders", "date", "sold_price", "net_sold"]
     edit_columns = add_columns
     search_columns = add_columns
 

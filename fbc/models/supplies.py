@@ -68,7 +68,6 @@ class PurchaseOrder(Model):
 
     __tablename__ = "purchase_order"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    old_id = Column(String(24))
     date = Column(Date, nullable=False)
     price = Column(Float, nullable=False)
     notes = Column(String(100))
@@ -121,7 +120,6 @@ class Supply(Model):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    old_id = Column(String(24))
     name = Column(String(100), nullable=False)
     # active_history keeps what quantity and pack_used were when one is
     # changed, even after a commit, for record_adjustment.

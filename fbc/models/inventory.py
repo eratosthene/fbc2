@@ -20,7 +20,6 @@ from fbc.util import fpercent, fprice
 class PurchaseLot(Model):
     __tablename__ = "purchase_lot"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    old_id = Column(String(24))
     name = Column(String(100), nullable=False)
     date = Column(Date, nullable=False)
     price = Column(Float, nullable=False)
@@ -165,7 +164,6 @@ class PurchaseLot(Model):
 class StorageBox(Model):
     __tablename__ = "storage_box"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    old_id = Column(String(24))
     name = Column(String(100), nullable=False)
 
     def __unicode__(self):
@@ -182,7 +180,6 @@ class Unit(Model):
     from fbc.models.sales import SalesReceipt
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    old_id = Column(String(24))
     name = Column(String(200), nullable=False, index=True)
     unit_type = Column(String(30))
     description = Column(String(300))
