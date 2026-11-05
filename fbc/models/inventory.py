@@ -35,70 +35,22 @@ class PurchaseLot(Model):
     def __repr__(self):
         return self.name
 
-    def compute_profit(self):
-        from fbc import db
+    def figures(self):
+        """
+        This lot's money figures (see fbc.finance.lot_figures). The list
+        view works them out once for every lot and leaves them in
+        `flask.g` for that request, so a row doesn't query for its own.
+        """
+        from flask import g, has_app_context
+        from fbc import finance
 
-        ret = {}
-        ret["gross"] = 0.0
-        ret["net"] = 0.0
-        for unit in db.session.query(Unit).filter_by(purchase_lot=self).all():
-            # A receipt of several Units counts for its share of each.
-            if unit.sales_receipt:
-                receipt = unit.sales_receipt
-                ret["gross"] += receipt.unit_share(unit, receipt.sold_price)
-                ret["net"] += receipt.unit_share(unit, receipt.net_sold)
-        ret["fees"] = round(ret["gross"] - ret["net"], 2)
-        if ret["gross"] > 0:
-            ret["feepc"] = round(ret["fees"] / ret["gross"], 2)
-        else:
-            ret["feepc"] = 0.0
-        ret["profit"] = round(ret["net"] - self.price, 2)
-        ret["roi"] = round(ret["profit"] / self.price, 2)
-        return ret
-
-    def compute_units(self):
-        from fbc import db
-
-        ret = {}
-        ret["total"] = db.session.query(Unit).filter_by(purchase_lot=self).count()
-        ret["sold"] = (
-            db.session.query(Unit).filter_by(purchase_lot=self, sold=True).count()
-        )
-        ret["left"] = ret["total"] - ret["sold"]
-        return ret
-
-    def compute_forecast(self, t, u):
-        from fbc import db
-
-        ret = {}
-        if u["total"] > 0:
-            ret["breakeven"] = self.price / u["total"] / (1 - t["feepc"])
-        else:
-            ret["breakeven"] = 0
-        total_price = 0.0
-        total_sold_price = 0.0
-        total_num_sold = 0
-        for unit in db.session.query(Unit).filter_by(purchase_lot=self).all():
-            if unit.retail_price:
-                total_price += unit.retail_price
-            if unit.sold and unit.sales_receipt:
-                total_num_sold += 1
-                total_sold_price += unit.sales_receipt.unit_share(
-                    unit, unit.sales_receipt.sold_price
-                )
-        ret["pprofit"] = total_price - (total_price * t["feepc"]) - self.price
-        if total_num_sold > 0:
-            ret["avgsoldprice"] = total_sold_price / total_num_sold
-        else:
-            ret["avgsoldprice"] = 0
-        ret["avgppu"] = ret["avgsoldprice"] - ret["breakeven"]
-        ret["lprofit"] = u["total"] * ret["avgppu"]
-        return ret
+        cached = g.get("lot_figures") if has_app_context() else None
+        if cached and self.id in cached:
+            return cached[self.id]
+        return finance.lot_figures([self])[self.id]
 
     def breakdown(self):
-        t = self.compute_profit()
-        u = self.compute_units()
-        c = self.compute_forecast(t, u)
+        f = self.figures()
         ret = '<table class="table table-bordered table-condensed table-hover" style="width: auto">'
         ret = (
             ret
@@ -106,12 +58,12 @@ class PurchaseLot(Model):
         )
         ret = ret + "<tr>"
         ret = ret + "<td>" + fprice(self.price) + "</td>"
-        ret = ret + "<td>" + fprice(t["gross"]) + "</td>"
-        ret = ret + "<td>" + fprice(t["fees"]) + "</td>"
-        ret = ret + "<td>" + fpercent(t["feepc"]) + "</td>"
-        ret = ret + "<td>" + fprice(t["net"]) + "</td>"
-        ret = ret + "<td>" + fprice(t["profit"]) + "</td>"
-        ret = ret + "<td>" + fpercent(t["roi"]) + "</td>"
+        ret = ret + "<td>" + fprice(f["gross"]) + "</td>"
+        ret = ret + "<td>" + fprice(f["fees"]) + "</td>"
+        ret = ret + "<td>" + fpercent(f["feepc"] / 100) + "</td>"
+        ret = ret + "<td>" + fprice(f["net"]) + "</td>"
+        ret = ret + "<td>" + fprice(f["profit"]) + "</td>"
+        ret = ret + "<td>" + fpercent(f["roi"] / 100) + "</td>"
         ret = ret + "</tr></table>"
         ret = (
             ret
@@ -121,9 +73,9 @@ class PurchaseLot(Model):
             ret + "<tr><th>Total Units</th><th>Sold Units</th><th>Units Left</th></tr>"
         )
         ret = ret + "<tr>"
-        ret = ret + "<td>" + str(u["total"]) + "</td>"
-        ret = ret + "<td>" + str(u["sold"]) + "</td>"
-        ret = ret + "<td>" + str(u["left"]) + "</td>"
+        ret = ret + "<td>" + str(f["units"]) + "</td>"
+        ret = ret + "<td>" + str(f["sold_units"]) + "</td>"
+        ret = ret + "<td>" + str(f["units"] - f["sold_units"]) + "</td>"
         ret = ret + "</tr></table>"
         ret = (
             ret
@@ -134,31 +86,25 @@ class PurchaseLot(Model):
             + "<tr><th>Breakeven Price</th><th>Potential Profit</th><th>Avg. Sold Price</th><th>Avg. Profit/Unit</th><th>Likely Profit</th></tr>"
         )
         ret = ret + "<tr>"
-        ret = ret + "<td>" + fprice(c["breakeven"]) + "</td>"
-        ret = ret + "<td>" + fprice(c["pprofit"]) + "</td>"
-        ret = ret + "<td>" + fprice(c["avgsoldprice"]) + "</td>"
-        ret = ret + "<td>" + fprice(c["avgppu"]) + "</td>"
-        ret = ret + "<td>" + fprice(c["lprofit"]) + "</td>"
+        ret = ret + "<td>" + fprice(f["breakeven"]) + "</td>"
+        ret = ret + "<td>" + fprice(f["potential_profit"]) + "</td>"
+        ret = ret + "<td>" + fprice(f["avg_sold_price"]) + "</td>"
+        ret = ret + "<td>" + fprice(f["avg_profit_per_unit"]) + "</td>"
+        ret = ret + "<td>" + fprice(f["likely_profit"]) + "</td>"
         ret = ret + "</tr></table>"
         return Markup(ret)
 
     def list_sold(self):
-        u = self.compute_units()
-        return u["sold"]
+        return self.figures()["sold_units"]
 
     def list_total(self):
-        u = self.compute_units()
-        return u["total"]
+        return self.figures()["units"]
 
     def list_profit(self):
-        t = self.compute_profit()
-        return fprice(t["profit"])
+        return fprice(self.figures()["profit"])
 
     def list_breakeven(self):
-        t = self.compute_profit()
-        u = self.compute_units()
-        c = self.compute_forecast(t, u)
-        return fprice(c["breakeven"])
+        return fprice(self.figures()["breakeven"])
 
 
 class StorageBox(Model):

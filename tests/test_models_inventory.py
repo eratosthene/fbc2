@@ -44,38 +44,44 @@ def test_purchase_lot_purchase_price_formats_currency():
     assert lot.purchase_price() == "$42.50"
 
 
-def test_compute_units_counts_total_sold_and_left(db):
+def test_figures_count_total_sold_and_in_stock(db):
     lot = _make_lot(db)
     _make_unit(db, lot, sold=True, name="Sold Unit")
     _make_unit(db, lot, sold=False, name="Unsold Unit 1")
     _make_unit(db, lot, sold=False, name="Unsold Unit 2")
 
-    units = lot.compute_units()
-    assert units["total"] == 3
-    assert units["sold"] == 1
-    assert units["left"] == 2
+    f = lot.figures()
+    assert f["units"] == 3
+    assert f["sold_units"] == 1
+    assert f["instock"] == 2
 
 
-def test_compute_units_with_no_units_is_all_zero(db):
+def test_figures_with_no_units_is_all_zero(db):
     lot = _make_lot(db)
-    units = lot.compute_units()
-    assert units == {"total": 0, "sold": 0, "left": 0}
+    f = lot.figures()
+    assert (f["units"], f["sold_units"], f["breakeven"], f["perunit"]) == (0, 0, 0, 0)
 
 
-def test_compute_profit_with_no_sales_is_zero(db):
+def test_figures_with_no_sales_is_zero(db):
     lot = _make_lot(db, price=50.0)
     _make_unit(db, lot, sold=False)
 
-    profit = lot.compute_profit()
-    assert profit["gross"] == 0.0
-    assert profit["net"] == 0.0
-    assert profit["fees"] == 0.0
-    assert profit["feepc"] == 0.0
-    assert profit["profit"] == -50.0
-    assert profit["roi"] == -1.0
+    f = lot.figures()
+    assert f["gross"] == 0
+    assert f["net"] == 0
+    assert f["fees"] == 0.0
+    assert f["feepc"] == 0.0
+    assert f["profit"] == -50.0
+    assert f["roi"] == -100.0
 
 
-def test_compute_profit_aggregates_sales_receipts(db):
+def test_figures_with_a_free_lot_has_no_roi(db):
+    lot = _make_lot(db, price=0.0)
+    _make_unit(db, lot)
+    assert lot.figures()["roi"] == 0.0
+
+
+def test_figures_aggregate_sales_receipts(db):
     lot = _make_lot(db, price=50.0)
     receipt = SalesReceipt(
         date=datetime.date(2024, 2, 1), sold_price=100.0, net_sold=90.0
@@ -84,16 +90,16 @@ def test_compute_profit_aggregates_sales_receipts(db):
     db.session.commit()
     _make_unit(db, lot, sold=True, sales_receipt=receipt)
 
-    profit = lot.compute_profit()
-    assert profit["gross"] == 100.0
-    assert profit["net"] == 90.0
-    assert profit["fees"] == 10.0
-    assert profit["feepc"] == 0.1
-    assert profit["profit"] == 40.0
-    assert profit["roi"] == 0.8
+    f = lot.figures()
+    assert f["gross"] == 100.0
+    assert f["net"] == 90.0
+    assert f["fees"] == 10.0
+    assert f["feepc"] == 10.0
+    assert f["profit"] == 40.0
+    assert f["roi"] == 80.0
 
 
-def test_compute_forecast_breakeven_and_projected_profit(db):
+def test_figures_forecast_breakeven_and_projected_profit(db):
     lot = _make_lot(db, price=100.0)
     receipt = SalesReceipt(
         date=datetime.date(2024, 2, 1), sold_price=60.0, net_sold=54.0
@@ -105,23 +111,12 @@ def test_compute_forecast_breakeven_and_projected_profit(db):
     )
     _make_unit(db, lot, retail_price=60.0, sold=False, name="Unsold")
 
-    t = lot.compute_profit()
-    u = lot.compute_units()
-    forecast = lot.compute_forecast(t, u)
-
-    assert forecast["breakeven"] == pytest.approx(100.0 / 2 / (1 - t["feepc"]))
-    assert forecast["avgsoldprice"] == 60.0
-    assert forecast["avgppu"] == pytest.approx(60.0 - forecast["breakeven"])
-    assert forecast["lprofit"] == pytest.approx(2 * forecast["avgppu"])
-
-
-def test_compute_forecast_with_no_units_has_zero_breakeven(db):
-    lot = _make_lot(db, price=100.0)
-    t = lot.compute_profit()
-    u = lot.compute_units()
-    forecast = lot.compute_forecast(t, u)
-    assert forecast["breakeven"] == 0
-    assert forecast["avgsoldprice"] == 0
+    f = lot.figures()
+    assert f["breakeven"] == pytest.approx(100.0 / 2 / 0.9)
+    assert f["avg_sold_price"] == 60.0
+    assert f["potential_profit"] == pytest.approx(120.0 - 12.0 - 100.0)
+    assert f["avg_profit_per_unit"] == pytest.approx(60.0 - f["breakeven"])
+    assert f["likely_profit"] == pytest.approx(2 * f["avg_profit_per_unit"])
 
 
 def test_list_sold_total_and_profit_helpers(db):
