@@ -111,6 +111,8 @@ def setup():
     # fbc logs every route it registers at DEBUG as it's imported; keep the
     # output to the script's own.
     logging.disable(logging.INFO)
+    # Only the models and the database are needed, not the views.
+    os.environ.setdefault("FBC_SKIP_VIEWS", "1")
     from fbc import app, db
 
     logging.disable(logging.NOTSET)
