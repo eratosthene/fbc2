@@ -174,6 +174,16 @@ class PurchaseLotModelView(CustomModelView):
         "list_breakeven": "B/E",
     }
 
+    def _get_list_widget(self, *args, **kwargs):
+        # Work every lot's figures out once, rather than a set of queries
+        # per row. They live in g, so for this request only, and the rows
+        # are read from them as the page renders, after this returns.
+        from flask import g
+        from fbc import finance
+
+        g.lot_figures = finance.lot_figures()
+        return super()._get_list_widget(*args, **kwargs)
+
 
 class StorageBoxModelView(CustomModelView):
     datamodel = SQLAInterface(StorageBox)

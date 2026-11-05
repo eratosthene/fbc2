@@ -19,6 +19,14 @@ range (`100-200`) or a mix (`5, 100-200`).
 Units (one copy of a record each), the Purchase Lots they came in and the
 Storage Boxes they're kept in.
 
+The Purchase Lots list shows each lot's Units, how many are sold, its
+Profit and its B/E (the price a Unit must sell for to cover the lot after
+fees). Open a lot for its Breakdown. These come from the same maths as the
+home page's Purchase Lots table, so the two always agree: a Sales Receipt's
+money is split between its Units, and a lot's price evenly between its
+Units. Fee % and ROI are percents, and B/E is worked out from the lot's own
+fee %.
+
 Adding a Unit without a Retail Price still saves it, but warns, with a link to
 edit the Unit and add one.
 
