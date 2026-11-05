@@ -1,6 +1,10 @@
+import os
 import sys
 
 sys.path.insert(0, "..")
+# Only the models and the database are needed, not the views (see "Writing
+# scripts" in docs/development.md).
+os.environ.setdefault("FBC_SKIP_VIEWS", "1")
 from fbc.models.inventory import Unit
 from fbc import app, db
 

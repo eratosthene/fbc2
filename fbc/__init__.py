@@ -2,6 +2,7 @@
 import importlib
 import logging
 import os
+import sys
 from urllib.parse import urlencode
 
 import click
@@ -36,7 +37,15 @@ migrate = Migrate(app, db)
 # hundred database queries on every import, which is most of the startup time.
 # Anything that serves pages or needs `appbuilder` must not set it. See
 # "Writing scripts" in docs/development.md.
-SKIP_VIEWS = os.environ.get("FBC_SKIP_VIEWS", "").lower() in ("1", "true", "yes")
+#
+# The `flask` commands below that don't need the views turn it on themselves,
+# as the app is imported before Flask knows which command it will run. A value
+# set in the environment, such as FBC_SKIP_VIEWS=0, wins.
+SKIP_VIEWS_COMMANDS = {"combine-receipts", "backfill-earnings"}
+_skip_views = os.environ.get("FBC_SKIP_VIEWS")
+if _skip_views is None:
+    _skip_views = "1" if SKIP_VIEWS_COMMANDS & set(sys.argv[1:5]) else ""
+SKIP_VIEWS = _skip_views.lower() in ("1", "true", "yes")
 
 if SKIP_VIEWS:
     # The views would have imported the models, and a relationship names its

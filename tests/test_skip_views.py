@@ -43,3 +43,33 @@ def test_scripts_can_use_the_models_without_the_views():
         text=True,
     )
     assert result.stdout.strip().endswith("ok"), result.stderr
+
+
+def _skip_views_for(argv, env_value=None):
+    code = CODE.split("import fbc\n")[0] + (
+        "import sys\nsys.argv = %r\nimport fbc\nprint(fbc.SKIP_VIEWS)\n" % (argv,)
+    )
+    env = {"PATH": ""}
+    if env_value is not None:
+        env["FBC_SKIP_VIEWS"] = env_value
+    result = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True
+    )
+    return result.stdout.strip().endswith("True"), result.stderr
+
+
+def test_flask_commands_that_dont_need_the_views_skip_them():
+    for argv in (
+        ["flask", "--app", "fbc", "backfill-earnings"],
+        ["flask", "combine-receipts", "--apply"],
+    ):
+        assert _skip_views_for(argv)[0], argv
+
+
+def test_other_flask_commands_keep_the_views():
+    for argv in (["flask", "--app", "fbc", "setup-db"], ["flask", "run"]):
+        assert not _skip_views_for(argv)[0], argv
+
+
+def test_the_environment_wins_over_the_command():
+    assert not _skip_views_for(["flask", "backfill-earnings"], "0")[0]
