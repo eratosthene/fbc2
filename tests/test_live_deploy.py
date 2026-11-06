@@ -30,6 +30,12 @@ case "$1" in
     run)
         # docker run --rm --entrypoint sh IMAGE -c ...
         cat "$STUB/migrations/$(key "$5")" 2>/dev/null || exit 1 ;;
+    image)
+        # docker image inspect IMAGE
+        [ -f "$STUB/migrations/$(key "$3")" ] || exit 1 ;;
+    tag)
+        cp "$STUB/migrations/$(key "$2")" "$STUB/migrations/$(key "$3")"
+        cp "$STUB/health/$(key "$2")" "$STUB/health/$(key "$3")" ;;
     compose)
         case "$4" in
             up) running > "$STUB/up" ;;
@@ -53,12 +59,23 @@ def server(tmp_path, monkeypatch):
     (repo / "docker").mkdir(parents=True)
     shutil.copy(ROOT / "docker/live-deploy.sh", repo / "docker/live-deploy.sh")
     (repo / "config.py").write_text("")
+    # Stands in for docker/build.sh: makes fbc2:latest from the files in
+    # $STUB/built (migrations, then health).
+    build = repo / "docker/build.sh"
+    build.write_text(
+        "#!/bin/bash\n"
+        'echo "build.sh" >> "$STUB/calls"\n'
+        '[ -f "$STUB/built/migrations" ] || exit 1\n'
+        'cp "$STUB/built/migrations" "$STUB/migrations/fbc2_latest"\n'
+        'cp "$STUB/built/health" "$STUB/health/fbc2_latest"\n'
+    )
+    build.chmod(0o755)
     env = repo / "docker/.env"
     env.write_text("FBC_CONFIG_SECRET_KEY='keep me'\n")
     env.chmod(0o600)
 
     stub = tmp_path / "stub"
-    for d in ("migrations", "health"):
+    for d in ("migrations", "health", "built"):
         (stub / d).mkdir(parents=True)
     (stub / "calls").write_text("")
     (stub / "up").write_text("fbc2:latest\n")
@@ -78,6 +95,10 @@ def server(tmp_path, monkeypatch):
             key = name.replace("/", "_").replace(":", "_")
             (stub / "migrations" / key).write_text("\n".join(migrations) + "\n")
             (stub / "health" / key).write_text(health + "\n")
+
+        def build_result(self, migrations, health="healthy"):
+            (stub / "built/migrations").write_text("\n".join(migrations) + "\n")
+            (stub / "built/health").write_text(health + "\n")
 
         def run(self, *args):
             return subprocess.run(
@@ -187,6 +208,60 @@ def test_previous_with_nothing_recorded_fails(server):
     result = server.run("--previous")
     assert result.returncode == 1
     assert "no previous image" in result.stderr
+
+
+def test_previous_can_be_an_image_built_here(server):
+    # The first deploy records the locally built image as the previous one;
+    # it isn't in a registry, so it mustn't be pulled.
+    server.image("fbc2:latest", ["a.py"])
+    server.image(NEW, ["a.py"])
+    server.run("sha-2222222")
+    result = server.run("--previous")
+    assert result.returncode == 0, result.stderr
+    assert "FBC_IMAGE=fbc2:latest" in server.env()
+    assert "docker pull fbc2" not in server.calls()
+
+
+def test_local_builds_and_runs_this_checkouts_image(server):
+    server.image(NEW, ["a.py"])
+    server.run("sha-2222222", "--backed-up")
+    server.build_result(["a.py"])
+    result = server.run("--local")
+    assert result.returncode == 0, result.stderr
+    assert "build.sh" in server.calls()
+    assert "FBC_IMAGE=fbc2:latest" in server.env()
+    assert server.previous() == NEW
+
+
+def test_local_failed_build_changes_nothing(server):
+    server.image(NEW, ["a.py"])
+    server.run("sha-2222222", "--backed-up")
+    result = server.run("--local")
+    assert result.returncode == 1
+    assert f"FBC_IMAGE={NEW}" in server.env()
+
+
+def test_local_over_local_keeps_the_old_image_to_go_back_to(server):
+    server.image("fbc2:latest", ["a.py"])
+    server.build_result(["a.py"], health="unhealthy")
+    result = server.run("--local", "--timeout", "2")
+    assert result.returncode == 1
+    assert server.previous() == "fbc2:previous"
+    assert "FBC_IMAGE=fbc2:previous" in server.env()
+    assert "rolled-back" in server.log()
+
+
+def test_local_with_different_migrations_needs_a_backup(server):
+    server.image(NEW, ["a.py"])
+    server.run("sha-2222222", "--backed-up")
+    server.build_result(["a.py", "b.py"])
+    result = server.run("--local")
+    assert result.returncode == 1
+    assert "--backed-up" in result.stderr
+
+
+def test_local_and_previous_conflict(server):
+    assert server.run("--local", "--previous").returncode == 2
 
 
 def test_the_script_is_executable():
