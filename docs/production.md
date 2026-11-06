@@ -90,6 +90,50 @@ Keep both files readable only by you, since they hold the live credentials:
 chmod 600 config.py docker/.env
 ```
 
+## Setting SKUs on old listings
+
+Listings made from eBay Drafts carry `fbc-<unit id>` as their SKU (Custom
+label). Listings from before that don't. `set-listing-skus` sets it on every
+active listing linked to exactly one unsold Unit. It's a one-off, run in the
+live container. It turns `FBC_SKIP_VIEWS` on itself, so don't set it.
+
+Run it in this order. The first only shows what it would do, and writes
+`skipped-listing-skus.csv` (in the container, so add `--csv /tmp/skipped.csv`
+and `docker cp` it out if you want to keep it):
+
+```bash
+sudo docker compose -f docker/compose.yml exec fbc flask set-listing-skus
+```
+
+Then change one listing, with an item ID from the dry run:
+
+```bash
+sudo docker compose -f docker/compose.yml exec fbc flask set-listing-skus --item 123456789012 --apply
+```
+
+Check that listing in Seller Hub before going on:
+
+- Its Custom label is `fbc-<unit id>`. eBay's docs don't say outright that a
+  SKU can be added to a listing this way.
+- The revise cost nothing and used no free insertion, and the listing kept
+  its shipping details, title, price and pictures. The command sends only the
+  item ID and SKU, but eBay's docs warn that a revise can drop shipping
+  details that aren't sent again.
+
+Then the rest:
+
+```bash
+sudo docker compose -f docker/compose.yml exec fbc flask set-listing-skus --apply
+```
+
+It leaves a listing alone, and lists it in the CSV with the reason, when it
+has no Unit linked, several Units or only sold ones, a SKU typed on eBay
+(`--overwrite` replaces that), or an `fbc-` SKU naming another Unit. Link
+those by hand and run it again: listings already right are skipped.
+`--limit N` changes at most N listings. It waits half a second between
+changes, and a listing eBay refuses is reported and the run goes on. It
+refuses in dev mode.
+
 ## Settings from the environment
 
 An environment variable named `FBC_CONFIG_<KEY>` overrides that setting in

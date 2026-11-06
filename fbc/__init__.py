@@ -41,7 +41,7 @@ migrate = Migrate(app, db)
 # The `flask` commands below that don't need the views turn it on themselves,
 # as the app is imported before Flask knows which command it will run. A value
 # set in the environment, such as FBC_SKIP_VIEWS=0, wins.
-SKIP_VIEWS_COMMANDS = {"combine-receipts", "backfill-earnings"}
+SKIP_VIEWS_COMMANDS = {"combine-receipts", "backfill-earnings", "set-listing-skus"}
 _skip_views = os.environ.get("FBC_SKIP_VIEWS")
 if _skip_views is None:
     _skip_views = "1" if SKIP_VIEWS_COMMANDS & set(sys.argv[1:5]) else ""
@@ -159,6 +159,47 @@ def backfill_earnings(apply, update_net, since, limit):
         + str(counts["unsettled"])
         + "."
     )
+
+
+@app.cli.command("set-listing-skus")
+@click.option(
+    "--apply", is_flag=True, help="Change the listings; without it, only show."
+)
+@click.option(
+    "--overwrite",
+    is_flag=True,
+    help="Also replace a SKU typed on eBay that isn't fbc-<unit id>.",
+)
+@click.option("--item", help="Only this eBay item ID.")
+@click.option("--limit", type=int, help="Change at most this many listings.")
+@click.option(
+    "--csv",
+    "csv_path",
+    default="skipped-listing-skus.csv",
+    show_default=True,
+    help="Where to write the listings it skipped, and why.",
+)
+def set_listing_skus(apply, overwrite, item, limit, csv_path):
+    """Set fbc-<unit id> as the SKU on live listings that lack it."""
+    from fbc import skus
+
+    try:
+        result = skus.set_skus(
+            apply=apply, overwrite=overwrite, item=item, limit=limit, echo=click.echo
+        )
+    except skus.EbayError as e:
+        raise click.ClickException(str(e))
+    counts = result["counts"]
+    click.echo("")
+    click.echo(("Set " if apply else "Would set ") + str(counts[skus.SET]) + ".")
+    click.echo("Already right: " + str(counts[skus.RIGHT]) + ".")
+    for reason in skus.SKIP_REASONS:
+        click.echo("Skipped, " + reason + ": " + str(counts[reason]) + ".")
+    with open(csv_path, "w", newline="") as f:
+        f.write(skus.skipped_csv(result["skipped"]))
+    click.echo("Wrote " + str(len(result["skipped"])) + " skipped to " + csv_path + ".")
+    if not apply:
+        click.echo("This was a dry run. Add --apply to change the listings.")
 
 
 def _register_views():
