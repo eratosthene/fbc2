@@ -197,6 +197,18 @@ def test_the_command_reports_and_writes_the_csv(lot, ebay, app, tmp_path):
     assert "no Unit linked" in path.read_text()
 
 
+def test_csv_dash_prints_only_the_csv_to_stdout(lot, ebay, app):
+    make_unit(lot, "1")
+    ebay([item("1"), item("2")])
+    result = app.test_cli_runner().invoke(args=["set-listing-skus", "--csv", "-"])
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines() == [
+        "item_id,title,reason,detail",
+        "2,Title 2,no Unit linked,",
+    ]
+    assert "Would set 1." in result.stderr
+
+
 def test_dev_mode_refuses_and_never_reaches_ebay(lot, app, monkeypatch, tmp_path):
     import requests
 

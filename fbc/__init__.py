@@ -177,29 +177,40 @@ def backfill_earnings(apply, update_net, since, limit):
     "csv_path",
     default="skipped-listing-skus.csv",
     show_default=True,
-    help="Where to write the listings it skipped, and why.",
+    help="Where to write the listings it skipped, and why. - prints the CSV"
+    " to stdout, with the rest of the output on stderr.",
 )
 def set_listing_skus(apply, overwrite, item, limit, csv_path):
     """Set fbc-<unit id> as the SKU on live listings that lack it."""
     from fbc import skus
 
+    # With the CSV on stdout, say everything else on stderr so it stays clean.
+    to_stdout = csv_path == "-"
+
+    def say(text):
+        click.echo(text, err=to_stdout)
+
     try:
         result = skus.set_skus(
-            apply=apply, overwrite=overwrite, item=item, limit=limit, echo=click.echo
+            apply=apply, overwrite=overwrite, item=item, limit=limit, echo=say
         )
     except skus.EbayError as e:
         raise click.ClickException(str(e))
     counts = result["counts"]
-    click.echo("")
-    click.echo(("Set " if apply else "Would set ") + str(counts[skus.SET]) + ".")
-    click.echo("Already right: " + str(counts[skus.RIGHT]) + ".")
+    say("")
+    say(("Set " if apply else "Would set ") + str(counts[skus.SET]) + ".")
+    say("Already right: " + str(counts[skus.RIGHT]) + ".")
     for reason in skus.SKIP_REASONS:
-        click.echo("Skipped, " + reason + ": " + str(counts[reason]) + ".")
-    with open(csv_path, "w", newline="") as f:
-        f.write(skus.skipped_csv(result["skipped"]))
-    click.echo("Wrote " + str(len(result["skipped"])) + " skipped to " + csv_path + ".")
+        say("Skipped, " + reason + ": " + str(counts[reason]) + ".")
+    text = skus.skipped_csv(result["skipped"])
+    if to_stdout:
+        click.echo(text, nl=False)
+    else:
+        with open(csv_path, "w", newline="") as f:
+            f.write(text)
+        say("Wrote " + str(len(result["skipped"])) + " skipped to " + csv_path + ".")
     if not apply:
-        click.echo("This was a dry run. Add --apply to change the listings.")
+        say("This was a dry run. Add --apply to change the listings.")
 
 
 def _register_views():

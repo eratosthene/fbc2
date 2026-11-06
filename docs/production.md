@@ -69,7 +69,8 @@ docker/live-down.sh
 
 To run a `flask` command in the live container without typing the Docker
 part, use `docker/live-flask.sh`, such as
-`docker/live-flask.sh set-listing-skus --apply`.
+`docker/live-flask.sh set-listing-skus --apply`. Redirecting its output to a
+file works.
 
 The Docker files are all in `docker/`. The build context is still the repo
 root, since the image copies `fbc/` and `migrations/`.
@@ -102,17 +103,18 @@ active listing linked to exactly one unsold Unit. It's a one-off, run in the
 live container. It turns `FBC_SKIP_VIEWS` on itself, so don't set it.
 
 Run it in this order. The first only shows what it would do, and writes
-`skipped-listing-skus.csv` (in the container, so add `--csv /tmp/skipped.csv`
-and `docker cp` it out if you want to keep it):
+`skipped-listing-skus.csv` inside the container, where it's lost when the
+container is recreated. To keep the CSV, have it print to stdout (the rest of
+the output goes to stderr) and redirect it to a file on the server:
 
 ```bash
-sudo docker compose -f docker/compose.yml exec fbc flask set-listing-skus
+docker/live-flask.sh set-listing-skus --csv - > skipped.csv
 ```
 
 Then change one listing, with an item ID from the dry run:
 
 ```bash
-sudo docker compose -f docker/compose.yml exec fbc flask set-listing-skus --item 123456789012 --apply
+docker/live-flask.sh set-listing-skus --item 123456789012 --apply
 ```
 
 Check that listing in Seller Hub before going on:
@@ -127,7 +129,7 @@ Check that listing in Seller Hub before going on:
 Then the rest:
 
 ```bash
-sudo docker compose -f docker/compose.yml exec fbc flask set-listing-skus --apply
+docker/live-flask.sh set-listing-skus --apply
 ```
 
 It leaves a listing alone, and lists it in the CSV with the reason, when it
