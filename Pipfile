@@ -13,6 +13,8 @@ certifi = "*"
 ebaysdk = "~=2.2"
 gunicorn = "~=26.2"
 flask-migrate = "~=4.1"
+# Only here to keep out 4.0.0 (pip-audit, CVE-2026-49272). Needed by the Discogs client.
+oauthlib = "*"
 
 [dev-packages]
 pytest = "*"
