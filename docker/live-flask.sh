@@ -23,4 +23,4 @@ if [ ! -t 1 ]; then
     tty=(-T)
 fi
 
-exec sudo docker compose -f docker/compose.yml exec "${tty[@]}" fbc flask "$@"
+exec sudo docker compose -f docker/compose.yml exec ${tty[@]+"${tty[@]}"} fbc flask "$@"
