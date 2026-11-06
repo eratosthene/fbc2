@@ -28,6 +28,18 @@ On every push to `main`, the `publish` job in `.github/workflows/docker.yml`:
 
 On pull requests the job is skipped, so nothing is published from a branch.
 
+Not every merge builds an image. The Docker workflow only runs when a change
+touches what goes into the image: `Pipfile`, `Pipfile.lock`, `fbc/`,
+`migrations/`, the Dockerfile, its `.dockerignore` and entrypoint, and the
+workflow and smoke check themselves. A merge that only changes docs, tests,
+scripts, the compose files or the other workflows publishes nothing, so that
+commit has no `sha-` tag. To deploy, use the newest tag that exists: open the
+repository's Packages and open `fbc2`, or run
+`git log -1 --format=%h -- Pipfile Pipfile.lock fbc migrations docker/Dockerfile docker/docker-entrypoint.sh`
+and use `sha-` plus that. The `main` tag always points at the latest image.
+If the Dockerfile ever copies something new, add its path to the workflow's
+`paths` list.
+
 Two kinds of tag, with different jobs:
 
 | Tag           | Moves?      | Use                                                              |
