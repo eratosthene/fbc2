@@ -8,7 +8,8 @@ file is what they don't say.
 
 ## Commands
 
-- Tests: `pipenv run pytest` (add `-q` or a path to narrow it).
+- Tests: `pipenv run pytest -n auto` (parallel, about 30 s; add `-q`, or drop
+  `-n auto` and give a path to run one test).
 - Format and lint: Ruff for Python (`ruff-format`, then `ruff --fix`) and
   mdformat for Markdown, both through pre-commit, which pins them; neither is
   in the Pipfile. Commits run those and the file checks. The test suite runs
