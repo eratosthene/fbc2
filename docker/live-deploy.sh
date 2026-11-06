@@ -5,8 +5,9 @@
 #   docker/live-deploy.sh               show what runs now and what ran before
 #   docker/live-deploy.sh TAG           pull and run TAG: sha-1a2b3c4, main
 #   docker/live-deploy.sh --previous    run the image that ran before this one
+#   docker/live-deploy.sh --local       build this checkout's code and run that
 #
-# Options: --backed-up (you've backed up the database; needed when the image's
+# --local is for an emergency, when CI's image isn't an option. Options: --backed-up (you've backed up the database; needed when the image's
 # migrations differ from the running one's), --timeout SECONDS (how long to
 # wait for it to be healthy, default 300).
 #
@@ -26,15 +27,17 @@ timeout=300
 backed_up=false
 target=
 use_previous=false
+local=false
 
 usage() {
-    sed -n '2,16s/^# \{0,1\}//p' "$0"
+    sed -n '2,17s/^# \{0,1\}//p' "$0"
 }
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --backed-up) backed_up=true; shift ;;
         --previous) use_previous=true; shift ;;
+        --local) local=true; shift ;;
         --timeout) timeout=${2:?--timeout needs a number of seconds}; shift 2 ;;
         -h | --help) usage; exit 0 ;;
         -*) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -95,7 +98,7 @@ now=$(current)
 # docker/build.sh made.
 was=${now:-fbc2:latest}
 
-if [ "$use_previous" = false ] && [ -z "$target" ]; then
+if [ "$use_previous" = false ] && [ "$local" = false ] && [ -z "$target" ]; then
     echo "Running:  $was$([ -n "$now" ] || echo " (built here, not pinned)")"
     echo "Before:   $(cat "$previous_file" 2>/dev/null || echo none)"
     echo
@@ -103,10 +106,17 @@ if [ "$use_previous" = false ] && [ -z "$target" ]; then
     exit 0
 fi
 
+if [ "$use_previous" = true ] || [ "$local" = true ]; then
+    [ -z "$target" ] || { echo "That option takes no tag." >&2; exit 2; }
+    [ "$use_previous" = false ] || [ "$local" = false ] ||
+        { echo "Give --previous or --local, not both." >&2; exit 2; }
+fi
+
 if [ "$use_previous" = true ]; then
-    [ -z "$target" ] || { echo "--previous takes no tag." >&2; exit 2; }
     new=$(cat "$previous_file" 2>/dev/null || true)
     [ -n "$new" ] || { echo "There's no previous image recorded." >&2; exit 1; }
+elif [ "$local" = true ]; then
+    new=fbc2:latest
 else
     case "$target" in
         */*) new=$target ;;
@@ -114,10 +124,35 @@ else
     esac
 fi
 
-echo "Pulling $new"
-if ! sudo docker pull "$new"; then
-    echo "Couldn't pull $new; nothing has changed." >&2
-    exit 1
+# What the running image carries, read before a build can replace it.
+old_migrations=$(migrations_of "$was" 2>/dev/null || echo unknown)
+
+if [ "$local" = true ]; then
+    # Building replaces fbc2:latest, so keep the one running now to go back to.
+    if [ "$was" = "$new" ] && sudo docker image inspect "$was" >/dev/null 2>&1; then
+        sudo docker tag "$was" fbc2:previous
+        was=fbc2:previous
+    fi
+    echo "Building this checkout's code as $new"
+    if ! docker/build.sh; then
+        echo "The build failed; nothing has changed." >&2
+        exit 1
+    fi
+else
+    case "$new" in
+        "$registry_image":*)
+            echo "Pulling $new"
+            if ! sudo docker pull "$new"; then
+                echo "Couldn't pull $new; nothing has changed." >&2
+                exit 1
+            fi ;;
+        *)
+            # An image built here (fbc2:latest, fbc2:previous) isn't in a registry.
+            if ! sudo docker image inspect "$new" >/dev/null 2>&1; then
+                echo "There's no image $new here; nothing has changed." >&2
+                exit 1
+            fi ;;
+    esac
 fi
 
 # Migrations only go forward. If the two images carry different ones, the
@@ -126,7 +161,6 @@ fi
 migrations=false
 if [ "$new" != "$was" ]; then
     new_migrations=$(migrations_of "$new")
-    old_migrations=$(migrations_of "$was" 2>/dev/null || echo unknown)
     if [ "$new_migrations" != "$old_migrations" ]; then
         migrations=true
     fi

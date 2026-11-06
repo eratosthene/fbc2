@@ -67,6 +67,23 @@ A deploy:
 6. goes back to the previous image if that fails (see below), and records each
    result in `docker/deploys.log`.
 
+### An emergency: building on the server
+
+If CI's image isn't an option (GitHub is down, or you need a fix that isn't
+merged), build this checkout's code on the NAS and run it with the same
+checks and rollback:
+
+```bash
+docker/live-deploy.sh --local
+```
+
+It runs `docker/build.sh`, keeps the image that was running as
+`fbc2:previous` so it can go back to it, and sets `FBC_IMAGE=fbc2:latest`.
+It asks for `--backed-up` when the migrations differ, like any deploy. When
+CI's image is an option again, deploy a tag as usual. Don't edit
+`FBC_IMAGE` out of `docker/.env` by hand for this: `docker/live-deploy.sh`
+then loses track of what to go back to.
+
 A rollback by hand is one line: change `FBC_IMAGE` in `docker/.env` to an
 older tag, then `docker/live-up.sh -n`. `docker/live-deploy.sh --previous` does
 that and waits for health.
