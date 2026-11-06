@@ -35,16 +35,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # The app (and the entrypoint's `flask setup-db`) needs a database,
-      # so skip the entrypoint and just check the packages it runs on are
-      # installed and importable in the image, and that config.py, which
-      # holds the live credentials, isn't in it.
       - name: Check the image's packages import
         id: smoke
-        run: >-
-          docker run --rm --entrypoint python fbc2:ci -c
-          "import os, flask_appbuilder, flask_migrate, gunicorn, pymysql, discogs_client, ebaysdk, PIL, dotenv;
-          assert not os.path.exists('/app/config.py'), 'config.py is in the image'"
+        run: .github/scripts/image-smoke.sh fbc2:ci
 
       - name: Get image size
         id: size
@@ -86,3 +79,60 @@ jobs:
 
             const prSection = require("./.github/scripts/pr-section.js");
             await prSection({ github, context, core }, "fbc2-docker-build", body);
+
+  # Publishes the image prod runs (see docs/deploy.md). Only for a push to
+  # main, so it does nothing on pull requests, and only once the build and
+  # smoke check above passed. The `main` tag moves only after the pushed image
+  # itself has passed the same check.
+  publish:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Name the tag
+        id: tag
+        run: echo "sha=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      # linux/amd64 only: the live server's CPU. No provenance attestation,
+      # which makes the image an index that older Docker versions may not
+      # read. The source label ties the package to this repository.
+      - name: Build and push the commit's tag
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            fbc2.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check the pushed image
+        run: |
+          docker pull "$IMAGE:${{ steps.tag.outputs.sha }}"
+          .github/scripts/image-smoke.sh "$IMAGE:${{ steps.tag.outputs.sha }}"
+
+      - name: Move the main tag to it
+        run: |
+          docker buildx imagetools create -t "$IMAGE:main" \
+            "$IMAGE:${{ steps.tag.outputs.sha }}"

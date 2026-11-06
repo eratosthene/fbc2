@@ -10,6 +10,8 @@
 # build and starts the image already there, which is all a change to
 # config.py or docker/.env needs; it refuses an image built from other code
 # than this checkout's. It makes an empty docker/.env if there isn't one.
+# When docker/.env sets FBC_IMAGE (docker/live-deploy.sh does), the image is
+# one CI published: it won't build, and -n only recreates the container.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -21,7 +23,7 @@ build=true
 image_inputs=(fbc migrations docker/Dockerfile docker/docker-entrypoint.sh Pipfile Pipfile.lock)
 
 usage() {
-    sed -n '2,12s/^# \{0,1\}//p' "$0"
+    sed -n '2,14s/^# \{0,1\}//p' "$0"
 }
 
 while [ $# -gt 0 ]; do
@@ -44,7 +46,17 @@ if [ ! -f docker/.env ]; then
     echo "Made an empty docker/.env (see \"Settings from the environment\" in docs/production.md)."
 fi
 
-if [ "$build" = true ]; then
+# An image CI published, pinned by docker/live-deploy.sh.
+pinned=$(sed -n 's/^FBC_IMAGE=//p' docker/.env | tail -n 1)
+
+if [ -n "$pinned" ]; then
+    if [ "$build" = true ]; then
+        echo "docker/.env sets FBC_IMAGE=$pinned, so there's nothing to build." >&2
+        echo "Use docker/live-deploy.sh to change the image, or -n to recreate" >&2
+        echo "the container. To build here instead, remove that line." >&2
+        exit 1
+    fi
+elif [ "$build" = true ]; then
     docker/build.sh
 else
     # An image from older code may not read docker/.env at all, and would
