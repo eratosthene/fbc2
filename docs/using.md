@@ -30,6 +30,37 @@ fee %.
 Adding a Unit without a Retail Price still saves it, but warns, with a link to
 edit the Unit and add one.
 
+### Archiving
+
+Old, finished records can be archived so the long lists leave them out. It
+only changes the lists. The home page, Purchase Lot figures and earnings
+totals still count archived records, so no money figure changes.
+
+The Units, eBay Listings, eBay Orders and Sales Receipts lists hide archived
+records by default. Above each list, **Show archived** shows everything and
+**Hide archived** goes back. To see only the archived ones, search Archived
+equal to Yes. Related lists, such as the Units on a Purchase Lot, always
+show everything.
+
+`flask --app fbc archive` archives what has aged out, and only shows what it
+would do until you add `--apply`. Each age is in days in `config.py`
+(`ARCHIVE_AFTER_DAYS`, 365 by default; 0 turns one off):
+
+- **Units** that are Sold, from when their Sales Receipt is dated. A Unit
+  with no receipt uses the date of the first eBay Order on its listing, and
+  with neither it can't be dated, so it's never archived by the command.
+- **eBay Listings** whose Units are all Sold, from when the listing started.
+- **eBay Orders** that have shipped (are on a Sales Receipt) and have no
+  return or refund open, from when the order was placed. An open return or
+  dispute is read from the Sales Receipt's earnings lines (eBay holding the
+  money back), so an order with no earnings lines counts as clear.
+- **Sales Receipts**, from their date.
+
+To archive or unarchive by hand, select rows in a list and choose Archive or
+Unarchive. The command only archives, never unarchives, so it archives an
+unarchived record again on the next run if it still qualifies. Run it now
+and then, such as monthly.
+
 ## Discogs
 
 The Discogs collection, synced in, with Add Unit for releases that have none

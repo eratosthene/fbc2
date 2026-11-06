@@ -1,6 +1,7 @@
 from flask_appbuilder import Model
 from markupsafe import Markup
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -9,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
+    false,
 )
 from sqlalchemy.orm import relationship
 
@@ -153,6 +155,10 @@ class SalesReceipt(Model):
     )
     sold_price = Column(Float)
     net_sold = Column(Float)
+    # Hidden from the lists by default; see fbc/archive.py.
+    archived = Column(
+        Boolean, nullable=False, default=False, server_default=false(), index=True
+    )
     # How eBay's earnings add up to net_sold. Receipts from before these
     # were kept, or with no eBay lines at all, have none.
     lines = relationship(

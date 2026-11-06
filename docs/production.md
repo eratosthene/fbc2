@@ -95,6 +95,20 @@ Keep both files readable only by you, since they hold the live credentials:
 chmod 600 config.py docker/.env
 ```
 
+## Archiving
+
+The archive column comes with a migration, which the container runs when it
+starts, as with any other. Then archive what is already old, once, and
+again whenever you like:
+
+```bash
+docker/live-flask.sh archive
+docker/live-flask.sh archive --apply
+```
+
+The first only counts. The ages are `ARCHIVE_AFTER_DAYS` in `config.py`;
+see `config.py.tpl`. It changes only which rows the lists show by default.
+
 ## Setting SKUs on old listings
 
 Listings made from eBay Drafts carry `fbc-<unit id>` as their SKU (Custom

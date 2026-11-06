@@ -163,6 +163,10 @@ class Unit(Model):
     # several. A receipt's prices are split between its Units by these
     # (see unit_weights).
     sold_price = Column(Float)
+    # Hidden from the lists by default; see fbc/archive.py.
+    archived = Column(
+        Boolean, nullable=False, default=False, server_default=false(), index=True
+    )
 
     def __unicode__(self):
         return (
