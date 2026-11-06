@@ -22,6 +22,8 @@ with Discogs and eBay. It's a Flask-AppBuilder app on MariaDB.
 - [Developing fbc](docs/development.md): running the app on this machine,
   the tests and migrations, the Docker setup, a copy of live data and fake
   eBay and Discogs records.
+- [Deploying fbc](docs/deploy.md): running the image CI publishes on the
+  live server, and rolling back.
 - [Running fbc in production](docs/production.md): `config.py`, settings
   from the environment, and starting, stopping and updating the app on the
   live server.

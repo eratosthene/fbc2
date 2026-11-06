@@ -195,3 +195,7 @@ app.db
 env
 venv
 *.sublime*
+
+# The live server's deploy state (docker/live-deploy.sh)
+docker/.previous-image
+docker/deploys.log

@@ -8,11 +8,15 @@
 # environment" in docs/production.md). A change to
 # either needs the container recreated, not a rebuild: `docker/live-up.sh
 # -n`. Paths here are relative to this file's folder, docker/.
+#
+# Which image runs is FBC_IMAGE in docker/.env, which docker/live-deploy.sh
+# sets to an image CI published (see docs/deploy.md). Without it, this runs the
+# fbc2:latest that docker/build.sh builds.
 name: fbc2
 
 services:
   fbc:
-    image: fbc2:latest
+    image: ${FBC_IMAGE:-fbc2:latest}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -30,3 +34,16 @@ services:
           create_host_path: false
     ports:
       - "20000:20000"
+    # Healthy once the entrypoint's `flask setup-db` has finished and the app
+    # answers, which docker/live-deploy.sh waits for. The start period is long
+    # because the live server's disk is slow to make tables.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:20000/login/', timeout=5)
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 120s

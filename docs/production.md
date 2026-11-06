@@ -39,8 +39,10 @@ The container runs `setup-db` itself each time it starts.
 ## Running on the live server
 
 The live server runs the app's Docker image with gunicorn, on port 20000.
-Build the image there, since it's built for the machine that builds it, and
-then start it, both from the repo root:
+The recommended way is to run the image CI built and published, with
+`docker/live-deploy.sh <tag>`; [Deploying fbc](deploy.md) covers that, and
+rolling back. Until that's turned on, build the image on the server instead,
+and then start it, both from the repo root:
 
 ```bash
 docker/build.sh
