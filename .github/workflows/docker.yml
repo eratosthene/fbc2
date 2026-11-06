@@ -1,9 +1,33 @@
 name: Docker build
 
+# Only what goes into the image, or builds and checks it: see the COPY lines in
+# docker/Dockerfile and docker/Dockerfile.dockerignore. A change to docs, tests,
+# scripts or the other workflows builds nothing and publishes nothing. If the
+# Dockerfile copies something new, add it here.
 on:
   pull_request:
+    paths:
+      - Pipfile
+      - Pipfile.lock
+      - fbc/**
+      - migrations/**
+      - docker/Dockerfile
+      - docker/Dockerfile.dockerignore
+      - docker/docker-entrypoint.sh
+      - .github/scripts/image-smoke.sh
+      - .github/workflows/docker.yml
   push:
     branches: [main]
+    paths:
+      - Pipfile
+      - Pipfile.lock
+      - fbc/**
+      - migrations/**
+      - docker/Dockerfile
+      - docker/Dockerfile.dockerignore
+      - docker/docker-entrypoint.sh
+      - .github/scripts/image-smoke.sh
+      - .github/workflows/docker.yml
 
 permissions:
   contents: read
