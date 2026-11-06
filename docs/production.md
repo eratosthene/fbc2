@@ -67,6 +67,10 @@ To stop it and remove its container (it never removes volumes):
 docker/live-down.sh
 ```
 
+To run a `flask` command in the live container without typing the Docker
+part, use `docker/live-flask.sh`, such as
+`docker/live-flask.sh set-listing-skus --apply`.
+
 The Docker files are all in `docker/`. The build context is still the repo
 root, since the image copies `fbc/` and `migrations/`.
 
