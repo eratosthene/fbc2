@@ -17,6 +17,7 @@ flask-migrate = "~=4.1"
 [dev-packages]
 pytest = "*"
 pytest-mock = "*"
+pytest-xdist = "*"
 
 [requires]
 python_version = "3.12"

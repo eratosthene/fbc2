@@ -1,9 +1,39 @@
 name: Tests
 
+# Only what the tests use: code, the scripts and Docker scripts they run, the
+# config template, the dependencies, and the files that run and report them. A
+# change to docs or the other workflows doesn't run the suite. If the tests
+# start to read another part of the repo, add it here.
 on:
   pull_request:
+    paths:
+      - fbc/**
+      - tests/**
+      - migrations/**
+      - scripts/**
+      - dev-scripts/**
+      - docker/**
+      - config.py.tpl
+      - Pipfile
+      - Pipfile.lock
+      - pytest.ini
+      - .github/workflows/tests.yml
+      - .github/scripts/test-results.js
   push:
     branches: [main]
+    paths:
+      - fbc/**
+      - tests/**
+      - migrations/**
+      - scripts/**
+      - dev-scripts/**
+      - docker/**
+      - config.py.tpl
+      - Pipfile
+      - Pipfile.lock
+      - pytest.ini
+      - .github/workflows/tests.yml
+      - .github/scripts/test-results.js
 
 permissions:
   contents: read
@@ -34,9 +64,10 @@ jobs:
         run: pipenv install --dev --deploy
 
       # One line per test, in colour and unbuffered, so the step's log can be
-      # watched live while it runs.
+      # watched live while it runs. `-n auto` runs them in parallel, one worker
+      # per CPU (pytest-xdist), so the lines come in any order.
       - name: Run tests
-        run: pipenv run pytest -v --color=yes --junitxml=test-results/junit.xml
+        run: pipenv run pytest -v -n auto --color=yes --junitxml=test-results/junit.xml
         env:
           PYTHONUNBUFFERED: "1"
 

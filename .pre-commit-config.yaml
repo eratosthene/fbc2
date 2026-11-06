@@ -124,8 +124,11 @@ repos:
   # ---------------------------------------------------------------------------- #
   #                              🧪 Tests (Local)                                #
   # ---------------------------------------------------------------------------- #
-  # The whole suite takes about 40 seconds, so it runs before each push rather
-  # than each commit. It runs inside the project's Pipenv environment
+  # The whole suite takes about 30 seconds (in parallel, with pytest-xdist), so
+  # it runs before each push rather than each commit, and only when the push
+  # changes something the tests use. A push of docs or workflow changes alone
+  # skips it. If the tests start to read another part of the repo, add it to
+  # `files`. It runs inside the project's Pipenv environment
   # (`pipenv install --dev`), so it works without first running `pipenv shell`.
   # CI's `pre-commit run` only runs the commit stage; the Tests workflow runs
   # the suite on its own.
@@ -133,9 +136,8 @@ repos:
     hooks:
       - id: pytest
         name: "🧪 test · Run unit tests"
-        entry: pipenv run pytest tests -q
+        entry: pipenv run pytest tests -q -n auto
         language: system
-        types: [python]
+        files: ^((fbc|tests|migrations|scripts|dev-scripts|docker)/|(Pipfile|Pipfile\.lock|pytest\.ini|config\.py\.tpl)$)
         pass_filenames: false
-        always_run: true
         stages: [pre-push]

@@ -42,8 +42,12 @@ ln -s "$(git rev-parse --git-common-dir)/../config.py" .
 - Run the tests:
 
   ```bash
-  pipenv run pytest
+  pipenv run pytest -n auto
   ```
+
+  `-n auto` runs them in parallel, one worker per CPU (pytest-xdist), which is
+  about three times faster. Leave it off for one test or a failure you want to
+  read in order, since starting the workers costs a couple of seconds.
 
 - After changing a model, generate a migration for it, and check it over
   before committing it. The Migrations workflow runs it against MariaDB on
