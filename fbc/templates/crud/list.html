@@ -1,2 +1,11 @@
 {% extends "appbuilder/general/model/list.html" %}
 {% block page_title %}{{app_name}}{% if title is defined and title|length %}: {{title}}{% endif%}{% endblock %}
+{% block list_search %}
+    {% if archive_link %}
+        <p class="text-muted">
+            {{ archive_link[0] }}
+            <a href="{{ archive_link[2] }}">{{ archive_link[1] }}</a>
+        </p>
+    {% endif %}
+    {{ super() }}
+{% endblock %}

@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    false,
 )
 from sqlalchemy.orm import relationship
 
@@ -26,6 +27,10 @@ class EbayListing(Model):
     price = Column(Float)
     url = Column(String(255))
     start_time = Column(DateTime)
+    # Hidden from the lists by default; see fbc/archive.py.
+    archived = Column(
+        Boolean, nullable=False, default=False, server_default=false(), index=True
+    )
 
     def __unicode__(self):
         return self.item_id + ": " + self.title + " $" + f"{self.price:.2f}"
@@ -53,6 +58,10 @@ class EbayOrder(Model):
     # The first item's title and listing; every item is in items.
     title = Column(String(100))
     ebay_listing_id = Column(String(20), ForeignKey("ebay_listing.item_id"))
+    # Hidden from the lists by default; see fbc/archive.py.
+    archived = Column(
+        Boolean, nullable=False, default=False, server_default=false(), index=True
+    )
     ebay_listing = relationship("EbayListing")
     items = relationship(
         "EbayOrderItem",

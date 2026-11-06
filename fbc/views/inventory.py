@@ -1,3 +1,4 @@
+from fbc.archive import ArchivableViewMixin
 from fbc.util import CustomModelView
 from flask import flash, url_for
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
@@ -54,7 +55,7 @@ UNIT_ADD_FORM_EXTRA_FIELDS = dict(
 # this rather than UnitModelView because Flask-AppBuilder attaches related
 # views by isinstance, so a subclass of UnitModelView would also show up on
 # every page that lists UnitModelView as related.
-class UnitModelBaseView(CustomModelView):
+class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
     datamodel = SQLAInterface(Unit)
     list_columns = [
         "name",
@@ -83,6 +84,7 @@ class UnitModelBaseView(CustomModelView):
         "notes",
         "retail_price",
         "sold",
+        "archived",
     ]
     edit_columns = [
         "name",
@@ -101,6 +103,8 @@ class UnitModelBaseView(CustomModelView):
         "sold",
         "sales_receipt",
     ]
+    # Archiving is by the command and the list actions, not the form.
+    add_exclude_columns = ["archived"]
     add_form_extra_fields = UNIT_ADD_FORM_EXTRA_FIELDS
     edit_form_extra_fields = UNIT_FORM_EXTRA_FIELDS
 

@@ -92,3 +92,21 @@ def test_supplies_get_their_usage_from_their_names():
             migration.downgrade()
         columns = {c["name"] for c in sa.inspect(conn).get_columns("supply")}
         assert columns == {"id", "name", "quantity"}
+
+
+def test_archived_columns_start_false_on_existing_rows():
+    migration = _migration("a7d3b9e14c60_add_archived_columns")
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as conn:
+        for table in migration.TABLES:
+            conn.execute(sa.text(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY)"))
+            conn.execute(sa.text(f"INSERT INTO {table} (id) VALUES (1)"))
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.upgrade()
+        for table in migration.TABLES:
+            assert conn.execute(sa.text(f"SELECT archived FROM {table}")).scalar() == 0
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.downgrade()
+        for table in migration.TABLES:
+            columns = [c["name"] for c in sa.inspect(conn).get_columns(table)]
+            assert columns == ["id"]

@@ -41,7 +41,12 @@ migrate = Migrate(app, db)
 # The `flask` commands below that don't need the views turn it on themselves,
 # as the app is imported before Flask knows which command it will run. A value
 # set in the environment, such as FBC_SKIP_VIEWS=0, wins.
-SKIP_VIEWS_COMMANDS = {"combine-receipts", "backfill-earnings", "set-listing-skus"}
+SKIP_VIEWS_COMMANDS = {
+    "combine-receipts",
+    "backfill-earnings",
+    "set-listing-skus",
+    "archive",
+}
 _skip_views = os.environ.get("FBC_SKIP_VIEWS")
 if _skip_views is None:
     _skip_views = "1" if SKIP_VIEWS_COMMANDS & set(sys.argv[1:5]) else ""
@@ -159,6 +164,17 @@ def backfill_earnings(apply, update_net, since, limit):
         + str(counts["unsettled"])
         + "."
     )
+
+
+@app.cli.command("archive")
+@click.option("--apply", is_flag=True, help="Save the changes; without it, only show.")
+def archive(apply):
+    """Archive old, finished Units, listings, orders and receipts."""
+    from fbc.archive import archive_all
+
+    archive_all(apply=apply, echo=click.echo)
+    if not apply:
+        click.echo("This was a dry run. Add --apply to archive them.")
 
 
 @app.cli.command("set-listing-skus")

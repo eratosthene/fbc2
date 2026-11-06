@@ -154,6 +154,19 @@ APP_THEME = "cyborg.css" # not too bad
 # APP_THEME = "united.css" # gross colors
 # APP_THEME = "yeti.css" # weird font sizes
 
+# Archiving (`flask archive`) hides old, finished records from the lists, and
+# only the lists: the home page and every money figure still count them. Each
+# is how many days old a record must be: Units that are sold, eBay Listings
+# whose Units are all sold, shipped eBay Orders with no return or refund
+# open, and Sales Receipts. A missing key means 365; 0 or None turns that one
+# off. See "Archiving" in docs/using.md.
+ARCHIVE_AFTER_DAYS = {
+    'UNITS': 365,
+    'EBAY_LISTINGS': 365,
+    'EBAY_ORDERS': 365,
+    'SALES_RECEIPTS': 365,
+}
+
 # ebay settings
 EBAY_SETTINGS = {
     'APP_ID': '',

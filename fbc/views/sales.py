@@ -4,6 +4,7 @@ from flask_appbuilder.actions import action
 from markupsafe import Markup
 from wtforms.validators import Optional
 
+from fbc.archive import ArchivableViewMixin
 from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
@@ -65,7 +66,7 @@ def _lines_total(earnings):
     return f"{sum(line['amount'] for line in earnings['lines']):.2f}"
 
 
-class SalesReceiptModelView(CustomModelView):
+class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
     datamodel = SQLAInterface(SalesReceipt)
     related_views = [UnitModelView]
     show_template = "sales_receipt/show.html"
@@ -81,7 +82,7 @@ class SalesReceiptModelView(CustomModelView):
     # Lines come from eBay (Ship This and Refresh Earnings), not the form.
     add_columns = ["ebay_orders", "date", "sold_price", "net_sold"]
     edit_columns = add_columns
-    search_columns = add_columns
+    search_columns = add_columns + ["archived"]
 
     def _init_forms(self):
         super(CustomModelView, self)._init_forms()
@@ -200,12 +201,12 @@ class SalesReceiptModelView(CustomModelView):
         )
 
 
-class EbayListingModelView(CustomModelView):
+class EbayListingModelView(ArchivableViewMixin, CustomModelView):
     datamodel = SQLAInterface(EbayListing)
     base_order = ("start_time", "desc")
     list_widget = EbayListingListWidget
     list_columns = ["item_id", "title", "start_time", "fmt_price", "fmt_url"]
-    search_columns = ["item_id", "price", "title"]
+    search_columns = ["item_id", "price", "title", "archived"]
     label_columns = {"fmt_price": "Price", "fmt_url": "URL"}
     related_views = [UnitModelView]
     add_columns = ["item_id", "title", "price", "url", "start_time"]
@@ -216,7 +217,7 @@ class EbayListingModelView(CustomModelView):
     edit_form_extra_fields = add_form_extra_fields
 
 
-class EbayOrderModelView(CustomModelView):
+class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
     datamodel = SQLAInterface(EbayOrder)
     base_order = ("created_time", "desc")
     list_widget = EbayOrderListWidget
@@ -228,7 +229,7 @@ class EbayOrderModelView(CustomModelView):
         "fmt_price",
         "links",
     ]
-    search_columns = ["order_id", "price", "title", "buyer"]
+    search_columns = ["order_id", "price", "title", "buyer", "archived"]
     label_columns = {
         "fmt_price": "Price",
         "fmt_url": "Order Id",
