@@ -94,6 +94,14 @@ combined receipt the Unit's share of its old receipt. Failing that, it's the
 listing's asking price, then its Retail Price, and last the average of the
 receipt's other Units.
 
+### SKUs on old listings
+
+Listings made from eBay Drafts get `fbc-<unit id>` as their SKU (Custom
+label), so fbc can tell which Unit they are. For older listings, `flask --app fbc set-listing-skus` sets it from the Unit linked to each listing. It
+only shows what it would do until you add `--apply`, and lists the listings
+it can't set, with why, in a CSV. See
+[Running fbc in production](production.md) for the live run.
+
 ### Earnings
 
 A Sales Receipt keeps how its order's earnings add up to Net Sold, as eBay's

@@ -67,6 +67,11 @@ To stop it and remove its container (it never removes volumes):
 docker/live-down.sh
 ```
 
+To run a `flask` command in the live container without typing the Docker
+part, use `docker/live-flask.sh`, such as
+`docker/live-flask.sh set-listing-skus --apply`. Redirecting its output to a
+file works.
+
 The Docker files are all in `docker/`. The build context is still the repo
 root, since the image copies `fbc/` and `migrations/`.
 
@@ -89,6 +94,51 @@ Keep both files readable only by you, since they hold the live credentials:
 ```bash
 chmod 600 config.py docker/.env
 ```
+
+## Setting SKUs on old listings
+
+Listings made from eBay Drafts carry `fbc-<unit id>` as their SKU (Custom
+label). Listings from before that don't. `set-listing-skus` sets it on every
+active listing linked to exactly one unsold Unit. It's a one-off, run in the
+live container. It turns `FBC_SKIP_VIEWS` on itself, so don't set it.
+
+Run it in this order. The first only shows what it would do, and writes
+`skipped-listing-skus.csv` inside the container, where it's lost when the
+container is recreated. To keep the CSV, have it print to stdout (the rest of
+the output goes to stderr) and redirect it to a file on the server:
+
+```bash
+docker/live-flask.sh set-listing-skus --csv - > skipped.csv
+```
+
+Then change one listing, with an item ID from the dry run:
+
+```bash
+docker/live-flask.sh set-listing-skus --item 123456789012 --apply
+```
+
+Check that listing in Seller Hub before going on:
+
+- Its Custom label is `fbc-<unit id>`. eBay's docs don't say outright that a
+  SKU can be added to a listing this way.
+- The revise cost nothing and used no free insertion, and the listing kept
+  its shipping details, title, price and pictures. The command sends only the
+  item ID and SKU, but eBay's docs warn that a revise can drop shipping
+  details that aren't sent again.
+
+Then the rest:
+
+```bash
+docker/live-flask.sh set-listing-skus --apply
+```
+
+It leaves a listing alone, and lists it in the CSV with the reason, when it
+has no Unit linked, several Units or only sold ones, a SKU typed on eBay
+(`--overwrite` replaces that), or an `fbc-` SKU naming another Unit. Link
+those by hand and run it again: listings already right are skipped.
+`--limit N` changes at most N listings. It waits half a second between
+changes, and a listing eBay refuses is reported and the run goes on. It
+refuses in dev mode.
 
 ## Settings from the environment
 
