@@ -1,0 +1,42 @@
+{# The Price Research block on Add Unit: closed until asked for, then loaded
+   from the pricing view so the page itself opens as fast as before. #}
+<details id="price-research" class="panel panel-default" style="margin-top:1em">
+  <summary class="panel-heading" style="cursor:pointer">Price Research (Discogs and eBay)</summary>
+  <div class="panel-body">
+    <p class="text-muted">Looks up what the two sites show for this record. Nothing is
+      fetched until you click.</p>
+    <button type="button" class="btn btn-default" id="price-research-load">Look up prices</button>
+    <div id="price-research-result" style="margin-top:1em"></div>
+  </div>
+</details>
+<script>
+(function () {
+  var button = document.getElementById("price-research-load");
+  var result = document.getElementById("price-research-result");
+  function field(name) {
+    var e = document.getElementById(name);
+    return e ? e.value : "";
+  }
+  button.addEventListener("click", function () {
+    var params = new URLSearchParams({
+      release: field("discogs_release"),
+      master: field("discogs_master"),
+      name: field("name")
+    });
+    button.disabled = true;
+    result.textContent = "Looking…";
+    fetch({{ url_for(pricing_endpoint) | tojson }} + "?" + params)
+      .then(function (r) { return r.text(); })
+      .then(function (html) { result.innerHTML = html; })
+      .catch(function () { result.textContent = "Couldn't load the price research."; })
+      .then(function () { button.disabled = false; button.textContent = "Look up again"; });
+  });
+  // The "Use" buttons in the loaded block.
+  result.addEventListener("click", function (event) {
+    var use = event.target.closest("[data-use-price]");
+    if (!use) { return; }
+    var price = document.getElementById("retail_price");
+    if (price) { price.value = use.getAttribute("data-use-price"); price.focus(); }
+  });
+})();
+</script>
