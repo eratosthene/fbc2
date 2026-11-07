@@ -1,3 +1,6 @@
+{% if r.discogs_url %}
+<p><a href="{{ r.discogs_url }}" target="_blank" rel="noopener">Open this release on Discogs</a></p>
+{% endif %}
 {# What pricing.research() found, shown inside the Price Research block. #}
 {% macro use(amount) -%}
 <button type="button" class="btn btn-xs btn-default" data-use-price="{{ '%.2f' % amount }}">Use ${{ '%.2f' % amount }}</button>

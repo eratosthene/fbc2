@@ -241,6 +241,10 @@ def research(release_id, master, name):
     own = Unit.average_sold_price(master) if master else None
     return {
         "dev_mode": devmode.on(),
+        # A plain link, so it works in dev mode too: nothing here reaches Discogs.
+        "discogs_url": "https://www.discogs.com/release/" + str(release_id)
+        if release_id
+        else None,
         "own_average": own,
         "discogs": discogs_research(release_id),
         "ebay": ebay_research(name),

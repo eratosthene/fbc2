@@ -274,3 +274,11 @@ def test_pricing_view_survives_both_sites_failing(client, monkeypatch):
 
     assert page.status_code == 200
     assert "Couldn&#39;t reach" in page.get_data(as_text=True)
+
+
+def test_pricing_view_links_to_the_discogs_release(client, dev_mode):
+    html = client.get("/unitmodelview/pricing?release=3095222&name=Carnaval").get_data(
+        as_text=True
+    )
+
+    assert 'href="https://www.discogs.com/release/3095222"' in html
