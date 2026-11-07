@@ -1,0 +1,83 @@
+{% extends "appbuilder/base.html" %}
+{# Identify Record: the form, and the ranked candidates under it. #}
+{% block content %}
+<h3>Identify Record</h3>
+<p>Find the Discogs release a record is, then go to Add Unit with it chosen.
+Give what you know; the matrix is read from each release Discogs finds, since
+Discogs can't search on it.</p>
+
+<form method="get" class="form-horizontal" action="{{ url_for('IdentifyRecordView.search') }}">
+  <input type="hidden" name="go" value="1">
+  {% macro field(name, label, value, hint='') %}
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="{{ name }}">{{ label }}</label>
+    <div class="col-sm-6"><input type="text" class="form-control" id="{{ name }}" name="{{ name }}" value="{{ value }}">
+      {% if hint %}<span class="help-block">{{ hint }}</span>{% endif %}</div>
+  </div>
+  {% endmacro %}
+  {{ field('artist', 'Artist', form.artist) }}
+  {{ field('title', 'Title', form.title) }}
+  {{ field('catno', 'Catalogue Number', form.catno) }}
+  {{ field('barcode', 'Barcode', form.barcode) }}
+  {{ field('country', 'Country', form.country, 'Searches this country and ranks it first. Blank searches every country.') }}
+  {{ field('matrix', 'Matrix', form.matrix, 'Case, spaces and punctuation are ignored. A partial matrix is fine.') }}
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="lot">Purchase Lot</label>
+    <div class="col-sm-6"><select class="form-control" id="lot" name="lot">
+      <option value="">(none)</option>
+      {% for lot in lots %}<option value="{{ lot.id }}" {{ 'selected' if form.lot == lot.id|string }}>{{ lot.name }}</option>{% endfor %}
+    </select></div>
+  </div>
+  <div class="form-group"><div class="col-sm-offset-2 col-sm-6">
+    <button class="btn btn-primary">Search Discogs</button>
+    {% if dev_mode %}<button class="btn btn-default" name="sample" value="1">Try the sample data</button>{% endif %}
+  </div></div>
+</form>
+
+{% if found %}
+{% if not found.ok %}
+<div class="alert {{ 'alert-warning' if found.dev_mode else 'alert-danger' }}">{{ found.error }}</div>
+{% else %}
+<p class="text-muted">{{ found.candidates|length }} release{{ '' if found.candidates|length == 1 else 's' }}
+  shown{% if found.total > found.candidates|length %} of {{ found.total }} found{% endif %},
+  best match first.
+  {% if found.searched %}It took {{ found.searched }} Discogs call{{ '' if found.searched == 1 else 's' }}
+  (Discogs allows 60 a minute).{% endif %}</p>
+{% if found.note %}<div class="alert alert-info">{{ found.note }}</div>{% endif %}
+{% if not found.candidates %}<p>Discogs found nothing. Try fewer fields, or a blank country.</p>{% endif %}
+{% for c in found.candidates %}
+<div class="panel panel-default"><div class="panel-body"><div class="row">
+  <div class="col-sm-3">
+    {% if c.images %}
+      {% for img in c.images[:3] %}<a href="{{ c.url }}" target="_blank" rel="noopener"><img src="{{ img }}" alt="" style="width:30%;max-width:100px"></a>{% endfor %}
+    {% elif c.thumb %}<img src="{{ c.thumb }}" alt="" style="max-width:150px">
+    {% else %}<span class="text-muted">No picture</span>{% endif %}
+  </div>
+  <div class="col-sm-7">
+    <h4 style="margin-top:0"><a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.title }}</a> ({{ c.year }})</h4>
+    <p>{{ c.formats|join('; ') }}<br>
+      {{ c.labels|join(', ') }}{% if c.catno %} &middot; {{ c.catno }}{% endif %}<br>
+      Country: <strong>{{ c.country }}</strong>
+      {% if c.country_match %}<span class="label label-success">matches</span>{% endif %}</p>
+    {% if c.unchecked %}<p class="text-muted">Matrix not checked (rate limit or error).</p>
+    {% elif c.matrix_html %}<p>Matrix: {% for m in c.matrix_html %}<code>{{ m }}</code> {% endfor %}</p>{% endif %}
+    {% if c.status_label %}
+    <span class="label {{ {'exact':'label-success','partial':'label-warning','mismatch':'label-danger'}.get(c.status,'label-default') }}">{{ c.status_label }}</span>
+    {% endif %}
+  </div>
+  <div class="col-sm-2">
+    <form method="post" action="{{ url_for('IdentifyRecordView.pick') }}">
+      {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+      <input type="hidden" name="release_id" value="{{ c.id }}">
+      <input type="hidden" name="lot" value="{{ form.lot }}">
+      <input type="hidden" name="matrix" value="{{ form.matrix }}">
+      <button class="btn btn-success">This one: Add Unit</button>
+    </form>
+    <p class="text-muted" style="font-size:80%;margin-top:.5em">Saves the release in fbc. Nothing is
+      added to your Discogs collection.</p>
+  </div>
+</div></div></div>
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endblock %}

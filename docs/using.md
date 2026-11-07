@@ -66,6 +66,36 @@ and then, such as monthly.
 The Discogs collection, synced in, with Add Unit for releases that have none
 yet.
 
+### Identify Record
+
+Inventory > Identify Record finds the Discogs release a record in hand is.
+Give what you know: artist, title, catalogue number or barcode (at least one),
+the country (US to start with) and the vinyl matrix, and the Purchase Lot it
+came in. It searches Discogs, reads the matrix of each release it finds
+(Discogs can't search on a matrix, so this is a call per release; it checks
+the first 12, and Discogs allows 60 calls a minute), and lists them best match
+first, with pictures, format, label, catalogue number, year and the matrix
+text, the part that matched highlighted.
+
+How the matrix is scored: case, spaces and punctuation are ignored. An
+**exact** match is the same text as a matrix listed on the release. A
+**partial** match shares a run of at least 4 letters and digits that covers at
+least 60% of the shorter one. A release that lists **no matrix** is kept, with
+a note to look at its pictures. One that lists matrices and none close is a
+**mismatch** and goes last. A matching country moves a release up.
+
+"This one: Add Unit" saves that release in fbc and opens Add Unit with it, the
+Purchase Lot and the matrix filled in. It reads from Discogs only: nothing is
+added to your Discogs collection, so the Unit has no collection copy (Ship This
+has nothing to remove for it). Add the record to the collection on Discogs and
+Sync Discogs will link it to the release.
+
+Results are kept for five minutes. If Discogs isn't connected, says no or
+asks for fewer requests, the page says so; when the rate limit hits part way,
+the releases not yet checked are listed unchecked. In Dev Mode it says "Not
+available in dev mode." and offers "Try the sample data", which ranks a made-up
+list so the matching can be tried without Discogs.
+
 ### Price Research on Add Unit
 
 Under the Add Unit form is a closed Price Research block. Nothing is fetched
