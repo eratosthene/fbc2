@@ -1,6 +1,9 @@
 from fbc.archive import ArchivableViewMixin
 from fbc.util import CustomModelView
-from flask import flash, url_for
+from flask import flash, render_template, request, url_for
+from flask_appbuilder import expose
+from flask_appbuilder.security.decorators import has_access
+from fbc import pricing
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
@@ -106,7 +109,25 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
     # Archiving is by the command and the list actions, not the form.
     add_exclude_columns = ["archived"]
     add_form_extra_fields = UNIT_ADD_FORM_EXTRA_FIELDS
+    add_template = "pricing/add_unit.html"
     edit_form_extra_fields = UNIT_FORM_EXTRA_FIELDS
+
+    def render_template(self, template, **kwargs):
+        # The Price Research block loads from pricing() below.
+        kwargs.setdefault("pricing_endpoint", self.endpoint + ".pricing")
+        return super().render_template(template, **kwargs)
+
+    @expose("/pricing")
+    @has_access
+    def pricing(self):
+        """The Price Research block on Add Unit, loaded when it's asked for."""
+        name = request.args.get("name", "")
+        found = pricing.research(
+            request.args.get("release") or None,
+            request.args.get("master") or None,
+            name,
+        )
+        return render_template("pricing/result.html", r=found, name=name)
 
     def _init_properties(self):
         super()._init_properties()

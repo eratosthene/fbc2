@@ -1,0 +1,6 @@
+{% extends "crud/add.html" %}
+{# Add Unit with the Price Research block under the form. #}
+{% block add_form %}
+{{ super() }}
+{% include "pricing/block.html" %}
+{% endblock %}

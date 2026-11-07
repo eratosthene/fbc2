@@ -1,0 +1,66 @@
+{# What pricing.research() found, shown inside the Price Research block. #}
+{% macro use(amount) -%}
+<button type="button" class="btn btn-xs btn-default" data-use-price="{{ '%.2f' % amount }}">Use ${{ '%.2f' % amount }}</button>
+{%- endmacro %}
+
+<h5>Your own sales of this master</h5>
+{% if r.own_average is not none %}
+<p>Sold, your Units: average ${{ '%.2f' % r.own_average }} {{ use(r.own_average) }}</p>
+{% else %}
+<p class="text-muted">None of your Units of this master have sold.</p>
+{% endif %}
+
+<h5>Discogs: asking prices, not sold prices</h5>
+{% set d = r.discogs %}
+{% if r.dev_mode %}
+<p class="text-muted">Not available in Dev Mode.</p>
+{% elif not d.ok %}
+<p class="text-danger">{{ d.error }}</p>
+{% else %}
+{% if d.suggestions %}
+<table class="table table-condensed" style="width:auto">
+  <caption>Discogs's suggested price for each condition</caption>
+  {% for label, amount, currency in d.suggestions %}
+  <tr><td>{{ label }}</td><td>{{ currency }} {{ '%.2f' % amount }}</td>
+    <td>{% if currency == 'USD' %}{{ use(amount) }}{% endif %}</td></tr>
+  {% endfor %}
+</table>
+{% elif d.suggestions_note %}
+<p class="text-muted">{{ d.suggestions_note }}</p>
+{% endif %}
+<p>
+  {% if d.lowest %}Lowest asking price now: {{ d.lowest[1] }} {{ '%.2f' % d.lowest[0] }}
+    {% if d.lowest[1] == 'USD' %}{{ use(d.lowest[0]) }}{% endif %}
+    {% if d.num_for_sale is not none %}({{ d.num_for_sale }} for sale){% endif %}<br>
+  {% elif d.num_for_sale == 0 %}None for sale on Discogs right now.<br>{% endif %}
+  {% if d.have is not none %}In {{ d.have }} collections, on {{ d.want }} wantlists.{% endif %}
+  {% if d.rating %}Rated {{ d.rating[0] }} by {{ d.rating[1] }}.{% endif %}
+</p>
+<p class="text-muted">Discogs's API doesn't give sold prices. The "Last sold" figures are
+  on the release's page on discogs.com.</p>
+{% endif %}
+
+<h5>eBay: asking prices, not sold prices</h5>
+{% set e = r.ebay %}
+{% if r.dev_mode %}
+<p class="text-muted">Not available in Dev Mode.</p>
+{% elif not e.ok %}
+<p class="text-danger">{{ e.error }}</p>
+{% elif not e.groups %}
+<p class="text-muted">No active Buy It Now listings matched "{{ name }}".</p>
+{% else %}
+<table class="table table-condensed" style="width:auto">
+  <caption>Active Buy It Now listings that match the Unit's name, by condition
+    ({{ e.total }} found, first page only)</caption>
+  <tr><th>Condition</th><th>Listings</th><th>Lowest</th><th>Median</th><th>Highest</th></tr>
+  {% for g in e.groups %}
+  <tr><td>{{ g.condition }}</td><td>{{ g.count }}</td><td>${{ '%.2f' % g.low }}</td>
+    <td>${{ '%.2f' % g.median }} {{ use(g.median) }}</td><td>${{ '%.2f' % g.high }}</td></tr>
+  {% endfor %}
+</table>
+<p class="text-muted">Matched by words in the name, so some may be other pressings.</p>
+{% endif %}
+{% if not r.dev_mode %}
+<p><a href="{{ r.ebay_sold_url }}" target="_blank" rel="noopener">See eBay's sold items for this
+  name</a> (opens eBay; its API doesn't give sold prices to fbc).</p>
+{% endif %}

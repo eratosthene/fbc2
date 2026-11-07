@@ -66,6 +66,35 @@ and then, such as monthly.
 The Discogs collection, synced in, with Add Unit for releases that have none
 yet.
 
+### Price Research on Add Unit
+
+Under the Add Unit form is a closed Price Research block. Nothing is fetched
+until you open it and click Look up prices, so the page opens as fast as
+before. It shows, each labelled with where it comes from:
+
+- **Your own sales of this master**: the average sold price of your Units of
+  the same Discogs master. This is also what pre-fills the Retail Price when
+  you come from a Discogs release.
+- **Discogs, asking prices**: Discogs's suggested price for each condition
+  (Mint to Poor), the lowest price now for sale and how many are, and how many
+  collections and wantlists have the release. Suggested prices need seller
+  settings filled in on your Discogs account; without them the rest still
+  shows.
+- **eBay, asking prices**: active Buy It Now listings in eBay's Records
+  category that match the Unit's name, grouped by condition, with the lowest,
+  median and highest price. They match on words, so some may be other
+  pressings. Only the first page of results is used.
+
+None of these are sold prices. Discogs's API has no sold history (its "Last
+sold" figures are only on discogs.com), and eBay gives sold prices only to
+approved partners. Under the eBay figures is a link to eBay's own sold-items
+search for the Unit's name, which opens on eBay.
+
+Each figure has a Use button that puts it in the Retail Price field. Results
+are kept for ten minutes, so looking again doesn't call the sites again, and
+a site that fails or isn't connected shows its message without stopping the
+other or the form. In Dev Mode the block says "Not available in Dev Mode."
+
 ## Sales
 
 eBay listings and orders, synced in. eBay Drafts turn a Unit into a listing,
