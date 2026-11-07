@@ -70,8 +70,9 @@ yet.
 
 Under the Add Unit form is a closed Price Research block. Nothing is fetched
 until you open it and click Look up prices, so the page opens as fast as
-before. It starts with a link to the release on Discogs, to open in
-another tab, then shows, each labelled with where it comes from:
+before. It starts with links to the release on Discogs and to its sold
+history there, to open in another tab (the sold history needs you signed in
+to Discogs; fbc doesn't read it), then shows, each labelled with where it comes from:
 
 - **Your own sales of this master**: the average sold price of your Units of
   the same Discogs master. This is also what pre-fills the Retail Price when

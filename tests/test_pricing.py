@@ -282,3 +282,4 @@ def test_pricing_view_links_to_the_discogs_release(client, dev_mode):
     )
 
     assert 'href="https://www.discogs.com/release/3095222"' in html
+    assert 'href="https://www.discogs.com/sell/history/3095222"' in html

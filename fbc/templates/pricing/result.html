@@ -1,5 +1,7 @@
 {% if r.discogs_url %}
-<p><a href="{{ r.discogs_url }}" target="_blank" rel="noopener">Open this release on Discogs</a></p>
+<p><a href="{{ r.discogs_url }}" target="_blank" rel="noopener">Open this release on Discogs</a>
+  &middot; <a href="{{ r.discogs_url | replace('/release/', '/sell/history/') }}" target="_blank"
+  rel="noopener">Its sold history on Discogs</a> (needs you signed in to Discogs)</p>
 {% endif %}
 {# What pricing.research() found, shown inside the Price Research block. #}
 {% macro use(amount) -%}
