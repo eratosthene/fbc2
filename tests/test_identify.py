@@ -529,3 +529,72 @@ def test_a_missing_master_falls_back_to_the_release_year(monkeypatch):
     use(monkeypatch, NoMaster([], {9: record(9, year=1978)}))
     release, _ = identify.save_release(9)
     assert release.master_year == 1978
+
+
+# --- Release ID ---
+
+
+def test_release_ids_are_read_from_numbers_brackets_and_addresses():
+    f = identify.release_id_from
+    assert f("123") == f(" r123 ") == f("[r123]") == 123
+    assert f("https://www.discogs.com/release/123-Some-Band-Album") == 123
+    assert f("https://www.discogs.com/ja/release/123-x?foo=1") == 123
+    assert f("https://www.discogs.com/master/55-x") is None
+    assert f("abc") is None
+
+
+def test_a_release_id_overrides_the_other_fields_and_gives_one_result(monkeypatch):
+    fake = use(monkeypatch, FakeClient([1, 2], {7: record(7, "UK", ["A1"])}))
+    r = identify.search(
+        artist="Someone Else",
+        catno="X",
+        country="US",
+        matrix="A1",
+        vinyl_type="Any vinyl",
+        reissue="yes",
+        release_id="[r7]",
+    )
+    assert r["ok"] and [c["id"] for c in r["candidates"]] == [7]
+    assert fake.urls == ["https://api.discogs.com/releases/7"]  # no search made
+    assert r["candidates"][0]["status"] == identify.EXACT  # still ranked and shown
+    assert not r["candidates"][0]["country_match"]
+
+
+def test_a_bad_or_missing_release_id_is_a_message(monkeypatch):
+    from discogs_client.exceptions import HTTPError
+
+    use(monkeypatch, FakeClient([], {}, fail=lambda u: HTTPError("nope", 404)))
+    assert "isn't a release id" in identify.search(release_id="master 5")["error"]
+    assert identify.search(release_id="99")["error"] == "Discogs has no release 99."
+
+
+def test_a_release_id_in_dev_mode_never_reaches_discogs(dev_mode, monkeypatch):
+    monkeypatch.setattr(discogs, "client", lambda: pytest.fail("reached Discogs"))
+    assert identify.search(release_id="7")["dev_mode"]
+
+
+def test_the_page_takes_a_release_id(monkeypatch, client):
+    use(monkeypatch, FakeClient([], {7: record(7)}))
+    html = client.get("/identifyrecord/?go=1&release_id=7&artist=zzz").get_data(
+        as_text=True
+    )
+    text = " ".join(html.split())
+    assert 'name="release_id"' in html
+    assert "Band - Album" in text and "1 release shown" in text
+
+
+def test_add_unit_from_the_releases_list_uses_the_master_year_and_pressing(app, db):
+    from fbc.models.discogs import DiscogsRelease
+
+    release = DiscogsRelease(
+        release_id=5,
+        title="Album",
+        year=1990,
+        master_year=1970,
+        master_id=1,
+        country="UK",
+        formats=json.dumps([{"name": "Vinyl", "descriptions": ["LP", "Reissue"]}]),
+        notes="[]",
+    )
+    html = release.unit_add(instance_id=1, markup=False)
+    assert "(1970)" in html and "pressing=UK+1990+Reissue" in html

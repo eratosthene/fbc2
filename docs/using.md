@@ -110,7 +110,12 @@ the releases not yet checked are listed unchecked. In Dev Mode it says "Not
 available in dev mode." and offers "Try the sample data", which ranks a made-up
 list so the matching can be tried without Discogs.
 
-Add Unit from here names the Unit with the master's year, "Artist - Title
+If you've already found the release on Discogs, paste its number, [r123456] or
+address into Release ID. That replaces the other fields: Search Discogs
+fetches just that release (one call) and shows it as the only result. Country
+and Matrix still rank it, so you can see whether they match.
+
+Add Unit from here, and from the Add Unit link on the Releases list, names the Unit with the master's year, "Artist - Title
 (1970)", and fills in Pressing as the country code, the release's year and
 Original or Reissue, like "US 1970 Original" or "UK 1990 Reissue". It's a
 Reissue if Discogs lists the release as a Reissue or Repress. Countries Discogs

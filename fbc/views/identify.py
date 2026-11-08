@@ -31,6 +31,7 @@ class IdentifyRecordView(BaseView):
             "reissue": request.args.get("reissue", ""),
             "color": request.args.get("color", ""),
             "lot": request.args.get("lot", ""),
+            "release_id": request.args.get("release_id", ""),
         }
         found = None
         if request.args.get("sample") and devmode.on():
@@ -43,6 +44,7 @@ class IdentifyRecordView(BaseView):
                 vinyl_type=form["type"],
                 reissue=form["reissue"],
                 color=form["color"],
+                release_id=form["release_id"],
             )
         return self.render_template(
             "identify/search.html",

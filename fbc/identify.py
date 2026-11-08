@@ -319,6 +319,7 @@ def search(
     vinyl_type=DEFAULT_TYPE,
     reissue="",
     color="",
+    release_id="",
 ):
     """
     Look for releases on Discogs and rank them: {"ok": True, "candidates",
@@ -326,7 +327,8 @@ def search(
     how many Discogs calls it took. Only vinyl is searched; vinyl_type is a
     label from TYPES, and reissue "yes" or "no" filters on Discogs's Reissue
     format description. color only ranks. "note" is set when Discogs's rate limit
-    stopped the matrix check part way.
+    stopped the matrix check part way. A release_id (a number, [r123] or a
+    release's address) overrides everything else: just that release.
     """
     from urllib.parse import urlencode
 
@@ -336,6 +338,8 @@ def search(
 
     if devmode.on():
         return _failure("Not available in dev mode.", dev_mode=True)
+    if (release_id or "").strip():
+        return _one_release(release_id, country, matrix, color)
     type_word = dict(TYPES).get(vinyl_type, "LP")
     params = {"type": "release", "per_page": 25}
     for key, value in (
@@ -413,6 +417,50 @@ def search(
         return found
     # Ranking is cheap and depends on the matrix, which isn't in the key.
     return dict(found, candidates=rank(found["candidates"], country, matrix, color))
+
+
+def release_id_from(text):
+    """The release number in "123", "r123", "[r123]" or a release's address
+    (".../release/123-Artist-Title"), or None, including for a master's."""
+    import re
+
+    text = (text or "").strip()
+    m = re.fullmatch(r"\[?r?(\d+)\]?", text, re.I) or re.search(r"/release/(\d+)", text)
+    return int(m.group(1)) if m else None
+
+
+def _one_release(text, country, matrix, color):
+    """search() for a release id: that one release, ranked like any other."""
+    from discogs_client.exceptions import DiscogsAPIError, HTTPError
+
+    from fbc import discogs
+
+    rid = release_id_from(text)
+    if not rid:
+        return _failure(
+            "That isn't a release id. Use the number, [r123456] or the"
+            " release's address from Discogs (not a master's)."
+        )
+    try:
+        record = _release_record(discogs.client(), rid)
+    except discogs.DiscogsAuthError as e:
+        return _failure(str(e))
+    except RateLimited:
+        return _failure("Discogs says too many requests; wait a minute and try again.")
+    except (DiscogsAPIError, HTTPError) as e:
+        if getattr(e, "status_code", None) == 404:
+            return _failure("Discogs has no release " + str(rid) + ".")
+        return _failure("Discogs said no: " + str(e))
+    except Exception as e:
+        logger.exception("Discogs release lookup failed")
+        return _failure("Couldn't reach Discogs: " + str(e))
+    return {
+        "ok": True,
+        "candidates": rank([_summary(record)], country, matrix, color),
+        "searched": 1,
+        "note": None,
+        "total": 1,
+    }
 
 
 def _release_record(client, release_id):

@@ -15,6 +15,7 @@ Discogs can't search on it.</p>
       {% if hint %}<span class="help-block">{{ hint }}</span>{% endif %}</div>
   </div>
   {% endmacro %}
+  {{ field('release_id', 'Release ID', form.release_id, 'If you already found it on Discogs: the number, [r123456] or its address. This replaces everything else below except Country and Matrix, which only rank it, and shows just that release.') }}
   {{ field('artist', 'Artist', form.artist) }}
   {{ field('title', 'Title', form.title) }}
   {{ field('catno', 'Catalogue Number', form.catno) }}
