@@ -20,6 +20,19 @@ Discogs can't search on it.</p>
   {{ field('catno', 'Catalogue Number', form.catno) }}
   {{ field('barcode', 'Barcode', form.barcode) }}
   {{ field('country', 'Country', form.country, 'Searches this country and ranks it first. Blank searches every country.') }}
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="type">Type</label>
+    <div class="col-sm-6"><select class="form-control" id="type" name="type">
+      {% for t in types %}<option {{ 'selected' if form.type == t }}>{{ t }}</option>{% endfor %}
+    </select><span class="help-block">Only vinyl is searched, never CDs or cassettes.</span></div>
+  </div>
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="reissue">Reissue</label>
+    <div class="col-sm-6"><select class="form-control" id="reissue" name="reissue">
+      {% for value, label in reissue_choices %}<option value="{{ value }}" {{ 'selected' if form.reissue == value }}>{{ label }}</option>{% endfor %}
+    </select></div>
+  </div>
+  {{ field('color', 'Color', form.color, 'Optional, like red or clear. It ranks releases that list it higher; it never hides one.') }}
   {{ field('matrix', 'Matrix', form.matrix, 'Case, spaces and punctuation are ignored. A partial matrix is fine.') }}
   <div class="form-group">
     <label class="col-sm-2 control-label" for="lot">Purchase Lot</label>
@@ -58,7 +71,9 @@ Discogs can't search on it.</p>
     <p>{{ c.formats|join('; ') }}<br>
       {{ c.labels|join(', ') }}{% if c.catno %} &middot; {{ c.catno }}{% endif %}<br>
       Country: <strong>{{ c.country }}</strong>
-      {% if c.country_match %}<span class="label label-success">matches</span>{% endif %}</p>
+      {% if c.country_match %}<span class="label label-success">matches</span>{% endif %}
+      {% if c.format_text %}<br>Color / format notes: <strong>{{ c.format_text }}</strong>
+      {% if c.color_match %}<span class="label label-success">matches</span>{% endif %}{% endif %}</p>
     {% if c.unchecked %}<p class="text-muted">Matrix not checked (rate limit or error).</p>
     {% elif c.matrix_html %}<p>Matrix: {% for m in c.matrix_html %}<code>{{ m }}</code> {% endfor %}</p>{% endif %}
     {% if c.status_label %}

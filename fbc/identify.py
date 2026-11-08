@@ -61,6 +61,13 @@ MIN_PARTIAL_RUN = 4
 MIN_PARTIAL_COVER = 0.6
 EXACT_SCORE = 50
 COUNTRY_SCORE = 30
+COLOR_SCORE = 10
+# What the Type field offers: (label, the word Discogs lists in a release's
+# format descriptions, or None for any vinyl). The first is the default.
+TYPES = [("LP", "LP"), ('7" (45 RPM)', '7"'), ('12"', '12"'), ("Any vinyl", None)]
+DEFAULT_TYPE = "LP"
+# Reissue: blank is either, so a record that might be either isn't hidden.
+REISSUE_CHOICES = [("", "Either"), ("yes", "Reissue"), ("no", "Not a reissue")]
 MISMATCH_SCORE = -20
 
 EXACT, PARTIAL, NOT_LISTED, MISMATCH, NOT_ASKED = (
@@ -192,11 +199,36 @@ def listed_matrices(release):
     return out
 
 
-def rank(candidates, country, matrix):
+def color_matches(wanted, format_text):
+    """The colour typed in is in the release's format text ("Red Translucent")."""
+    wanted = " ".join((wanted or "").lower().split())
+    return bool(wanted) and wanted in (format_text or "").lower()
+
+
+def keep_hit(hit, type_word, reissue):
+    """
+    Whether a search hit is the type of vinyl wanted (type_word, None for any
+    vinyl) and, if reissue is "yes" or "no", is or isn't a reissue. Always
+    vinyl: the search asks for it, and this checks again.
+    """
+    formats = hit.get("format") or []
+    if "Vinyl" not in formats:
+        return False
+    if type_word and type_word not in formats:
+        return False
+    if reissue == "yes":
+        return "Reissue" in formats
+    if reissue == "no":
+        return "Reissue" not in formats
+    return True
+
+
+def rank(candidates, country, matrix, color=""):
     """
     Candidates as {"id", "title", "year", "country", "formats", "labels",
     "catno", "thumb", "images", "matrices"} in best-first order, each given
-    "status", "status_label", "score", "matrix_html" and "country_match".
+    "status", "status_label", "score", "matrix_html", "country_match" and
+    "color_match" (a matching colour adds 10, a missing one costs nothing).
     """
     ranked = []
     for c in candidates:
@@ -205,7 +237,12 @@ def rank(candidates, country, matrix):
         c["country_match"] = country_matches(country, c.get("country"))
         c["status"] = status
         c["status_label"] = MATRIX_LABELS[status]
-        c["score"] = score + (COUNTRY_SCORE if c["country_match"] else 0)
+        c["color_match"] = color_matches(color, c.get("format_text"))
+        c["score"] = (
+            score
+            + (COUNTRY_SCORE if c["country_match"] else 0)
+            + (COLOR_SCORE if c["color_match"] else 0)
+        )
         c["matrix_html"] = [
             highlight(t, span if t == text else None) for t in c.get("matrices") or []
         ]
@@ -240,6 +277,8 @@ def _summary(release, result=None):
     labels = release.get("labels") or []
     images = [i.get("uri150") or i.get("uri") for i in release.get("images") or []]
     return {
+        # "Red Translucent", "Clear": where Discogs puts a record's colour.
+        "format_text": ", ".join(f["text"] for f in formats if f.get("text")),
         "id": release.get("id") or result.get("id"),
         "title": release.get("title") or result.get("title"),
         "year": release.get("year") or result.get("year"),
@@ -263,11 +302,23 @@ def _summary(release, result=None):
     }
 
 
-def search(artist="", title="", catno="", barcode="", country="", matrix=""):
+def search(
+    artist="",
+    title="",
+    catno="",
+    barcode="",
+    country="",
+    matrix="",
+    vinyl_type=DEFAULT_TYPE,
+    reissue="",
+    color="",
+):
     """
     Look for releases on Discogs and rank them: {"ok": True, "candidates",
     "searched", "note"} or {"ok": False, "error", "dev_mode"}. "searched" is
-    how many Discogs calls it took. "note" is set when Discogs's rate limit
+    how many Discogs calls it took. Only vinyl is searched; vinyl_type is a
+    label from TYPES, and reissue "yes" or "no" filters on Discogs's Reissue
+    format description. color only ranks. "note" is set when Discogs's rate limit
     stopped the matrix check part way.
     """
     from urllib.parse import urlencode
@@ -278,6 +329,7 @@ def search(artist="", title="", catno="", barcode="", country="", matrix=""):
 
     if devmode.on():
         return _failure("Not available in dev mode.", dev_mode=True)
+    type_word = dict(TYPES).get(vinyl_type, "LP")
     params = {"type": "release", "per_page": 25}
     for key, value in (
         ("artist", artist),
@@ -287,7 +339,9 @@ def search(artist="", title="", catno="", barcode="", country="", matrix=""):
     ):
         if (value or "").strip():
             params[key] = value.strip()
-    if len(params) == 2:
+    # Both are narrowed again on the hits, which carry their formats.
+    params["format"] = "Vinyl"
+    if len(params) == 3:
         return _failure("Give an artist, title, catalogue number or barcode.")
     # Searching with the country keeps other pressings from filling the page.
     # Matching countries are ranked first either way, so a wrong country filter
@@ -316,6 +370,7 @@ def search(artist="", title="", catno="", barcode="", country="", matrix=""):
             logger.exception("Discogs search failed")
             return _failure("Couldn't reach Discogs: " + str(e))
         candidates, note = [], None
+        hits = [h for h in hits if keep_hit(h, type_word, reissue)]
         for hit in hits[:MAX_CANDIDATES]:
             if not hit.get("id"):
                 continue
@@ -342,7 +397,7 @@ def search(artist="", title="", catno="", barcode="", country="", matrix=""):
             "total": len(hits),
         }
 
-    key = ("search", tuple(sorted(params.items())))
+    key = ("search", tuple(sorted(params.items())), type_word, reissue)
     found = _cached(key, fetch)
     if not found["ok"]:
         # Failures aren't kept, so fixing the cause and retrying works at once.
@@ -350,7 +405,7 @@ def search(artist="", title="", catno="", barcode="", country="", matrix=""):
             _cache.pop(key, None)
         return found
     # Ranking is cheap and depends on the matrix, which isn't in the key.
-    return dict(found, candidates=rank(found["candidates"], country, matrix))
+    return dict(found, candidates=rank(found["candidates"], country, matrix, color))
 
 
 def _release_record(client, release_id):
@@ -487,6 +542,7 @@ SAMPLE_CANDIDATES = [
         "thumb": None,
         "images": [],
         "matrices": ["SR-1001-A-1 RE", "SR-1001-B-2 RE"],
+        "format_text": "Red Translucent",
     },
     {
         "id": 1000002,
@@ -542,14 +598,14 @@ SAMPLE_CANDIDATES = [
 SAMPLE_IDS = {c["id"] for c in SAMPLE_CANDIDATES}
 
 
-def sample(country="", matrix=""):
+def sample(country="", matrix="", color=""):
     """Ranking of the sample candidates, shaped like search()'s answer. Dev
     mode only, so it never looks like a real result."""
     if not devmode.on():
         return _failure("The sample data is only for Dev Mode.")
     return {
         "ok": True,
-        "candidates": rank(SAMPLE_CANDIDATES, country, matrix),
+        "candidates": rank(SAMPLE_CANDIDATES, country, matrix, color),
         "searched": 0,
         "note": "Sample data, not from Discogs.",
         "total": len(SAMPLE_CANDIDATES),

@@ -44,7 +44,7 @@ def record(rid, country="US", matrices=(), year=1978):
         "genres": ["Rock"],
         "styles": ["Prog"],
         "master_id": 77,
-        "formats": [{"name": "Vinyl", "descriptions": ["LP"]}],
+        "formats": [{"name": "Vinyl", "descriptions": ["LP"], "text": "Red"}],
         "labels": [{"name": "Lbl", "catno": "L-1"}],
         "images": [{"uri150": "http://img/%d.jpg" % rid}],
         "identifiers": [{"type": "Matrix / Runout", "value": m} for m in matrices]
@@ -61,7 +61,14 @@ class FakeClient:
         if self.fail and self.fail(url):
             raise self.fail(url)
         if "/database/search" in url:
-            return {"results": [{"id": h} for h in self.hits]}
+            return {
+                "results": [
+                    h
+                    if isinstance(h, dict)
+                    else {"id": h, "format": ["Vinyl", "LP", "Album"]}
+                    for h in self.hits
+                ]
+            }
         return self.records[int(url.rsplit("/", 1)[1])]
 
 
@@ -104,6 +111,63 @@ def test_ranking_orders_by_matrix_then_country():
     assert identify.country_matches("us", "US") and identify.country_matches(
         "United States", "US"
     )
+
+
+# --- type, reissue and color ---
+
+
+def hit(rid, *formats):
+    return {"id": rid, "format": list(formats)}
+
+
+def test_only_lps_are_searched_by_default_and_never_cds(monkeypatch):
+    fake = use(
+        monkeypatch,
+        FakeClient(
+            [
+                hit(1, "Vinyl", "LP", "Album"),
+                hit(2, "Vinyl", '7"', "45 RPM"),
+                hit(3, "CD", "Album"),
+                hit(4, "Cassette", "LP"),
+            ],
+            {1: record(1), 2: record(2), 3: record(3), 4: record(4)},
+        ),
+    )
+    r = identify.search(artist="Band")
+    assert [c["id"] for c in r["candidates"]] == [1]
+    assert "format=Vinyl" in fake.urls[0]
+    assert r["searched"] == 2  # filtered hits cost no release fetch
+
+
+def test_the_type_can_be_a_seven_inch_or_any_vinyl(monkeypatch):
+    hits = [hit(1, "Vinyl", "LP"), hit(2, "Vinyl", '7"'), hit(3, "CD")]
+    use(monkeypatch, FakeClient(hits, {1: record(1), 2: record(2), 3: record(3)}))
+    sevens = identify.search(artist="Band", vinyl_type='7" (45 RPM)')
+    assert [c["id"] for c in sevens["candidates"]] == [2]
+    identify.clear_cache()
+    anyvinyl = identify.search(artist="Band", vinyl_type="Any vinyl")
+    assert sorted(c["id"] for c in anyvinyl["candidates"]) == [1, 2]
+
+
+def test_reissue_is_blank_for_either_or_yes_or_no(monkeypatch):
+    hits = [hit(1, "Vinyl", "LP", "Reissue"), hit(2, "Vinyl", "LP")]
+    use(monkeypatch, FakeClient(hits, {1: record(1), 2: record(2)}))
+    ids = lambda **kw: sorted(  # noqa: E731
+        c["id"] for c in identify.search(artist="Band", **kw)["candidates"]
+    )
+    assert ids() == [1, 2]
+    assert ids(reissue="yes") == [1]
+    assert ids(reissue="no") == [2]
+
+
+def test_a_matching_color_ranks_higher_but_nothing_is_hidden(monkeypatch):
+    red, blue = record(1), record(2)
+    blue["formats"][0]["text"] = "Blue"
+    use(monkeypatch, FakeClient([2, 1], {1: red, 2: blue}))
+    r = identify.search(artist="Band", color=" RED ")
+    assert [c["id"] for c in r["candidates"]] == [1, 2]
+    assert r["candidates"][0]["color_match"] and not r["candidates"][1]["color_match"]
+    assert identify.color_matches("", "Red") is False
 
 
 # --- search ---
@@ -228,3 +292,10 @@ def test_the_page_says_dev_mode_and_offers_the_sample(dev_mode, client):
 def test_the_sample_is_off_outside_dev_mode(client):
     html = client.get("/identifyrecord/?sample=1").get_data(as_text=True)
     assert "Sample data" not in html
+
+
+def test_the_form_has_type_reissue_and_color(client):
+    html = client.get("/identifyrecord/").get_data(as_text=True)
+    assert 'name="type"' in html and "7&#34; (45 RPM)" in html or '7" (45 RPM)' in html
+    assert 'name="reissue"' in html and 'name="color"' in html
+    assert "<option selected>LP</option>" in html

@@ -70,8 +70,11 @@ yet.
 
 Inventory > Identify Record finds the Discogs release a record in hand is.
 Give what you know: artist, title, catalogue number or barcode (at least one),
-the country (US to start with) and the vinyl matrix, and the Purchase Lot it
-came in. It searches Discogs, reads the matrix of each release it finds
+the country (US to start with), the vinyl matrix, and the Purchase Lot it
+came in. Only vinyl is searched. Type is LP unless you choose 7" (45 RPM), 12"
+or Any vinyl. Reissue is blank for either, or Reissue or Not a reissue to
+filter on that. Color is optional, like red or clear: a release whose format
+notes list it ranks higher, and none is hidden for lacking it. It searches Discogs, reads the matrix of each release it finds
 (Discogs can't search on a matrix, so this is a call per release; it checks
 the first 12, and Discogs allows 60 calls a minute), and lists them best match
 first, with pictures, format, label, catalogue number, year and the matrix

@@ -27,16 +27,22 @@ class IdentifyRecordView(BaseView):
             "barcode": request.args.get("barcode", ""),
             "country": request.args.get("country", identify.DEFAULT_COUNTRY),
             "matrix": request.args.get("matrix", ""),
+            "type": request.args.get("type", identify.DEFAULT_TYPE),
+            "reissue": request.args.get("reissue", ""),
+            "color": request.args.get("color", ""),
             "lot": request.args.get("lot", ""),
         }
         found = None
         if request.args.get("sample") and devmode.on():
-            found = identify.sample(form["country"], form["matrix"])
+            found = identify.sample(form["country"], form["matrix"], form["color"])
         elif request.args.get("go"):
             found = identify.search(
                 **{k: form[k] for k in ("artist", "title", "catno", "barcode")},
                 country=form["country"],
                 matrix=form["matrix"],
+                vinyl_type=form["type"],
+                reissue=form["reissue"],
+                color=form["color"],
             )
         return self.render_template(
             "identify/search.html",
@@ -46,6 +52,8 @@ class IdentifyRecordView(BaseView):
             lots=self._lots(),
             dev_mode=devmode.on(),
             default_country=identify.DEFAULT_COUNTRY,
+            types=[label for label, _ in identify.TYPES],
+            reissue_choices=identify.REISSUE_CHOICES,
         )
 
     @expose("/pick", methods=["POST"])
