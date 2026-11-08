@@ -1,0 +1,48 @@
+{% extends "appbuilder/base.html" %}
+{# Add the chosen release to the Discogs collection: condition, notes, folder. #}
+{% block content %}
+<h3>Add to your Discogs collection</h3>
+{% if not form.ok %}
+<div class="alert {{ 'alert-warning' if form.dev_mode else 'alert-danger' }}">{{ form.error }}</div>
+{% else %}
+<p>Release <a href="https://www.discogs.com/release/{{ release_id }}" target="_blank" rel="noopener">{{ release_id }}</a>.
+  The button below <strong>adds a copy to your Discogs account</strong> and sets these fields on it,
+  then opens Add Unit with the Media and Sleeve Condition as the grading and the Notes filled in.</p>
+{% if form.missing %}
+<div class="alert alert-info">Not set up as custom fields on your Discogs account, so not shown:
+  {{ form.missing|join(', ') }}.</div>
+{% endif %}
+<form method="post" class="form-horizontal" action="{{ url_for('IdentifyRecordView.collect') }}">
+  {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+  <input type="hidden" name="release_id" value="{{ release_id }}">
+  <input type="hidden" name="lot" value="{{ lot }}">
+  <input type="hidden" name="matrix" value="{{ matrix }}">
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="folder">Folder</label>
+    <div class="col-sm-6"><select class="form-control" id="folder" name="folder">
+      {% for id, name in form.folders %}<option value="{{ id }}" {{ 'selected' if values.get('folder') == id|string }}>{{ name }}</option>{% endfor %}
+    </select></div>
+  </div>
+  {% for f in form.fields %}
+  {% set key = 'field_' ~ f.id %}
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="{{ key }}">{{ f.name }}</label>
+    <div class="col-sm-6">
+    {% if f.type == 'dropdown' %}
+      <select class="form-control" id="{{ key }}" name="{{ key }}">
+        <option value="">(blank)</option>
+        {% for o in f.options %}<option {{ 'selected' if values.get(key) == o }}>{{ o }}</option>{% endfor %}
+      </select>
+    {% else %}
+      <textarea class="form-control" id="{{ key }}" name="{{ key }}" rows="2">{{ values.get(key, '') }}</textarea>
+    {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  <div class="form-group"><div class="col-sm-offset-2 col-sm-6">
+    <button class="btn btn-primary">Add to my Discogs collection and add the Unit</button>
+    <a class="btn btn-default" href="{{ url_for('IdentifyRecordView.search') }}">Back</a>
+  </div></div>
+</form>
+{% endif %}
+{% endblock %}

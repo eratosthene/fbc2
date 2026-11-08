@@ -244,8 +244,11 @@ class DiscogsRelease(Model):
         from fbc.models.inventory import Unit
 
         discogs_master = self.discogs_master_key()
+        from fbc.identify import pressing_for, unit_name
+
         params = {
-            "name": str(self),
+            "name": unit_name(self),
+            "pressing": pressing_for(self),
             "unit_type": '12" LP',
             "grading": grading,
             "discogs_release": self.release_id,

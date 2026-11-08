@@ -66,6 +66,62 @@ and then, such as monthly.
 The Discogs collection, synced in, with Add Unit for releases that have none
 yet.
 
+### Identify Record
+
+Inventory > Identify Record finds the Discogs release a record in hand is.
+Give what you know: artist, title, catalogue number or barcode (at least one),
+the country (US to start with), the vinyl matrix, and the Purchase Lot it
+came in. Only vinyl is searched. Type is LP unless you choose 7" (45 RPM), 12"
+or Any vinyl. Reissue is blank for either, or Reissue or Not a reissue to
+filter on that. Color is optional, like red or clear: a release whose format
+notes list it ranks higher, and none is hidden for lacking it. It searches Discogs, reads the matrix of each release it finds
+(Discogs can't search on a matrix, so this is a call per release; it checks
+the first 12, and Discogs allows 60 calls a minute), and lists them best match
+first, with pictures, format, label, catalogue number, year and the matrix
+text, the part that matched highlighted.
+
+How the matrix is scored: case, spaces and punctuation are ignored. An
+**exact** match is the same text as a matrix listed on the release. A
+**partial** match shares a run of at least 4 letters and digits that covers at
+least 60% of the shorter one. A release that lists **no matrix** is kept, with
+a note to look at its pictures. One that lists matrices and none close is a
+**mismatch** and goes last. A matching country moves a release up.
+
+Each result has two buttons.
+
+- **This one: add to Discogs** opens a form for a copy of the release in your
+  Discogs collection: Folder, Media Condition, Sleeve Condition, Notes, Dust
+  Jacket Condition and Extras Included (any of those not set up as custom
+  fields on your Discogs account are left off, and it says which). Only its
+  button, "Add to my Discogs collection and add the Unit", **writes to your
+  Discogs account**: it adds the copy, sets the fields, saves the release in
+  fbc as Sync Discogs would, and opens Add Unit with the release, Purchase Lot,
+  matrix and instance chosen, the two conditions as the grading (like
+  "NM or M-/VG+") and the Notes. Dust Jacket Condition and Extras Included only
+  go to Discogs. If a field fails to set, the copy is still added and it says
+  which. If the copy is added but fbc can't save it, run Sync Discogs.
+- **Just add the Unit** saves the release in fbc only and adds nothing to
+  Discogs, so the Unit has no collection copy (Ship This has nothing to remove
+  for it).
+
+Results are kept for five minutes. If Discogs isn't connected, says no or
+asks for fewer requests, the page says so; when the rate limit hits part way,
+the releases not yet checked are listed unchecked. In Dev Mode it says "Not
+available in dev mode." and offers "Try the sample data", which ranks a made-up
+list so the matching can be tried without Discogs.
+
+If you've already found the release on Discogs, paste its number, [r123456] or
+address into Release ID. That replaces the other fields: Search Discogs
+fetches just that release (one call) and shows it as the only result. Country
+and Matrix still rank it, so you can see whether they match.
+
+Add Unit from here, and from the Add Unit link on the Releases list, names the Unit with the master's year, "Artist - Title
+(1970)", and fills in Pressing as the country code, the release's year and
+Original or Reissue, like "US 1970 Original" or "UK 1990 Reissue". It's a
+Reissue if Discogs lists the release as a Reissue or Repress. Countries Discogs
+spells out are shortened for the common ones (Germany is DE); any other is used
+as Discogs spells it.
+
 ### Price Research on Add Unit
 
 Under the Add Unit form is a closed Price Research block. Nothing is fetched

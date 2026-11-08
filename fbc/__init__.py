@@ -255,6 +255,7 @@ def _register_views():
         PurchaseOrderModelView,
     )
     from fbc.views.expenses import ExpenseModelView
+    from fbc.views.identify import IdentifyRecordView
     from fbc.views.inventory import (
         UnitModelView,
         PurchaseLotModelView,
@@ -285,6 +286,7 @@ def _register_views():
             category="Inventory",
         )
         appbuilder.add_view(PurchaseLotModelView, "Purchase Lots", category="Inventory")
+        appbuilder.add_view(IdentifyRecordView, "Identify Record", category="Inventory")
         appbuilder.add_view(StorageBoxModelView, "Storage Boxes", category="Inventory")
         appbuilder.add_view(DiscogsReleaseModelView, "Releases", category="Discogs")
         appbuilder.add_view(
