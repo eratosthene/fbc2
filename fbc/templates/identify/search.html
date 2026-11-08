@@ -86,10 +86,12 @@ Discogs can't search on it.</p>
       <input type="hidden" name="release_id" value="{{ c.id }}">
       <input type="hidden" name="lot" value="{{ form.lot }}">
       <input type="hidden" name="matrix" value="{{ form.matrix }}">
-      <button class="btn btn-success">This one: Add Unit</button>
+      <button class="btn btn-success" formaction="{{ url_for('IdentifyRecordView.collect') }}" formmethod="get">This one: add to Discogs</button>
+      <button class="btn btn-default btn-xs" style="margin-top:.5em">Just add the Unit</button>
     </form>
-    <p class="text-muted" style="font-size:80%;margin-top:.5em">Saves the release in fbc. Nothing is
-      added to your Discogs collection.</p>
+    <p class="text-muted" style="font-size:80%;margin-top:.5em">"Add to Discogs" asks for the
+      condition and folder first, then adds a copy to your Discogs collection. "Just add the Unit"
+      saves the release in fbc only, and adds nothing to Discogs.</p>
   </div>
 </div></div></div>
 {% endfor %}

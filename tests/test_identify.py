@@ -1,10 +1,17 @@
 """Identify Record, with Discogs mocked: no test reaches it."""
 
 import datetime
+from types import SimpleNamespace
 
 import pytest
 
 import fbc
+from test_util_discogs_sync import (
+    FakeArtist,
+    FakeCollectionItem,
+    FakeMaster,
+    FakeRelease,
+)
 from fbc import discogs, identify
 from fbc.models.discogs import DiscogsRelease
 from fbc.models.inventory import PurchaseLot
@@ -277,7 +284,7 @@ def test_the_page_renders_the_form_results_and_sample(monkeypatch, client):
         as_text=True
     )
     assert "<mark>" in html and "Partial matrix match" in html
-    assert "Nothing is" in html and "added to your Discogs collection" in html
+    assert "This one: add to Discogs" in html and "Just add the Unit" in html
 
 
 def test_the_page_says_dev_mode_and_offers_the_sample(dev_mode, client):
@@ -299,3 +306,178 @@ def test_the_form_has_type_reissue_and_color(client):
     assert 'name="type"' in html and "7&#34; (45 RPM)" in html or '7" (45 RPM)' in html
     assert 'name="reissue"' in html and 'name="color"' in html
     assert "<option selected>LP</option>" in html
+
+
+# --- adding to the Discogs collection ---
+
+
+class CollectClient:
+    """Enough of Discogs's collection API to add a copy and set its fields."""
+
+    def __init__(self, fail_field=None):
+        self.posts, self.fail_field = [], fail_field
+        self.base = "https://api.discogs.com/users/me"
+
+    def identity(self):
+        client = self
+        return SimpleNamespace(
+            fetch=lambda key: client.base,
+            collection_items=lambda rid: [
+                FakeCollectionItem(
+                    FakeRelease(
+                        rid,
+                        "Album",
+                        1978,
+                        artists=[FakeArtist(5, "Band")],
+                        master=FakeMaster(77, 1977),
+                    ),
+                    folder_id=2,
+                    instance_id=555,
+                )
+            ],
+        )
+
+    def _get(self, url):
+        if url.endswith("/collection/folders"):
+            return {
+                "folders": [
+                    {"id": 0, "name": "All"},
+                    {"id": 1, "name": "Uncategorized"},
+                    {"id": 2, "name": "Records"},
+                ]
+            }
+        assert url.endswith("/collection/fields")
+        return {
+            "fields": [
+                {
+                    "id": 1,
+                    "name": "Media Condition",
+                    "type": "dropdown",
+                    "options": ["Mint (M)", "Near Mint (NM or M-)"],
+                },
+                {
+                    "id": 2,
+                    "name": "Sleeve Condition",
+                    "type": "dropdown",
+                    "options": ["Very Good Plus (VG+)"],
+                },
+                {"id": 3, "name": "Notes", "type": "textarea"},
+                {
+                    "id": 4,
+                    "name": "Dust Jacket Condition",
+                    "type": "dropdown",
+                    "options": ["Good (G)"],
+                },
+                {"id": 9, "name": "Something Else", "type": "textarea"},
+            ]
+        }
+
+    def _post(self, url, data):
+        self.posts.append((url, data))
+        if self.fail_field and url.endswith("/fields/%d" % self.fail_field):
+            raise RuntimeError("nope")
+        return {"instance_id": 555} if "/instances/" not in url else None
+
+
+def use_collection(monkeypatch, **kw):
+    fake = CollectClient(**kw)
+    monkeypatch.setattr(discogs, "client", lambda: fake)
+    return fake
+
+
+def test_the_form_offers_the_account_folders_and_the_named_fields(monkeypatch):
+    use_collection(monkeypatch)
+    form = identify.collection_form()
+    assert [f[1] for f in form["folders"]] == ["Uncategorized", "Records"]
+    assert [f["name"] for f in form["fields"]] == [
+        "Media Condition",
+        "Sleeve Condition",
+        "Notes",
+        "Dust Jacket Condition",
+    ]
+    assert form["missing"] == ["Extras Included"]
+
+
+def test_collect_adds_sets_fields_and_saves_the_instance(monkeypatch):
+    fake = use_collection(monkeypatch)
+    release, instance_id, warnings, problem = identify.collect(
+        9,
+        2,
+        {
+            "Media Condition": "Near Mint (NM or M-)",
+            "Notes": "ex-radio",
+            "Dust Jacket Condition": "Excellent (E)",  # not a choice
+            "Sleeve Condition": "",
+        },
+    )
+    assert problem is None and instance_id == 555
+    assert fake.posts[0] == (fake.base + "/collection/folders/2/releases/9", None)
+    assert (
+        fake.base + "/collection/folders/2/releases/9/instances/555/fields/1",
+        {"value": "Near Mint (NM or M-)"},
+    ) in fake.posts
+    assert (
+        fake.base + "/collection/folders/2/releases/9/instances/555/fields/3",
+        {"value": "ex-radio"},
+    ) in fake.posts
+    assert len(fake.posts) == 3  # blank and unoffered values aren't sent
+    assert warnings == ["Dust Jacket Condition: Discogs has no choice 'Excellent (E)'"]
+    assert [i.instance_id for i in release.discogs_instances] == [555]
+
+
+def test_a_field_that_fails_is_a_warning_and_the_copy_is_still_saved(monkeypatch):
+    use_collection(monkeypatch, fail_field=3)
+    release, instance_id, warnings, problem = identify.collect(9, 1, {"Notes": "x"})
+    assert problem is None and release and "Notes wasn't set" in warnings[0]
+
+
+def test_collect_refuses_a_folder_that_isnt_the_accounts(monkeypatch):
+    fake = use_collection(monkeypatch)
+    assert identify.collect(9, 0, {})[3]
+    assert identify.collect(9, 77, {})[3]
+    assert fake.posts == []
+
+
+def test_collect_never_reaches_discogs_in_dev_mode(dev_mode, monkeypatch):
+    monkeypatch.setattr(discogs, "client", lambda: pytest.fail("reached Discogs"))
+    assert identify.collect(9, 1, {})[3]
+    assert not identify.collection_form()["ok"]
+
+
+def test_grading_comes_from_the_two_conditions():
+    assert (
+        identify.grading_from(
+            {
+                "Media Condition": "Near Mint (NM or M-)",
+                "Sleeve Condition": "Very Good Plus (VG+)",
+            }
+        )
+        == "NM or M-/VG+"
+    )
+    assert identify.grading_from({"Sleeve Condition": "Good (G)"}) == "G"
+
+
+def test_collect_page_posts_then_goes_to_add_unit(monkeypatch, client):
+    fake = use_collection(monkeypatch)
+    html = client.get("/identifyrecord/collect?release_id=9&lot=3&matrix=A1").get_data(
+        as_text=True
+    )
+    assert "adds a copy to your Discogs account" in html and "Records" in html
+    assert "Extras Included" in html and fake.posts == []  # showing it writes nothing
+    r = client.post(
+        "/identifyrecord/collect",
+        data={
+            "release_id": "9",
+            "lot": "3",
+            "matrix": "A1",
+            "folder": "2",
+            "field_1": "Near Mint (NM or M-)",
+            "field_2": "Very Good Plus (VG+)",
+            "field_3": "ex-radio",
+        },
+    )
+    assert r.status_code == 302
+    location = r.headers["Location"]
+    assert "discogs_instance=555" in location and "discogs_release=9" in location
+    assert "notes=ex-radio" in location and "matrix=A1" in location
+    assert "grading=NM+or+M-/VG%2B" in location

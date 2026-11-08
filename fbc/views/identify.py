@@ -80,3 +80,64 @@ class IdentifyRecordView(BaseView):
                 **identify.unit_add_params(release, lot, matrix),
             )
         )
+
+    @expose("/collect", methods=["GET", "POST"])
+    @has_access
+    def collect(self):
+        """
+        Add the chosen release to the Discogs collection with its condition,
+        notes and folder, then go to Add Unit. The GET shows the form; only
+        the POST, from its button, writes to Discogs.
+        """
+        data = request.form if request.method == "POST" else request.args
+        release_id = data.get("release_id", "")
+        lot = data.get("lot") or None
+        matrix = data.get("matrix", "")
+        if not release_id.isdigit():
+            flash("Pick a release.", "danger")
+            return redirect(url_for("IdentifyRecordView.search"))
+        form = identify.collection_form()
+        if request.method == "POST" and form["ok"]:
+            values = {
+                f["name"]: data.get("field_" + str(f["id"]), "") for f in form["fields"]
+            }
+            try:
+                folder_id = int(data.get("folder", ""))
+            except ValueError:
+                folder_id = None
+            if folder_id is None:
+                flash("Choose a folder.", "danger")
+            else:
+                release, instance_id, warnings, problem = identify.collect(
+                    release_id, folder_id, values
+                )
+                for warning in warnings:
+                    flash(warning, "warning")
+                if problem:
+                    flash(problem, "danger")
+                    if release is None and instance_id:
+                        return redirect(url_for("IdentifyRecordView.search"))
+                else:
+                    flash("Added to your Discogs collection.", "success")
+                    return redirect(
+                        url_for(
+                            "UnitModelView.add",
+                            **identify.unit_add_params(
+                                release,
+                                lot,
+                                matrix,
+                                instance_id=instance_id,
+                                grading=identify.grading_from(values),
+                                notes=values.get("Notes", ""),
+                            ),
+                        )
+                    )
+        return self.render_template(
+            "identify/collect.html",
+            title="Add to Discogs",
+            form=form,
+            release_id=release_id,
+            lot=lot or "",
+            matrix=matrix,
+            values=request.form,
+        )

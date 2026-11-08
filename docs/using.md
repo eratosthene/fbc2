@@ -87,11 +87,22 @@ least 60% of the shorter one. A release that lists **no matrix** is kept, with
 a note to look at its pictures. One that lists matrices and none close is a
 **mismatch** and goes last. A matching country moves a release up.
 
-"This one: Add Unit" saves that release in fbc and opens Add Unit with it, the
-Purchase Lot and the matrix filled in. It reads from Discogs only: nothing is
-added to your Discogs collection, so the Unit has no collection copy (Ship This
-has nothing to remove for it). Add the record to the collection on Discogs and
-Sync Discogs will link it to the release.
+Each result has two buttons.
+
+- **This one: add to Discogs** opens a form for a copy of the release in your
+  Discogs collection: Folder, Media Condition, Sleeve Condition, Notes, Dust
+  Jacket Condition and Extras Included (any of those not set up as custom
+  fields on your Discogs account are left off, and it says which). Only its
+  button, "Add to my Discogs collection and add the Unit", **writes to your
+  Discogs account**: it adds the copy, sets the fields, saves the release in
+  fbc as Sync Discogs would, and opens Add Unit with the release, Purchase Lot,
+  matrix and instance chosen, the two conditions as the grading (like
+  "NM or M-/VG+") and the Notes. Dust Jacket Condition and Extras Included only
+  go to Discogs. If a field fails to set, the copy is still added and it says
+  which. If the copy is added but fbc can't save it, run Sync Discogs.
+- **Just add the Unit** saves the release in fbc only and adds nothing to
+  Discogs, so the Unit has no collection copy (Ship This has nothing to remove
+  for it).
 
 Results are kept for five minutes. If Discogs isn't connected, says no or
 asks for fewer requests, the page says so; when the rate limit hits part way,

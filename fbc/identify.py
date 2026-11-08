@@ -14,11 +14,17 @@ What Discogs's API gives (checked against its docs and python3-discogs-client
   search plus up to MAX_CANDIDATES release fetches. When Discogs says 429 (too
   many requests) the candidates not yet fetched are listed unranked, with a
   note. The client library doesn't retry or throttle itself.
-- A release can be added to the collection by POST, but the library's
-  CollectionFolder.add_release returns nothing, so fbc couldn't tell which
-  instance it made. fbc never writes to the Discogs account from here. Picking
-  a release saves it in fbc as a Release with no collection copy, which is
-  all Add Unit needs.
+- A release is added to the collection by POST to
+  /users/{name}/collection/folders/{folder}/releases/{id}. Discogs answers
+  with the new copy's instance_id (the library's add_release throws it away,
+  so fbc posts itself). The copy's condition, notes and other custom fields
+  are then set one at a time, by POST to .../instances/{instance}/fields/{field}.
+  Field ids are the account's own, so they're looked up by name.
+
+fbc writes to the Discogs account only from collect(), which the page reaches
+through its own "Add to my Discogs collection" button and form; nothing else
+here writes. "Just add the Unit" saves the release in fbc as a Release with no
+collection copy.
 
 Everything that reaches Discogs goes through discogs.client(), which refuses
 to run in dev mode; search() also checks devmode itself, so the page can say
@@ -503,7 +509,9 @@ def save_record(record):
     return release
 
 
-def unit_add_params(release, purchase_lot_id=None, matrix=""):
+def unit_add_params(
+    release, purchase_lot_id=None, matrix="", instance_id=None, grading="", notes=""
+):
     """The Add Unit form's starting values for a release: like
     DiscogsRelease.unit_add, but with no collection instance, and the Purchase
     Lot and matrix the user gave."""
@@ -516,6 +524,12 @@ def unit_add_params(release, purchase_lot_id=None, matrix=""):
         "discogs_release": release.release_id,
         "discogs_master": master,
     }
+    if instance_id:
+        params["discogs_instance"] = instance_id
+    if grading:
+        params["grading"] = grading
+    if (notes or "").strip():
+        params["notes"] = notes.strip()
     if purchase_lot_id:
         params["purchase_lot"] = purchase_lot_id
     if (matrix or "").strip():
@@ -524,6 +538,171 @@ def unit_add_params(release, purchase_lot_id=None, matrix=""):
     if avg is not None:
         params["retail_price"] = f"{avg:.2f}"
     return params
+
+
+# --- Adding to the collection ----------------------------------------------
+
+# The collection fields the form offers, in order. They're matched by name
+# against the account's custom fields (Discogs numbers them per account).
+COLLECTION_FIELDS = [
+    "Media Condition",
+    "Sleeve Condition",
+    "Notes",
+    "Dust Jacket Condition",
+    "Extras Included",
+]
+
+
+def _grade(value):
+    """ "Near Mint (NM or M-)" -> "NM or M-", as Sync Discogs reads it."""
+    import re
+
+    m = re.search(r".*\((.*)\)", value or "")
+    return m.group(1) if m else ""
+
+
+def grading_from(values):
+    """The Unit's grading from the Media and Sleeve Condition chosen: "M-/VG+"."""
+    media = _grade(values.get("Media Condition"))
+    sleeve = _grade(values.get("Sleeve Condition"))
+    return "/".join(g for g in (media, sleeve) if g)
+
+
+def _me(client):
+    me = client.identity()
+    return me, me.fetch("resource_url")
+
+
+def collection_form():
+    """
+    What the collect form offers, from the account: {"ok": True, "folders":
+    [(id, name)], "fields": [{"id", "name", "type", "options"}], "missing":
+    [names not set up on the account]} or {"ok": False, "error", "dev_mode"}.
+    """
+    from discogs_client.exceptions import DiscogsAPIError, HTTPError
+
+    from fbc import discogs
+
+    if devmode.on():
+        return _failure("Not available in dev mode.", dev_mode=True)
+
+    def fetch():
+        try:
+            client = discogs.client()
+            me, base = _me(client)
+            folders = client._get(base + "/collection/folders")["folders"]
+            fields = client._get(base + "/collection/fields")["fields"]
+        except discogs.DiscogsAuthError as e:
+            return _failure(str(e))
+        except (DiscogsAPIError, HTTPError) as e:
+            return _failure("Discogs said no: " + str(e))
+        except Exception as e:
+            logger.exception("Couldn't read the collection's folders and fields")
+            return _failure("Couldn't reach Discogs: " + str(e))
+        by_name = {f["name"].lower(): f for f in fields}
+        chosen = [by_name[n.lower()] for n in COLLECTION_FIELDS if n.lower() in by_name]
+        return {
+            "ok": True,
+            # Folder 0 is "All", which can't be added to.
+            "folders": [(f["id"], f["name"]) for f in folders if f["id"] != 0],
+            "fields": [
+                {
+                    "id": f["id"],
+                    "name": f["name"],
+                    "type": f.get("type"),
+                    "options": f.get("options") or [],
+                }
+                for f in chosen
+            ],
+            "missing": [n for n in COLLECTION_FIELDS if n.lower() not in by_name],
+        }
+
+    found = _cached(("collection-form",), fetch)
+    if not found["ok"]:
+        with _lock:
+            _cache.pop(("collection-form",), None)
+    return found
+
+
+def collect(release_id, folder_id, values):
+    """
+    Add a copy of the release to the Discogs collection folder `folder_id`,
+    set its custom fields from `values` ({field name: text}, blanks and
+    anything a dropdown doesn't offer left out), and save it in fbc like a
+    synced one. WRITES TO THE DISCOGS ACCOUNT. Returns (DiscogsRelease,
+    instance_id, warnings, None) or (None, None, [], why not). If the copy
+    is made but something after fails, the answer says so: the release is
+    then in Discogs and Sync Discogs will bring it in.
+    """
+    from discogs_client.exceptions import DiscogsAPIError, HTTPError
+
+    from fbc import db, discogs
+    from fbc.models.discogs import DiscogsRelease
+    from fbc.util import add_discogs_release
+
+    if devmode.on():
+        return None, None, [], devmode.message("Discogs")
+    form = collection_form()
+    if not form["ok"]:
+        return None, None, [], form["error"]
+    if int(folder_id) not in {f[0] for f in form["folders"]}:
+        return None, None, [], "That isn't one of your Discogs folders."
+    release_id = int(release_id)
+    try:
+        client = discogs.client()
+        me, base = _me(client)
+        added = client._post(
+            "%s/collection/folders/%d/releases/%d" % (base, int(folder_id), release_id),
+            None,
+        )
+    except discogs.DiscogsAuthError as e:
+        return None, None, [], str(e)
+    except (DiscogsAPIError, HTTPError) as e:
+        if getattr(e, "status_code", None) == 429:
+            return None, None, [], "Discogs says too many requests; try in a minute."
+        return None, None, [], "Discogs said no: " + str(e)
+    except Exception as e:
+        logger.exception("Couldn't add release %s to the collection", release_id)
+        return None, None, [], "Couldn't reach Discogs: " + str(e)
+    instance_id = added["instance_id"]
+    logger.info("Added release %s to Discogs as instance %s", release_id, instance_id)
+
+    warnings = []
+    for field in form["fields"]:
+        value = (values.get(field["name"]) or "").strip()
+        if not value:
+            continue
+        if field["type"] == "dropdown" and value not in field["options"]:
+            warnings.append(field["name"] + ": Discogs has no choice " + repr(value))
+            continue
+        try:
+            client._post(
+                "%s/collection/folders/%d/releases/%d/instances/%s/fields/%s"
+                % (base, int(folder_id), release_id, instance_id, field["id"]),
+                {"value": value},
+            )
+        except Exception as e:
+            logger.warning("Couldn't set %s: %s", field["name"], e)
+            warnings.append(field["name"] + " wasn't set: " + str(e))
+    try:
+        item = next(
+            i
+            for i in me.collection_items(release_id)
+            if int(i.instance_id) == int(instance_id)
+        )
+        add_discogs_release(item)
+    except Exception as e:
+        logger.exception("Added to Discogs but couldn't save in fbc")
+        db.session.rollback()
+        return (
+            None,
+            instance_id,
+            warnings,
+            "It was added to your Discogs collection (instance %s), but fbc"
+            " couldn't save it (%s). Run Sync Discogs to bring it in."
+            % (instance_id, e),
+        )
+    return db.session.get(DiscogsRelease, release_id), instance_id, warnings, None
 
 
 # --- Sample data -----------------------------------------------------------
