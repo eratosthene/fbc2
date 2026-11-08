@@ -1,6 +1,7 @@
 """Identify Record, with Discogs mocked: no test reaches it."""
 
 import datetime
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -480,4 +481,51 @@ def test_collect_page_posts_then_goes_to_add_unit(monkeypatch, client):
     location = r.headers["Location"]
     assert "discogs_instance=555" in location and "discogs_release=9" in location
     assert "notes=ex-radio" in location and "matrix=A1" in location
+    assert "(1977)" in location and "pressing=US+1978+Original" in location
     assert "grading=NM+or+M-/VG%2B" in location
+
+
+# --- Unit name and pressing ---
+
+
+def test_pressing_is_country_year_and_original_or_reissue():
+    def release(country, year, *descriptions):
+        formats = [{"name": "Vinyl", "descriptions": list(descriptions)}]
+        return SimpleNamespace(country=country, year=year, formats=json.dumps(formats))
+
+    assert identify.pressing_for(release("US", 1970, "LP")) == "US 1970 Original"
+    assert (
+        identify.pressing_for(release("UK", 1990, "LP", "Reissue")) == "UK 1990 Reissue"
+    )
+    assert (
+        identify.pressing_for(release("Germany", 1985, "Repress")) == "DE 1985 Reissue"
+    )
+    assert identify.pressing_for(release("Wakanda", 1985)) == "Wakanda 1985 Original"
+    assert identify.pressing_for(release(None, None)) == "Original"
+
+
+def test_the_unit_is_named_with_the_master_year(monkeypatch):
+    rec = record(9, year=1990)
+    rec["formats"][0]["descriptions"] = ["LP", "Reissue"]
+    rec["country"] = "UK"
+    use(
+        monkeypatch,
+        FakeClient([], {9: rec, 77: {"year": 1970}}),
+    )
+    release, problem = identify.save_release(9)
+    assert problem is None and release.master_year == 1970
+    params = identify.unit_add_params(release)
+    assert params["name"] == "Band, The - Band - Album (1970)"
+    assert params["pressing"] == "UK 1990 Reissue"
+
+
+def test_a_missing_master_falls_back_to_the_release_year(monkeypatch):
+    class NoMaster(FakeClient):
+        def _get(self, url):
+            if "/masters/" in url:
+                raise RuntimeError("gone")
+            return super()._get(url)
+
+    use(monkeypatch, NoMaster([], {9: record(9, year=1978)}))
+    release, _ = identify.save_release(9)
+    assert release.master_year == 1978

@@ -59,6 +59,7 @@ CACHE_SECONDS = 300
 MAX_CANDIDATES = 12
 SEARCH_URL = "https://api.discogs.com/database/search"
 RELEASE_URL = "https://api.discogs.com/releases/"
+MASTER_URL = "https://api.discogs.com/masters/"
 DEFAULT_COUNTRY = "US"
 # Discogs spells the country out in releases; the search filter takes either.
 COUNTRY_NAMES = {"US": "US", "USA": "US", "UNITED STATES": "US", "UK": "UK"}
@@ -453,10 +454,26 @@ def save_release(release_id):
     except Exception as e:
         logger.exception("Couldn't fetch release %s", release_id)
         return None, "Couldn't reach Discogs: " + str(e)
-    return save_record(record), None
+    return save_record(record, _master_year(discogs.client(), record)), None
 
 
-def save_record(record):
+def _master_year(client, record):
+    """The master's year, or None (the release's year is then used)."""
+    master_id = record.get("master_id")
+    if not master_id:
+        return None
+    try:
+        master = _cached(
+            ("master", int(master_id)),
+            lambda: _get(client, MASTER_URL + str(int(master_id))),
+        )
+        return master.get("year") or None
+    except Exception as e:
+        logger.warning("Couldn't fetch master %s: %s", master_id, e)
+        return None
+
+
+def save_record(record, master_year=None):
     """The DiscogsRelease for a Discogs release record (the API's JSON)."""
     from fbc import db
     from fbc.models.discogs import Artist, DiscogsRelease, Genre, Style
@@ -490,7 +507,7 @@ def save_record(record):
         genres=[get_or_make(Genre, name=g) for g in record.get("genres") or []],
         styles=[get_or_make(Style, name=s) for s in record.get("styles") or []],
         master_id=record.get("master_id") or 0,
-        master_year=record.get("year"),
+        master_year=master_year or record.get("year"),
         formats=json.dumps(record.get("formats") or []),
         labels=json.dumps(
             [
@@ -509,6 +526,41 @@ def save_record(record):
     return release
 
 
+# Discogs spells countries out. These are the ones a shop sees most; any other
+# is used as Discogs spells it.
+COUNTRY_CODES = {
+    "US": "US", "UK": "UK", "Canada": "CA", "Germany": "DE", "Japan": "JP",
+    "France": "FR", "Netherlands": "NL", "Italy": "IT", "Australia": "AU",
+    "Europe": "EU", "Sweden": "SE", "Spain": "ES", "Brazil": "BR",
+    "Mexico": "MX", "Ireland": "IE", "Belgium": "BE", "Norway": "NO",
+    "Denmark": "DK", "Finland": "FI", "New Zealand": "NZ", "Jamaica": "JM",
+    "Argentina": "AR", "Russia": "RU", "Portugal": "PT", "Greece": "GR",
+}  # fmt: skip
+
+
+def pressing_for(release):
+    """
+    The Unit's Pressing from a release: "US 1970 Original" or "UK 1990
+    Reissue". Reissue if its formats say Reissue or Repress, else Original.
+    The country is left out if there isn't one, and the year too.
+    """
+    try:
+        formats = json.loads(release.formats or "[]")
+    except ValueError:
+        formats = []
+    words = {d for f in formats for d in (f.get("descriptions") or [])}
+    kind = "Reissue" if words & {"Reissue", "Repress"} else "Original"
+    country = release.country or ""
+    parts = [COUNTRY_CODES.get(country, country), release.year, kind]
+    return " ".join(str(p) for p in parts if p)
+
+
+def unit_name(release):
+    """ "Artist - Title (master year)": the master's year, else the release's."""
+    year = release.master_year or release.year
+    return "%s - %s (%s)" % (release.artist_rep(), release.title, year)
+
+
 def unit_add_params(
     release, purchase_lot_id=None, matrix="", instance_id=None, grading="", notes=""
 ):
@@ -519,7 +571,8 @@ def unit_add_params(
 
     master = release.discogs_master_key()
     params = {
-        "name": str(release),
+        "name": unit_name(release),
+        "pressing": pressing_for(release),
         "unit_type": '12" LP',
         "discogs_release": release.release_id,
         "discogs_master": master,

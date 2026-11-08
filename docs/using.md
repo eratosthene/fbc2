@@ -110,6 +110,13 @@ the releases not yet checked are listed unchecked. In Dev Mode it says "Not
 available in dev mode." and offers "Try the sample data", which ranks a made-up
 list so the matching can be tried without Discogs.
 
+Add Unit from here names the Unit with the master's year, "Artist - Title
+(1970)", and fills in Pressing as the country code, the release's year and
+Original or Reissue, like "US 1970 Original" or "UK 1990 Reissue". It's a
+Reissue if Discogs lists the release as a Reissue or Repress. Countries Discogs
+spells out are shortened for the common ones (Germany is DE); any other is used
+as Discogs spells it.
+
 ### Price Research on Add Unit
 
 Under the Add Unit form is a closed Price Research block. Nothing is fetched
