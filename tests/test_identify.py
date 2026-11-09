@@ -859,3 +859,14 @@ def test_without_a_matrix_only_one_batch_is_checked(monkeypatch):
     r = identify.search(master="1")
     assert len(r["candidates"]) == 20
     assert len([u for u in fake.urls if "/releases/" in u]) == 20
+
+
+def test_the_results_follow_the_lot_and_matrix_changed_after_searching(
+    monkeypatch, client
+):
+    use(monkeypatch, FakeClient([2], {2: record(2)}))
+    html = client.get("/identifyrecord/?go=1&artist=Band").get_data(as_text=True)
+    # Each result's buttons hold copies; this script keeps them in step.
+    assert 'form[action$="/pick"] input[name="' in html
+    assert 'sync("lot")' in html and 'sync("matrix")' in html
+    assert 'id="lot"' in html and 'id="matrix"' in html

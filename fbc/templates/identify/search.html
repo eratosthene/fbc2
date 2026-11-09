@@ -129,6 +129,24 @@ Discogs can't search on it.</p>
   <span class="text-muted">{{ found.total }} versions match so far; each check is a Discogs call.</span></p>{% endif %}
 {% endif %}
 {% endif %}
+{# The Purchase Lot and Matrix on the form can change after the results are shown;
+   each result's buttons carry their own copy, so keep them in step. #}
+<script>
+(function () {
+  function sync(name) {
+    var field = document.getElementById(name);
+    if (!field) { return; }
+    var copy = function () {
+      var hidden = document.querySelectorAll('form[action$="/pick"] input[name="' + name + '"]');
+      for (var i = 0; i < hidden.length; i++) { hidden[i].value = field.value; }
+    };
+    field.addEventListener("input", copy);
+    field.addEventListener("change", copy);
+  }
+  sync("lot");
+  sync("matrix");
+})();
+</script>
 {# One viewer for every picture: click a thumbnail, then use the arrow buttons or keys. #}
 <div class="modal fade" id="identify-viewer" tabindex="-1" role="dialog">
   <div class="modal-dialog modal-lg" role="document"><div class="modal-content">
