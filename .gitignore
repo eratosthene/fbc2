@@ -199,3 +199,7 @@ venv
 # The live server's deploy state (docker/live-deploy.sh)
 docker/.previous-image
 docker/deploys.log
+
+# A network proxy's root CA, for the dev image (docker/dev-certs/README.md)
+/docker/dev-certs/*.pem
+/docker/dev-certs/*.crt

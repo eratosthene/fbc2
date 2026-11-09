@@ -45,6 +45,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      # Any root CAs in docker/dev-certs go into the image, for a network
+      # proxy that re-signs HTTPS. The live image never gets them.
+      additional_contexts:
+        extra-ca: ./dev-certs
     image: fbc2:dev
     depends_on:
       db:
