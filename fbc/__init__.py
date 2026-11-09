@@ -253,6 +253,7 @@ def _register_views():
         SupplyModelView,
         SupplyUseModelView,
         PurchaseOrderModelView,
+        PurchaseOrderSupplyModelView,
     )
     from fbc.views.expenses import ExpenseModelView
     from fbc.views.identify import IdentifyRecordView
@@ -309,6 +310,7 @@ def _register_views():
         appbuilder.add_view(
             PurchaseOrderModelView, "Purchase Orders", category="Supplies"
         )
+        appbuilder.add_view_no_menu(PurchaseOrderSupplyModelView)
         appbuilder.add_view(SupplyUseModelView, "Supply Use", category="Supplies")
         appbuilder.add_view(ExpenseModelView, "Expenses", category="Supplies")
 

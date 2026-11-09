@@ -276,14 +276,20 @@ on, until a later run. Run it in the live container like
 The packing supplies sales use up, and Purchase Orders to restock them.
 
 A Purchase Order is one order, with its whole price. It can restock any
-number of supplies. Anything else on it, like record crates, is an Expense
+number of supplies: save the order, then add each supply from the order's
+page, under Supplies On Purchase Order, with how many came. That many are
+added to the supply's Quantity (count packs, like rolls, not the uses in
+each). Changing or removing one takes the difference back out. Orders
+from before this have no quantity, since the Supply List already counted
+them. Anything else on it, like record crates, is an Expense
 on the order: add it from the order's page, under Expenses. Those come out
 of the order's price, and the rest is the order's Supply Cost. The
 Expenses on an order can't come to more than its price.
 
 Supply Use records each time stock changes, with its date: Ship This, Add
-Unit, edits to Quantity on the Supply List (a stock-take or a restock, which
-counts below 0) and Reconcile Supplies. Each supply's page lists its own. It
+Unit, Purchase Orders (counted below 0, as Purchase Order), edits to Quantity
+on the Supply List (a stock-take, which can count below 0) and Reconcile
+Supplies. Each supply's page lists its own. It
 starts from when this was added, with nothing before.
 
 Cost Per Use on a supply, set by hand, is what one use costs, for costing

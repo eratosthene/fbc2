@@ -9,7 +9,7 @@ from fbc.models.discogs import DiscogsRelease
 from fbc.models.ebay import EbayListing
 from fbc.models.expenses import Expense
 from fbc.models.inventory import PurchaseLot, Unit
-from fbc.models.supplies import PurchaseOrder, Supply, SupplyUse
+from fbc.models.supplies import PurchaseOrder, PurchaseOrderSupply, Supply, SupplyUse
 from fbc.views.discogs import ArtistModelView, DiscogsReleaseModelView, FolderModelView
 from fbc.views.inventory import (
     UNITS_WITHOUT_LISTING_FILTERS,
@@ -778,25 +778,24 @@ def test_expense_form_refuses_what_it_cant_save(client, fields, error):
 
 
 def _order_with_two_supplies(client, price="100.00"):
-    """A Uline order for mailers and a label roll, through the form."""
+    """A Uline order for mailers and a label roll, through its forms."""
     mailers = Supply(name="LP Mailers", quantity=10)
     labels = Supply(name="Shipping Label Roll", quantity=1)
     fbc.db.session.add_all([mailers, labels])
     fbc.db.session.commit()
     client.post(
         "/purchaseordermodelview/add",
-        data=MultiDict(
-            [
-                ("date", "2026-04-01"),
-                ("price", price),
-                ("notes", "Uline order"),
-                ("link", ""),
-                ("supply", str(mailers.id)),
-                ("supply", str(labels.id)),
-            ]
-        ),
+        data={
+            "date": "2026-04-01",
+            "price": price,
+            "notes": "Uline order",
+            "link": "",
+        },
     )
-    return fbc.db.session.query(PurchaseOrder).one()
+    order = fbc.db.session.query(PurchaseOrder).one()
+    _add_order_supply(client, order, mailers, 5)
+    _add_order_supply(client, order, labels, 2)
+    return order
 
 
 def test_a_purchase_order_holds_several_supplies_and_expenses(client):
@@ -934,3 +933,54 @@ def test_unit_list_filters_by_id_and_range(client):
     assert listed(ids[1]) == [ids[1]]
     assert listed(f"{ids[1]}-{ids[2]}") == ids[1:3]
     assert listed("nonsense") == []
+
+
+def _order_with_no_supplies(client):
+    client.post(
+        "/purchaseordermodelview/add",
+        data={"date": "2026-04-01", "price": "50.00", "notes": "Uline order"},
+    )
+    return fbc.db.session.query(PurchaseOrder).one()
+
+
+def _add_order_supply(client, order, supply, quantity):
+    # From the order's page, which fills in the order itself.
+    return client.post(
+        "/purchaseordersupplymodelview/add?_flt_0_purchase_order=" + str(order.id),
+        data={"supply": str(supply.id), "quantity": str(quantity)},
+    )
+
+
+def test_a_purchase_order_adds_what_it_brought_to_a_supplys_quantity(client):
+    mailers = Supply(name="LP Mailers", quantity=10)
+    fbc.db.session.add(mailers)
+    fbc.db.session.commit()
+    order = _order_with_no_supplies(client)
+
+    _add_order_supply(client, order, mailers, 25)
+
+    fbc.db.session.expire_all()
+    assert mailers.quantity == 35
+    assert [s.name for s in order.supply] == ["LP Mailers"]
+    use = fbc.db.session.query(SupplyUse).one()
+    assert (use.supply_id, use.count, use.kind) == (mailers.id, -25, "restock")
+
+
+def test_changing_or_removing_what_an_order_brought_changes_the_quantity_back(client):
+    mailers = Supply(name="LP Mailers", quantity=10)
+    fbc.db.session.add(mailers)
+    fbc.db.session.commit()
+    order = _order_with_no_supplies(client)
+    _add_order_supply(client, order, mailers, 25)
+    item = fbc.db.session.query(PurchaseOrderSupply).one()
+
+    client.post(
+        "/purchaseordersupplymodelview/edit/" + str(item.id),
+        data={"supply": str(mailers.id), "quantity": "20"},
+    )
+    fbc.db.session.expire_all()
+    assert mailers.quantity == 30
+
+    client.post("/purchaseordersupplymodelview/delete/" + str(item.id))
+    fbc.db.session.expire_all()
+    assert mailers.quantity == 10
