@@ -83,10 +83,12 @@ this master** fills in the Master field (keeping what else you typed). Then
 press **Search Discogs**. With a Master it lists that master's versions,
 filtered by Country, Type and Reissue, instead of searching on Artist, Title,
 Catalogue Number and Barcode, so no version is missed because of how Discogs
-ranks a search. It checks the matrix of 20 versions at a time, with a "Check
-the next 20 versions" button when there are more, and looks through at most
-500 versions of one master. Discogs has no matrix filter for a master's
-versions, so each version is a call to read its matrix.
+ranks a search. It checks the matrix of 20 versions at a time. With a matrix
+typed in it carries on to the next 20 by itself until a batch has an exact
+match, checking at most 40 versions in one search; otherwise, or to go on past
+that, press "Check more versions". It looks through at most 500 versions of
+one master. Discogs has no matrix filter for a master's versions, so each
+version is a call to read its matrix, and Discogs allows 60 calls a minute.
 
 Without a Master, it searches Discogs, then reads the matrix of each release
 it finds. Discogs documents no way to search on a matrix, so that's a call per

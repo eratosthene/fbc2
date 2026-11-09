@@ -825,3 +825,37 @@ def test_a_huge_master_stops_at_the_page_limit_and_says_so(monkeypatch):
         len(r["candidates"]) == 4 and "first 200 versions" not in r["note"] or r["note"]
     )
     assert r["next_offset"] is None
+
+
+def test_a_matrix_keeps_checking_batches_until_an_exact_match(monkeypatch):
+    versions = [version(i) for i in range(1, 46)]
+    records = {i: record(i) for i in range(1, 46)}
+    records[25] = record(25, matrices=["A-1 15109"])  # in the second batch
+    fake = use(monkeypatch, MasterClient(versions, records))
+    r = identify.search(master="1", matrix="a1 15109")
+    ids = [c["id"] for c in r["candidates"]]
+    assert ids[0] == 25 and len(ids) == 40  # two batches, stopped at the cap
+    assert r["candidates"][0]["status"] == identify.EXACT
+    assert r["next_offset"] == 40
+    releases = [u for u in fake.urls if "/releases/" in u]
+    assert len(releases) == 40
+
+
+def test_a_matrix_stops_after_the_first_batch_that_has_an_exact_match(monkeypatch):
+    versions = [version(i) for i in range(1, 46)]
+    records = {i: record(i) for i in range(1, 46)}
+    records[3] = record(3, matrices=["A-1 15109"])
+    fake = use(monkeypatch, MasterClient(versions, records))
+    r = identify.search(master="1", matrix="a1 15109")
+    assert len(r["candidates"]) == 20 and r["next_offset"] == 20
+    assert len([u for u in fake.urls if "/releases/" in u]) == 20
+
+
+def test_without_a_matrix_only_one_batch_is_checked(monkeypatch):
+    versions = [version(i) for i in range(1, 46)]
+    fake = use(
+        monkeypatch, MasterClient(versions, {i: record(i) for i in range(1, 46)})
+    )
+    r = identify.search(master="1")
+    assert len(r["candidates"]) == 20
+    assert len([u for u in fake.urls if "/releases/" in u]) == 20

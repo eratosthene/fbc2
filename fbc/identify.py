@@ -485,6 +485,10 @@ MASTER_URL_BASE = "https://api.discogs.com/masters/"
 # vinyl in one country, and this stops a huge master eating the rate limit.
 MAX_VERSION_PAGES = 5
 MASTER_BATCH = 20
+# With a matrix, batches are checked one after another until one has an exact
+# match, up to this many releases: under Discogs's 60 calls a minute, and short
+# enough for a page to load.
+MASTER_AUTO_MAX = 40
 
 
 def master_id_from(text):
@@ -597,7 +601,11 @@ def _master_versions(client, master_id, country, type_word, reissue, need):
 
 
 def _master_search(master, country, matrix, color, type_word, reissue, offset):
-    """search() for a master: its versions, filtered, checked 20 at a time."""
+    """
+    search() for a master: its versions, filtered, checked 20 at a time. With
+    a matrix it carries on to the next 20, up to MASTER_AUTO_MAX, until a
+    batch has an exact match.
+    """
     from discogs_client.exceptions import DiscogsAPIError, HTTPError
 
     from fbc import discogs
@@ -613,16 +621,14 @@ def _master_search(master, country, matrix, color, type_word, reissue, offset):
     except (TypeError, ValueError):
         offset = 0
 
+    matrix_text = normalise(matrix)
+    reach = MASTER_AUTO_MAX if matrix_text else MASTER_BATCH
+
     def fetch():
         try:
             client = discogs.client()
             hits, calls, truncated = _master_versions(
-                client,
-                master_id,
-                country,
-                type_word,
-                reissue,
-                offset + MASTER_BATCH + 1,
+                client, master_id, country, type_word, reissue, offset + reach + 1
             )
         except discogs.DiscogsAuthError as e:
             return _failure(str(e))
@@ -635,8 +641,18 @@ def _master_search(master, country, matrix, color, type_word, reissue, offset):
         except Exception as e:
             logger.exception("Discogs master versions failed")
             return _failure("Couldn't reach Discogs: " + str(e))
-        batch = hits[offset : offset + MASTER_BATCH]
-        candidates, note, used = _check(client, batch)
+        candidates, note, used, at = [], None, 0, offset
+        while at < len(hits) and at - offset < reach:
+            batch = hits[at : min(at + MASTER_BATCH, offset + reach)]
+            found_now, note, calls_now = _check(client, batch)
+            candidates += found_now
+            used += calls_now
+            at += len(batch)
+            exact = any(
+                match_matrix(matrix, c.get("matrices"))[0] == EXACT for c in found_now
+            )
+            if note or exact or not matrix_text:
+                break
         if truncated and not note:
             note = "Only the first %d versions were looked at." % (
                 MAX_VERSION_PAGES * 100
@@ -648,12 +664,18 @@ def _master_search(master, country, matrix, color, type_word, reissue, offset):
             "note": note,
             "total": len(hits),
             "master": master_id,
-            "next_offset": offset + MASTER_BATCH
-            if len(hits) > offset + MASTER_BATCH
-            else None,
+            "next_offset": at if len(hits) > at else None,
         }
 
-    key = ("master", master_id, (country or "").strip(), type_word, reissue, offset)
+    key = (
+        "master",
+        master_id,
+        (country or "").strip(),
+        type_word,
+        reissue,
+        offset,
+        matrix_text,
+    )
     found = _cached(key, fetch)
     if not found["ok"]:
         with _lock:
