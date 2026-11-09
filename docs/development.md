@@ -104,24 +104,13 @@ it off.
 
 `fbc/tracking.py` reads each order's carrier and tracking number from the
 `GetOrders` sync (`ShipmentTrackingDetails`, which needs no new OAuth scope)
-and links to the carrier's page. For USPS it also asks the Tracking 3.2 API
-([spec](https://developers.usps.com/sites/default/files/apidoc_specs/tracking-v3r2_7.yaml)):
-an OAuth client-credentials token from `apis.usps.com/oauth2/v3/token`, then
-`POST apis.usps.com/tracking/v3r2/tracking` with a list of up to 35
-`{"trackingNumber": ...}`. Its client ID and secret are in `USPS_SETTINGS`, from
-a developer account at developers.usps.com. One request covers a whole sync, so
-USPS's default limit (reported as about 60 requests an hour) isn't a worry; the
-cache and the cap per sync keep it that way.
-
-Paths, request and response fields follow that spec. What the spec doesn't
-say, and nothing here has checked against a live reply: the token request's
-exact body (fbc sends `grant_type`, `client_id` and `client_secret` as JSON),
-and the values of `statusCategory` (fbc looks for "Delivered"). Check one real
-lookup after setting the keys.
-
-All of it goes through `fetch_status`, which refuses in Dev Mode, and
-`usps.com` is among the hosts Dev Mode blocks. Tests mock `requests`. A
-carrier other than USPS would need its own client in the same place.
+and links to the carrier's page. It doesn't ask for tracking progress: eBay
+doesn't give it, and a carrier's API would. USPS's Tracking API was tried and
+dropped, because it needs a credit card on file with USPS; the
+[Tracking 3.2 spec](https://developers.usps.com/sites/default/files/apidoc_specs/tracking-v3r2_7.yaml)
+is `POST /tracking/v3r2/tracking` with a list of tracking numbers, if that
+changes. Any such client would keep its state on `EbayOrder` and go through
+`fbc/devmode.py`'s guards.
 
 ## Testing with Docker
 

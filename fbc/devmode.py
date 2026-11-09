@@ -1,18 +1,17 @@
 """
 Dev mode, for running fbc against a copy of the live database without
-reaching the live eBay, Discogs and USPS accounts.
+reaching the live eBay and Discogs accounts.
 
 It's on when config.py sets DEV_MODE = True or the environment has
 FBC_DEV_MODE=1 (docker/compose.dev.yml sets it); neither can turn the other
 off. In dev mode:
 
-- the eBay, Discogs and USPS keys in config.py are treated as empty;
+- the eBay and Discogs keys in config.py are treated as empty;
 - the functions every eBay and Discogs call goes through (listing.oauth_token,
-  listing._token_request, discogs.client, discogs._app_client,
-  tracking.fetch_status) refuse to run,
+  listing._token_request, discogs.client, discogs._app_client) refuse to run,
   so the OAuth tokens Connect eBay and Connect Discogs saved in the database
   are never used;
-- as a backstop, any request to an eBay, Discogs or USPS host is refused;
+- as a backstop, any request to an eBay or Discogs host is refused;
 - the syncs log that they're off and finish without doing anything, and the
   pages that would reach eBay or Discogs say so instead;
 - every page shows a Dev Mode banner, and the app is named "... (dev)".
@@ -32,10 +31,9 @@ ENVIRONMENT_VARIABLE = "FBC_DEV_MODE"
 # Kept in config.py but treated as empty in dev mode.
 EBAY_SECRETS = ("APP_ID", "DEV_ID", "CERT_ID", "RUNAME", "OAUTH_REFRESH_TOKEN")
 DISCOGS_SECRETS = ("CONSUMER_KEY", "CONSUMER_SECRET", "USER_TOKEN")
-USPS_SECRETS = ("CLIENT_ID", "CLIENT_SECRET")
 
 # Hosts no request may go to in dev mode, along with their subdomains.
-BLOCKED_DOMAINS = ("ebay.com", "discogs.com", "usps.com")
+BLOCKED_DOMAINS = ("ebay.com", "discogs.com")
 
 
 class ExternalRequestBlocked(requests.ConnectionError):
@@ -69,7 +67,6 @@ def init_app(app):
     for key, secrets in (
         ("EBAY_SETTINGS", EBAY_SECRETS),
         ("DISCOGS_SETTINGS", DISCOGS_SECRETS),
-        ("USPS_SETTINGS", USPS_SECRETS),
     ):
         # A copy, so the dict in the config module itself is left alone.
         settings = dict(app.config.get(key) or {})

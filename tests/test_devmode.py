@@ -71,7 +71,6 @@ def _app(**config):
             "OAUTH_REFRESH_TOKEN": "refresh",
             "LISTING": {"CATEGORY_ID": "176985"},
         },
-        USPS_SETTINGS={"CLIENT_ID": "id", "CLIENT_SECRET": "secret"},
         DISCOGS_SETTINGS={
             "CONSUMER_KEY": "key",
             "CONSUMER_SECRET": "secret",
@@ -104,7 +103,6 @@ def test_dev_mode_empties_the_ebay_and_discogs_keys(blocked_requests):
     discogs_settings = app.config["DISCOGS_SETTINGS"]
     assert all(discogs_settings[k] == "" for k in devmode.DISCOGS_SECRETS)
     assert discogs_settings["USER_AGENT"] == "fbc/1.0"
-    assert all(app.config["USPS_SETTINGS"][k] == "" for k in devmode.USPS_SECRETS)
     assert original["APP_ID"] == "app"
     assert app.config["APP_NAME"] == "FBC (dev)"
     assert blocked_requests == [1]
