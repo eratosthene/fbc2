@@ -12,6 +12,7 @@ from fbc.models.supplies import (
     RECONCILE,
     USED_FOR_LABELS,
     PurchaseOrder,
+    PurchaseOrderSupply,
     Supply,
     SupplyUse,
     fmt_stock,
@@ -123,7 +124,6 @@ class SupplyModelView(CustomModelView):
         "pack_size",
         "pack_used",
         "cost_per_use",
-        "purchase_orders",
     ]
     edit_columns = add_columns
     show_columns = [
@@ -201,11 +201,45 @@ def covers_its_expenses(form, field):
         )
 
 
+class PurchaseOrderSupplyModelView(CustomModelView):
+    """
+    What a Purchase Order brought of each supply. Adding one adds its
+    quantity to the supply's, and changing or deleting it takes back the
+    difference, so the Supply List stays right.
+    """
+
+    datamodel = SQLAInterface(PurchaseOrderSupply)
+    list_title = "Supplies On Purchase Order"
+    add_title = "Add Supply To Purchase Order"
+    edit_title = "Edit Supply On Purchase Order"
+    show_title = "Supply On Purchase Order"
+    list_columns = ["supply", "quantity"]
+    add_columns = ["purchase_order", "supply", "quantity"]
+    edit_columns = ["quantity"]
+    show_columns = ["purchase_order", "supply", "quantity"]
+    label_columns = {"purchase_order": "Purchase Order", "quantity": "Quantity Added"}
+    description_columns = {
+        "quantity": "How many came on the order. They're added to the supply's"
+        " Quantity, so count packs, like rolls, not the uses in each.",
+    }
+    validators_columns = {"quantity": [NumberRange(min=1)]}
+
+    def pre_add(self, item):
+        item.supply.restock(item.quantity)
+
+    def pre_update(self, item):
+        # The supply stays as it was: only how many can be corrected.
+        item.supply.restock(item.quantity - item.previous_quantity())
+
+    def pre_delete(self, item):
+        item.supply.restock(-item.quantity)
+
+
 class PurchaseOrderModelView(CustomModelView):
     datamodel = SQLAInterface(PurchaseOrder)
-    related_views = [ExpenseModelView]
+    related_views = [PurchaseOrderSupplyModelView, ExpenseModelView]
     list_columns = ["date", "purchase_price", "notes", "link"]
-    add_columns = ["date", "price", "notes", "link", "supply"]
+    add_columns = ["date", "price", "notes", "link"]
     edit_columns = add_columns
     show_columns = [
         "date",
@@ -226,8 +260,8 @@ class PurchaseOrderModelView(CustomModelView):
         "price": "What the whole order cost. Anything on it that isn't a"
         " supply, like a record crate, is an Expense on it, under Expenses"
         " below once it's saved. Those come out of this price, and the rest"
-        " is what the supplies cost.",
-        "supply": "Every supply this order restocked.",
+        " is what the supplies cost. Add the supplies it brought there too,"
+        " under Supplies On Purchase Order, to add them to their Quantity.",
     }
     validators_columns = {"price": [covers_its_expenses]}
 

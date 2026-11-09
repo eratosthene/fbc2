@@ -19,6 +19,8 @@ ADJUSTMENT = "adjustment"
 # Kept apart from ADJUSTMENT, which includes restocks, so a count's
 # differences show how far the estimates drift.
 RECONCILE = "reconcile"
+# A Purchase Order brought some in (or one it brought was changed or removed).
+RESTOCK = "restock"
 USED_FOR_LABELS = {
     None: "Only by hand",
     SHIPPING: "Shipping an order",
@@ -29,6 +31,7 @@ KIND_LABELS = {
     ADDING_UNIT: "Adding a Unit",
     ADJUSTMENT: "Supply List edit",
     RECONCILE: "Reconcile Supplies",
+    RESTOCK: "Purchase Order",
 }
 
 
@@ -76,6 +79,20 @@ class PurchaseOrder(Model):
     expenses = relationship(
         "Expense", back_populates="purchase_order", order_by="Expense.id"
     )
+    # What it brought, supply by supply. Deleting the order keeps the stock it
+    # added: it did arrive, and the Supply Use record of it stays.
+    items = relationship(
+        "PurchaseOrderSupply",
+        back_populates="purchase_order",
+        cascade="all, delete-orphan",
+        order_by="PurchaseOrderSupply.id",
+    )
+    supply = relationship(
+        "Supply",
+        secondary="purchase_order_supply",
+        viewonly=True,
+        back_populates="purchase_orders",
+    )
 
     @renders("price")
     def purchase_price(self):
@@ -110,15 +127,6 @@ class Supply(Model):
 
     from fbc import db
 
-    assoc_purchase_order_supply = db.Table(
-        "purchase_order_supply",
-        Model.metadata,
-        Column("id", Integer, primary_key=True),
-        Column("purchase_order_id", Integer, ForeignKey("purchase_order.id")),
-        Column("supply_id", Integer, ForeignKey("supply.id")),
-        keep_existing=True,
-    )
-
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
     # active_history keeps what quantity and pack_used were when one is
@@ -151,7 +159,15 @@ class Supply(Model):
     # worked out from them. None when not known.
     cost_per_use = Column(Float)
     purchase_orders = relationship(
-        "PurchaseOrder", secondary=assoc_purchase_order_supply, backref="supply"
+        "PurchaseOrder",
+        secondary="purchase_order_supply",
+        viewonly=True,
+        back_populates="supply",
+    )
+    order_items = relationship(
+        "PurchaseOrderSupply",
+        back_populates="supply",
+        cascade="all, delete-orphan",
     )
     # Deleting a supply deletes its history with it.
     uses = relationship(
@@ -216,6 +232,19 @@ class Supply(Model):
         self.quantity = max(0, (self.quantity or 0) - used // size)
         self.pack_used = used % size if self.quantity else 0
         return self._record(count, kind, receipt=receipt, unit=unit)
+
+    def restock(self, count):
+        """
+        Add `count` to quantity, which is how many a Purchase Order brought,
+        or fewer than 0 to take back some it didn't. Quantity stops at 0.
+        Records it as a SupplyUse and returns that, or None when stock didn't
+        change. The one in use (pack_used) stays as it is.
+        """
+        before = self.quantity or 0
+        self.quantity = max(0, before + count)
+        if self.quantity == before:
+            return None
+        return self._record(before - self.quantity, RESTOCK)
 
     def stock_from_count(self, on_hand, left=None):
         """
@@ -297,6 +326,37 @@ class Supply(Model):
             .order_by(Supply.name)
             .all()
         )
+
+
+class PurchaseOrderSupply(Model):
+    """
+    How many of a supply one Purchase Order brought. This was only a link
+    between the two, so what's there from before has a quantity of 0: the
+    Supply List already counted it.
+    """
+
+    __tablename__ = "purchase_order_supply"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    # Deleting either deletes this through the ORM's cascade.
+    purchase_order_id = Column(Integer, ForeignKey("purchase_order.id"), nullable=False)
+    purchase_order = relationship("PurchaseOrder", back_populates="items")
+    supply_id = Column(Integer, ForeignKey("supply.id"), nullable=False)
+    supply = relationship("Supply", back_populates="order_items")
+    # Added to the supply's quantity, so packs, like a roll of labels. Kept
+    # so editing or removing this can take back the same amount.
+    quantity = column_property(
+        Column(Integer, nullable=False, default=0, server_default="0"),
+        active_history=True,
+    )
+
+    def previous_quantity(self):
+        """What quantity was when it was loaded, before an edit."""
+        deleted = inspect(self).attrs.quantity.history.deleted
+        return deleted[0] if deleted else self.quantity
+
+    def __repr__(self):
+        name = self.supply.name if self.supply else "?"
+        return str(self.quantity) + " " + name
 
 
 class SupplyUse(Model):
