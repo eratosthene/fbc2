@@ -7,7 +7,6 @@ Give what you know; the matrix is read from each release Discogs finds, since
 Discogs can't search on it.</p>
 
 <form method="get" class="form-horizontal" action="{{ url_for('IdentifyRecordView.search') }}">
-  <input type="hidden" name="go" value="1">
   {% macro field(name, label, value, hint='') %}
   <div class="form-group">
     <label class="col-sm-2 control-label" for="{{ name }}">{{ label }}</label>
@@ -16,6 +15,7 @@ Discogs can't search on it.</p>
   </div>
   {% endmacro %}
   {{ field('release_id', 'Release ID', form.release_id, 'If you already found it on Discogs: the number, [r123456] or its address. This replaces everything else below except Country and Matrix, which only rank it, and shows just that release.') }}
+  {{ field('master', 'Master', form.master, 'The master on Discogs: the number, [m84990] or its address. Searching then lists that master\'s versions, filtered by Country, Type and Reissue, and replaces the Artist, Title, Catalogue Number and Barcode below. Don\'t know it? Fill in Artist and Title and press Find master.') }}
   {{ field('artist', 'Artist', form.artist) }}
   {{ field('title', 'Title', form.title) }}
   {{ field('catno', 'Catalogue Number', form.catno) }}
@@ -43,10 +43,30 @@ Discogs can't search on it.</p>
     </select></div>
   </div>
   <div class="form-group"><div class="col-sm-offset-2 col-sm-6">
-    <button class="btn btn-primary">Search Discogs</button>
+    <button class="btn btn-primary" name="go" value="1">Search Discogs</button>
+    <button class="btn btn-default" name="find_master" value="1">Find master from Artist and Title</button>
     {% if dev_mode %}<button class="btn btn-default" name="sample" value="1">Try the sample data</button>{% endif %}
   </div></div>
 </form>
+
+{% if masters %}
+{% if not masters.ok %}
+<div class="alert {{ 'alert-warning' if masters.dev_mode else 'alert-danger' }}">{{ masters.error }}</div>
+{% else %}
+<h4>Masters found</h4>
+{% if not masters.masters %}<p>Discogs found no master. Try fewer words in the title.</p>{% endif %}
+{% for m in masters.masters %}
+<div class="media" style="margin-bottom:.5em">
+  {% if m.thumb %}<div class="media-left"><img class="media-object" src="{{ m.thumb }}" alt="" style="width:60px"></div>{% endif %}
+  <div class="media-body">
+    <a href="{{ m.url }}" target="_blank" rel="noopener">{{ m.title }}</a>{% if m.year %} ({{ m.year }}){% endif %}
+    &middot; master {{ m.id }}
+    <a class="btn btn-xs btn-success" href="{{ master_links[m.id] }}">Use this master</a>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endif %}
 
 {% if found %}
 {% if not found.ok %}
@@ -105,6 +125,8 @@ Discogs can't search on it.</p>
   </div>
 </div></div></div>
 {% endfor %}
+{% if more_url %}<p><a class="btn btn-default" href="{{ more_url }}">Check the next 20 versions</a>
+  <span class="text-muted">{{ found.total }} versions match so far; each check is a Discogs call.</span></p>{% endif %}
 {% endif %}
 {% endif %}
 {# One viewer for every picture: click a thumbnail, then use the arrow buttons or keys. #}

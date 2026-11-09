@@ -331,6 +331,36 @@ def _summary(release, result=None):
     }
 
 
+def _check(client, hits):
+    """
+    Fetch each hit's release record, for its matrix and pictures: (candidates,
+    note, calls made). A hit that can't be fetched, or comes after Discogs's
+    rate limit stops us, is kept unchecked.
+    """
+    candidates, note, calls = [], None, 0
+    for hit in hits:
+        if not hit.get("id"):
+            continue
+        unchecked = False
+        try:
+            calls += 1
+            release = _release_record(client, hit["id"])
+        except RateLimited:
+            note = (
+                "Discogs's rate limit stopped the matrix check, so some"
+                " releases below are unchecked. Try again in a minute."
+            )
+            release, unchecked = {}, True
+        except Exception as e:
+            logger.warning("Couldn't fetch release %s: %s", hit.get("id"), e)
+            release, unchecked = {}, True
+        candidate = _summary(release, hit)
+        candidate["unchecked"] = unchecked
+        candidate["found_by_matrix"] = bool(hit.get("found_by_matrix"))
+        candidates.append(candidate)
+    return candidates, note, calls
+
+
 def search(
     artist="",
     title="",
@@ -342,6 +372,8 @@ def search(
     reissue="",
     color="",
     release_id="",
+    master="",
+    offset=0,
 ):
     """
     Look for releases on Discogs and rank them: {"ok": True, "candidates",
@@ -350,7 +382,10 @@ def search(
     label from TYPES, and reissue "yes" or "no" filters on Discogs's Reissue
     format description. color only ranks. "note" is set when Discogs's rate limit
     stopped the matrix check part way. A release_id (a number, [r123] or a
-    release's address) overrides everything else: just that release.
+    release's address) overrides everything else: just that release. A master
+    (a number, [m123] or its address) replaces artist, title, catalogue number
+    and barcode: its versions are listed, filtered by country, type and
+    reissue, and `offset` skips the ones an earlier call already checked.
     """
     from urllib.parse import urlencode
 
@@ -363,6 +398,10 @@ def search(
     if (release_id or "").strip():
         return _one_release(release_id, country, matrix, color)
     type_word = dict(TYPES).get(vinyl_type, "LP")
+    if (master or "").strip():
+        return _master_search(
+            master, country, matrix, color, type_word, reissue, offset
+        )
     params = {"type": "release", "per_page": 50}
     for key, value in (
         ("artist", artist),
@@ -418,29 +457,10 @@ def search(
         except Exception as e:
             logger.exception("Discogs search failed")
             return _failure("Couldn't reach Discogs: " + str(e))
-        candidates, note = [], None
         hits = [h for h in hits if keep_hit(h, type_word, reissue)]
         limit = MAX_CANDIDATES_WITH_MATRIX if matrix_text else MAX_CANDIDATES
-        for hit in hits[:limit]:
-            if not hit.get("id"):
-                continue
-            unchecked = False
-            try:
-                calls += 1
-                release = _release_record(client, hit["id"])
-            except RateLimited:
-                note = (
-                    "Discogs's rate limit stopped the matrix check, so some"
-                    " releases below are unchecked. Try again in a minute."
-                )
-                release, unchecked = {}, True
-            except Exception as e:
-                logger.warning("Couldn't fetch release %s: %s", hit.get("id"), e)
-                release, unchecked = {}, True
-            candidate = _summary(release, hit)
-            candidate["unchecked"] = unchecked
-            candidate["found_by_matrix"] = bool(hit.get("found_by_matrix"))
-            candidates.append(candidate)
+        candidates, note, used = _check(client, hits[:limit])
+        calls += used
         return {
             "ok": True,
             "candidates": candidates,
@@ -457,6 +477,188 @@ def search(
             _cache.pop(key, None)
         return found
     # Ranking is cheap, so the colour and country aren't in the key.
+    return dict(found, candidates=rank(found["candidates"], country, matrix, color))
+
+
+MASTER_URL_BASE = "https://api.discogs.com/masters/"
+# A master's versions come 100 to a page; a page or two covers most masters'
+# vinyl in one country, and this stops a huge master eating the rate limit.
+MAX_VERSION_PAGES = 5
+MASTER_BATCH = 20
+
+
+def master_id_from(text):
+    """The master number in "123", "m123", "[m123]" or a master's address
+    (".../master/123-Artist-Title"), or None."""
+    import re
+
+    text = (text or "").strip()
+    m = re.fullmatch(r"\[?m?(\d+)\]?", text, re.I) or re.search(r"/master/(\d+)", text)
+    return int(m.group(1)) if m else None
+
+
+def find_masters(artist="", title=""):
+    """
+    Masters on Discogs for an artist and title, to fill in the Master field:
+    {"ok": True, "masters": [{"id", "title", "year", "thumb", "url"}]} or
+    {"ok": False, "error", "dev_mode"}. One Discogs call.
+    """
+    from urllib.parse import urlencode
+
+    from discogs_client.exceptions import DiscogsAPIError, HTTPError
+
+    from fbc import discogs
+
+    if devmode.on():
+        return _failure("Not available in dev mode.", dev_mode=True)
+    params = {"type": "master", "per_page": 15}
+    if (artist or "").strip():
+        params["artist"] = artist.strip()
+    if (title or "").strip():
+        params["release_title"] = title.strip()
+    if len(params) == 2:
+        return _failure("Give an artist or a title to find the master.")
+
+    def fetch():
+        try:
+            hits = (
+                _get(discogs.client(), SEARCH_URL + "?" + urlencode(params)) or {}
+            ).get("results") or []
+        except discogs.DiscogsAuthError as e:
+            return _failure(str(e))
+        except RateLimited:
+            return _failure("Discogs says too many requests; try in a minute.")
+        except (DiscogsAPIError, HTTPError) as e:
+            return _failure("Discogs said no: " + str(e))
+        except Exception as e:
+            logger.exception("Discogs master search failed")
+            return _failure("Couldn't reach Discogs: " + str(e))
+        return {
+            "ok": True,
+            "masters": [
+                {
+                    "id": h["id"],
+                    "title": h.get("title"),
+                    "year": h.get("year"),
+                    "thumb": h.get("thumb"),
+                    "url": "https://www.discogs.com/master/" + str(h["id"]),
+                }
+                for h in hits
+                if h.get("id")
+            ],
+        }
+
+    key = ("find-masters", tuple(sorted(params.items())))
+    found = _cached(key, fetch)
+    if not found["ok"]:
+        with _lock:
+            _cache.pop(key, None)
+    return found
+
+
+def _master_versions(client, master_id, country, type_word, reissue, need):
+    """
+    The master's versions that are the wanted vinyl, as search-hit-like
+    dicts, fetching pages until there are `need` of them or none are left:
+    (hits, calls made, whether pages were left unread at the page limit).
+    """
+    from urllib.parse import urlencode
+
+    params = {"per_page": 100, "sort": "released", "format": "Vinyl"}
+    if (country or "").strip():
+        params["country"] = country.strip()
+    hits, calls, page, pages = [], 0, 0, 1
+    while page < pages and page < MAX_VERSION_PAGES and len(hits) < need:
+        page += 1
+        calls += 1
+        body = _get(
+            client,
+            "%s%d/versions?%s"
+            % (MASTER_URL_BASE, master_id, urlencode(dict(params, page=page))),
+        )
+        pages = ((body or {}).get("pagination") or {}).get("pages") or 1
+        for v in (body or {}).get("versions") or []:
+            formats = list(v.get("major_formats") or []) + [
+                f.strip() for f in (v.get("format") or "").split(",") if f.strip()
+            ]
+            hit = {
+                "id": v.get("id"),
+                "title": v.get("title"),
+                "country": v.get("country"),
+                "year": (v.get("released") or "")[:4] or None,
+                "format": formats,
+                "label": [v["label"]] if v.get("label") else [],
+                "catno": v.get("catno"),
+                "thumb": v.get("thumb"),
+            }
+            if hit["id"] and keep_hit(hit, type_word, reissue):
+                hits.append(hit)
+    return hits, calls, page < pages and len(hits) < need
+
+
+def _master_search(master, country, matrix, color, type_word, reissue, offset):
+    """search() for a master: its versions, filtered, checked 20 at a time."""
+    from discogs_client.exceptions import DiscogsAPIError, HTTPError
+
+    from fbc import discogs
+
+    master_id = master_id_from(master)
+    if not master_id:
+        return _failure(
+            "That isn't a master id. Use the number, [m84990] or the master's"
+            " address from Discogs."
+        )
+    try:
+        offset = max(0, int(offset or 0))
+    except (TypeError, ValueError):
+        offset = 0
+
+    def fetch():
+        try:
+            client = discogs.client()
+            hits, calls, truncated = _master_versions(
+                client,
+                master_id,
+                country,
+                type_word,
+                reissue,
+                offset + MASTER_BATCH + 1,
+            )
+        except discogs.DiscogsAuthError as e:
+            return _failure(str(e))
+        except RateLimited:
+            return _failure("Discogs says too many requests; try in a minute.")
+        except (DiscogsAPIError, HTTPError) as e:
+            if getattr(e, "status_code", None) == 404:
+                return _failure("Discogs has no master %d." % master_id)
+            return _failure("Discogs said no: " + str(e))
+        except Exception as e:
+            logger.exception("Discogs master versions failed")
+            return _failure("Couldn't reach Discogs: " + str(e))
+        batch = hits[offset : offset + MASTER_BATCH]
+        candidates, note, used = _check(client, batch)
+        if truncated and not note:
+            note = "Only the first %d versions were looked at." % (
+                MAX_VERSION_PAGES * 100
+            )
+        return {
+            "ok": True,
+            "candidates": candidates,
+            "searched": calls + used,
+            "note": note,
+            "total": len(hits),
+            "master": master_id,
+            "next_offset": offset + MASTER_BATCH
+            if len(hits) > offset + MASTER_BATCH
+            else None,
+        }
+
+    key = ("master", master_id, (country or "").strip(), type_word, reissue, offset)
+    found = _cached(key, fetch)
+    if not found["ok"]:
+        with _lock:
+            _cache.pop(key, None)
+        return found
     return dict(found, candidates=rank(found["candidates"], country, matrix, color))
 
 

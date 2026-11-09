@@ -76,9 +76,21 @@ vinyl. Reissue is blank for either, or Reissue or Not a reissue to filter on
 that. Color is optional, like red or clear: a release whose format notes list
 it ranks higher, and none is hidden for lacking it.
 
-It searches Discogs, then reads the matrix of each release it finds. Discogs
-documents no way to search on a matrix, so that's a call per release. It
-checks the first 12 releases, or 20 when you give a matrix (Discogs allows 60
+The best way in is the master, as on Discogs. If you know it, type its number
+or address into Master. If not, fill in Artist and Title and press **Find
+master from Artist and Title**: it lists the masters Discogs finds, and **Use
+this master** fills in the Master field (keeping what else you typed). Then
+press **Search Discogs**. With a Master it lists that master's versions,
+filtered by Country, Type and Reissue, instead of searching on Artist, Title,
+Catalogue Number and Barcode, so no version is missed because of how Discogs
+ranks a search. It checks the matrix of 20 versions at a time, with a "Check
+the next 20 versions" button when there are more, and looks through at most
+500 versions of one master. Discogs has no matrix filter for a master's
+versions, so each version is a call to read its matrix.
+
+Without a Master, it searches Discogs, then reads the matrix of each release
+it finds. Discogs documents no way to search on a matrix, so that's a call per
+release. It checks the first 12 releases, or 20 when you give a matrix (Discogs allows 60
 calls a minute). When you give a matrix it also asks Discogs's own text search
 for it, and what that finds is checked first and marked "Found by matrix". If
 a release you expect isn't listed, give more to narrow the search (the artist
