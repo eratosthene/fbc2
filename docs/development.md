@@ -100,6 +100,18 @@ should use it: take `app` and `db` from `fbc`, and don't touch
 `appbuilder`. A script that needs the web app, such as a test client, leaves
 it off.
 
+## Shipment tracking
+
+`fbc/tracking.py` reads each order's carrier and tracking number from the
+`GetOrders` sync (`ShipmentTrackingDetails`, which needs no new OAuth scope)
+and links to the carrier's page. It doesn't ask for tracking progress: eBay
+doesn't give it, and a carrier's API would. USPS's Tracking API was tried and
+dropped, because it needs a credit card on file with USPS; the
+[Tracking 3.2 spec](https://developers.usps.com/sites/default/files/apidoc_specs/tracking-v3r2_7.yaml)
+is `POST /tracking/v3r2/tracking` with a list of tracking numbers, if that
+changes. Any such client would keep its state on `EbayOrder` and go through
+`fbc/devmode.py`'s guards.
+
 ## Testing with Docker
 
 `docker/compose.dev.yml` runs the app from this checkout's code, with

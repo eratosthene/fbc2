@@ -227,15 +227,33 @@ class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
         "fmt_title",
         "buyer",
         "fmt_price",
+        "fmt_tracking",
         "links",
     ]
-    search_columns = ["order_id", "price", "title", "buyer", "archived"]
+    search_columns = [
+        "order_id",
+        "price",
+        "title",
+        "buyer",
+        "tracking_number",
+        "archived",
+    ]
     label_columns = {
         "fmt_price": "Price",
         "fmt_url": "Order Id",
         "fmt_title": "Title",
         "links": "Links",
+        "fmt_tracking": "Tracking",
     }
+    show_columns = [
+        "order_id",
+        "created_time",
+        "buyer",
+        "fmt_title",
+        "fmt_price",
+        "fmt_tracking",
+        "fmt_url",
+    ]
     related_views = [SalesReceiptModelView]
     add_columns = [
         "order_id",
