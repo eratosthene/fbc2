@@ -55,6 +55,9 @@ class EbayOrder(Model):
     # What the buyer paid for shipping. None for orders synced before fbc
     # kept it.
     shipping = Column(Float)
+    # From eBay once the order has shipped; see fbc/tracking.py.
+    shipping_carrier = Column(String(40))
+    tracking_number = Column(String(40))
     # The first item's title and listing; every item is in items.
     title = Column(String(100))
     ebay_listing_id = Column(String(20), ForeignKey("ebay_listing.item_id"))
@@ -94,6 +97,24 @@ class EbayOrder(Model):
             + '">'
             + self.order_id
             + "</a>"
+        )
+
+    def fmt_tracking(self):
+        """The carrier and tracking number, linked to the carrier's page."""
+        from markupsafe import escape
+
+        from fbc.tracking import carrier_name, tracking_url
+
+        if not self.tracking_number:
+            return ""
+        text = escape(
+            (carrier_name(self.shipping_carrier) + " " + self.tracking_number).strip()
+        )
+        url = tracking_url(self.shipping_carrier, self.tracking_number)
+        if not url:
+            return text
+        return Markup('<a href="{}" target="_blank" rel="noopener">{}</a>').format(
+            url, text
         )
 
     def listing_ids(self):

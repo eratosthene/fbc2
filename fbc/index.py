@@ -358,8 +358,9 @@ class MyIndexView(IndexView):
             if not order:
                 logger.info("Adding " + str(item["OrderID"]))
                 add_ebay_order(item)
-            elif doupdate == "True" or not order.items:
-                # Orders synced before fbc kept every item get them now.
+            elif doupdate == "True" or not order.items or not order.tracking_number:
+                # Orders synced before fbc kept every item get them now, and
+                # an order still without tracking checks whether it has some.
                 logger.info("Updating " + str(item["OrderID"]))
                 add_ebay_order(item)
 

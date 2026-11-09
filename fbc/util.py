@@ -8,6 +8,8 @@ from flask_appbuilder.models.filters import BaseFilter
 from flask_appbuilder.models.sqla.filters import get_field_setup_query
 from sqlalchemy import or_
 
+from fbc import tracking
+
 logger = logging.getLogger()
 
 
@@ -173,6 +175,14 @@ def order_items(item):
     return items
 
 
+def update_tracking(order, item):
+    """Keep an order's tracking as eBay has it; a blank never wipes it."""
+    carrier, number = tracking.from_order(item)
+    if number:
+        order.shipping_carrier = carrier
+        order.tracking_number = number
+
+
 def add_ebay_order(item):
     """
     Add a GetOrders order, with every item on it, if its first item's
@@ -189,6 +199,7 @@ def add_ebay_order(item):
         item["CreatedTime"], "%Y-%m-%dT%H:%M:%S.000Z"
     )
     items = order_items(item)
+    carrier, tracking_number = tracking.from_order(item)
     title = items[0].title
     ebay_listing_id = items[0].ebay_listing_id
     shipping = _money(
@@ -212,6 +223,8 @@ def add_ebay_order(item):
                 order_id=order_id,
                 price=price,
                 shipping=shipping,
+                shipping_carrier=carrier,
+                tracking_number=tracking_number,
                 buyer=buyer,
                 created_time=created_time,
                 title=title,
@@ -225,6 +238,7 @@ def add_ebay_order(item):
                 ebay_order.items = items
             if ebay_order.shipping is None:
                 ebay_order.shipping = shipping
+            update_tracking(ebay_order, item)
         db.session.commit()
         db.session.refresh(ebay_order)
         logger.debug(ebay_order)

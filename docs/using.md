@@ -208,6 +208,23 @@ label cost, and how much to refund on one of the orders on eBay to pass on
 the saving. Reload the page once it's refunded, so the refund is in the
 earnings.
 
+### Shipment tracking
+
+Each eBay Order shows its carrier and tracking number, linked to the
+carrier's own tracking page (USPS, UPS, FedEx and DHL; any other carrier
+shows as text). They come from eBay with the orders sync, so an order shows
+them after the first Sync (or Sync New) that runs once its label is bought.
+The list's Tracking column is blank until then.
+
+fbc doesn't show whether a package has moved or been delivered. eBay only
+gives the number and carrier, and the progress is the carrier's to give, which
+needs a carrier account and keys. Click the link to see it. fbc can't print a
+label again either: eBay has no way to do that for a label bought on eBay, so
+open the order's Order Id link and use the label link there.
+
+In Dev Mode nothing is fetched, so orders only show tracking that was already
+synced.
+
 ### Combining old Sales Receipts
 
 Before Ship This handled several Units, such shipments were recorded by hand,
