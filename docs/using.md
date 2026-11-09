@@ -69,23 +69,35 @@ yet.
 ### Identify Record
 
 Inventory > Identify Record finds the Discogs release a record in hand is.
-Give what you know: artist, title, catalogue number or barcode (at least one),
-the country (US to start with), the vinyl matrix, and the Purchase Lot it
-came in. Only vinyl is searched. Type is LP unless you choose 7" (45 RPM), 12"
-or Any vinyl. Reissue is blank for either, or Reissue or Not a reissue to
-filter on that. Color is optional, like red or clear: a release whose format
-notes list it ranks higher, and none is hidden for lacking it. It searches Discogs, reads the matrix of each release it finds
-(Discogs can't search on a matrix, so this is a call per release; it checks
-the first 12, and Discogs allows 60 calls a minute), and lists them best match
-first, with pictures, format, label, catalogue number, year and the matrix
-text, the part that matched highlighted.
+Give what you know: artist, title, catalogue number, barcode or matrix (at
+least one), the country (US to start with), and the Purchase Lot it came in.
+Only vinyl is searched. Type is LP unless you choose 7" (45 RPM), 12" or Any
+vinyl. Reissue is blank for either, or Reissue or Not a reissue to filter on
+that. Color is optional, like red or clear: a release whose format notes list
+it ranks higher, and none is hidden for lacking it.
+
+It searches Discogs, then reads the matrix of each release it finds. Discogs
+documents no way to search on a matrix, so that's a call per release. It
+checks the first 12 releases, or 20 when you give a matrix (Discogs allows 60
+calls a minute). When you give a matrix it also asks Discogs's own text search
+for it, and what that finds is checked first and marked "Found by matrix". If
+a release you expect isn't listed, give more to narrow the search (the artist
+and title, or a catalogue number), or paste its Release ID.
+
+Releases are listed best match first, with every picture (click one to see it
+full size, and use the arrows to step through them), format, label, catalogue
+number, year and the matrix text with the part that matched highlighted. A
+closed "Notes, barcode and other identifiers" section under each shows the
+release's notes and every identifier Discogs lists, such as the full barcode.
 
 How the matrix is scored: case, spaces and punctuation are ignored. An
 **exact** match is the same text as a matrix listed on the release. A
 **partial** match shares a run of at least 4 letters and digits that covers at
-least 60% of the shorter one. A release that lists **no matrix** is kept, with
-a note to look at its pictures. One that lists matrices and none close is a
-**mismatch** and goes last. A matching country moves a release up.
+least 60% of the shorter one, and scores higher the more it covers. A release
+that lists **no matrix** is kept, with a note to look at its pictures. One that
+lists matrices and none close is a **mismatch** and goes last. The matrix
+counts for most: an exact match outranks a release that only has the right
+country. A matching country and a matching color move a release up too.
 
 Each result has two buttons.
 

@@ -193,22 +193,72 @@ def test_search_ranks_what_discogs_returns(monkeypatch):
     assert r["ok"] and [c["id"] for c in r["candidates"]] == [2, 1]
     assert r["candidates"][0]["status"] == identify.EXACT
     assert r["candidates"][0]["thumb"] == "http://img/2.jpg"
-    assert r["searched"] == 3
-    assert "country=US" in fake.urls[0] and "artist=Band" in fake.urls[0]
+    assert r["searched"] == 4  # two searches (one on the matrix) and two releases
+    assert "q=a1xyz" in fake.urls[0] and "artist=Band" in fake.urls[1]
 
 
-def test_a_second_search_with_another_matrix_reuses_the_calls(monkeypatch):
+def test_a_second_search_with_the_same_matrix_reuses_the_calls(monkeypatch):
     fake = use(monkeypatch, FakeClient([1], {1: record(1, "US", ["A1"])}))
     identify.search(artist="Band", country="US", matrix="A1")
-    r = identify.search(artist="Band", country="US", matrix="B2")
-    assert len(fake.urls) == 2
-    assert r["candidates"][0]["status"] == identify.MISMATCH
+    calls = len(fake.urls)
+    r = identify.search(artist="Band", country="US", matrix="A1", color="red")
+    assert len(fake.urls) == calls
+    assert r["candidates"][0]["status"] == identify.EXACT
 
 
 def test_search_needs_something_to_search_for(monkeypatch):
     fake = use(monkeypatch, FakeClient([], {}))
-    assert not identify.search(country="US", matrix="A")["ok"]
+    assert not identify.search(country="US", color="red")["ok"]
     assert fake.urls == []
+
+
+def test_a_matrix_alone_is_enough_and_is_searched_as_text(monkeypatch):
+    fake = use(monkeypatch, FakeClient([4], {4: record(4, "US", ["\u039415109"])}))
+    r = identify.search(matrix="\u039415109")
+    assert r["ok"] and [c["id"] for c in r["candidates"]] == [4]
+    assert len(fake.urls) == 2 and "q=%CE%9415109" in fake.urls[0]
+    assert r["candidates"][0]["found_by_matrix"]
+    assert r["candidates"][0]["status"] == identify.EXACT
+
+
+def test_what_the_matrix_search_finds_is_checked_first_and_not_twice(monkeypatch):
+    class Two(FakeClient):
+        def _get(self, url):
+            if "/database/search" in url:
+                self.urls.append(url)
+                ids = [9] if "q=" in url else [1, 2, 9]
+                return {"results": [{"id": i, "format": ["Vinyl", "LP"]} for i in ids]}
+            return super()._get(url)
+
+    use(
+        monkeypatch,
+        Two([], {i: record(i, matrices=["Z9"] if i == 9 else []) for i in (1, 2, 9)}),
+    )
+    r = identify.search(artist="Band", matrix="Z9")
+    assert [c["id"] for c in r["candidates"]] == [9, 1, 2]
+    assert [c["found_by_matrix"] for c in r["candidates"]] == [True, False, False]
+
+
+def test_more_releases_are_checked_when_there_is_a_matrix(monkeypatch):
+    ids = list(range(1, 31))
+    fake = use(monkeypatch, FakeClient(ids, {i: record(i) for i in ids}))
+    assert len(identify.search(artist="Band")["candidates"]) == 12
+    identify.clear_cache()
+    assert len(identify.search(artist="Band", matrix="A1")["candidates"]) == 20
+    assert fake.urls
+
+
+def test_a_matrix_match_outweighs_a_matching_country():
+    ranked = identify.rank(
+        [
+            {"id": 1, "country": "US", "matrices": ["ZZZ 99"]},
+            {"id": 2, "country": "UK", "matrices": ["A-1 15109"]},
+            {"id": 3, "country": "UK", "matrices": ["A-1 15109 X"]},
+        ],
+        "US",
+        "a1 15109",
+    )
+    assert [c["id"] for c in ranked] == [2, 3, 1]
 
 
 def test_dev_mode_never_reaches_discogs(dev_mode, monkeypatch):
@@ -598,3 +648,32 @@ def test_add_unit_from_the_releases_list_uses_the_master_year_and_pressing(app, 
     )
     html = release.unit_add(instance_id=1, markup=False)
     assert "(1970)" in html and "pressing=UK+1990+Reissue" in html
+
+
+# --- notes, identifiers and pictures ---
+
+
+def test_the_results_carry_notes_identifiers_and_every_picture(monkeypatch, client):
+    rec = record(5, matrices=["A1"])
+    rec["notes"] = "Gatefold sleeve.\nPromo copy."
+    rec["identifiers"].append(
+        {"type": "Other", "value": "STERLING", "description": "Mastering"}
+    )
+    rec["images"] = [
+        {"uri": "http://img/full%d.jpg" % n, "uri150": "http://img/t%d.jpg" % n}
+        for n in range(6)
+    ]
+    use(monkeypatch, FakeClient([5], {5: rec}))
+    found = identify.search(artist="Band")["candidates"][0]
+    assert found["notes"].startswith("Gatefold")
+    assert {"type": "Barcode", "value": "123", "description": ""} in found[
+        "identifiers"
+    ]
+    assert len(found["images"]) == 6 and found["images"][5]["full"].endswith(
+        "full5.jpg"
+    )
+    html = client.get("/identifyrecord/?go=1&artist=Band").get_data(as_text=True)
+    assert html.count('class="identify-image"') == 6
+    assert 'href="http://img/full3.jpg"' in html and "identify-viewer" in html
+    assert "<details" in html and "STERLING" in html and "Promo copy." in html
+    assert "<details open" not in html  # closed until opened

@@ -63,7 +63,7 @@ Discogs can't search on it.</p>
 <div class="panel panel-default"><div class="panel-body"><div class="row">
   <div class="col-sm-3">
     {% if c.images %}
-      {% for img in c.images[:3] %}<a href="{{ c.url }}" target="_blank" rel="noopener"><img src="{{ img }}" alt="" style="width:30%;max-width:100px"></a>{% endfor %}
+      {% for img in c.images %}<a href="{{ img.full }}" class="identify-image" data-group="{{ c.id }}" data-index="{{ loop.index0 }}"><img src="{{ img.thumb }}" alt="Picture {{ loop.index }}" style="width:30%;max-width:100px;margin:0 2px 2px 0"></a>{% endfor %}
     {% elif c.thumb %}<img src="{{ c.thumb }}" alt="" style="max-width:150px">
     {% else %}<span class="text-muted">No picture</span>{% endif %}
   </div>
@@ -77,8 +77,17 @@ Discogs can't search on it.</p>
       {% if c.color_match %}<span class="label label-success">matches</span>{% endif %}{% endif %}</p>
     {% if c.unchecked %}<p class="text-muted">Matrix not checked (rate limit or error).</p>
     {% elif c.matrix_html %}<p>Matrix: {% for m in c.matrix_html %}<code>{{ m }}</code> {% endfor %}</p>{% endif %}
+    {% if c.found_by_matrix %}<span class="label label-info" title="Discogs's own text search matched the matrix you typed">Found by matrix</span>{% endif %}
     {% if c.status_label %}
     <span class="label {{ {'exact':'label-success','partial':'label-warning','mismatch':'label-danger'}.get(c.status,'label-default') }}">{{ c.status_label }}</span>
+    {% endif %}
+    {% if c.notes or c.identifiers %}
+    <details style="margin-top:.5em"><summary style="cursor:pointer">Notes, barcode and other identifiers</summary>
+      {% if c.identifiers %}<table class="table table-condensed" style="width:auto;margin:.5em 0">
+        {% for i in c.identifiers %}<tr><td>{{ i.type }}</td><td><code>{{ i.value }}</code></td><td class="text-muted">{{ i.description }}</td></tr>{% endfor %}
+      </table>{% endif %}
+      {% if c.notes %}<p style="white-space:pre-line;margin-top:.5em">{{ c.notes }}</p>{% endif %}
+    </details>
     {% endif %}
   </div>
   <div class="col-sm-2">
@@ -98,4 +107,48 @@ Discogs can't search on it.</p>
 {% endfor %}
 {% endif %}
 {% endif %}
+{# One viewer for every picture: click a thumbnail, then use the arrow buttons or keys. #}
+<div class="modal fade" id="identify-viewer" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-lg" role="document"><div class="modal-content">
+    <div class="modal-body text-center">
+      <img id="identify-viewer-image" src="" alt="" style="max-width:100%;max-height:75vh">
+    </div>
+    <div class="modal-footer">
+      <span id="identify-viewer-count" class="text-muted pull-left"></span>
+      <button type="button" class="btn btn-default" id="identify-viewer-prev">&larr; Previous</button>
+      <button type="button" class="btn btn-default" id="identify-viewer-next">Next &rarr;</button>
+      <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+    </div>
+  </div></div>
+</div>
+<script>
+(function () {
+  var viewer = document.getElementById("identify-viewer");
+  if (!viewer) { return; }
+  var big = document.getElementById("identify-viewer-image");
+  var count = document.getElementById("identify-viewer-count");
+  var group = [], at = 0;
+  function show(i) {
+    at = (i + group.length) % group.length;
+    big.src = group[at].href;
+    count.textContent = (at + 1) + " of " + group.length;
+  }
+  document.addEventListener("click", function (event) {
+    var link = event.target.closest(".identify-image");
+    if (!link) { return; }
+    event.preventDefault();
+    group = Array.prototype.slice.call(
+      document.querySelectorAll('.identify-image[data-group="' + link.dataset.group + '"]'));
+    show(group.indexOf(link));
+    $(viewer).modal("show");
+  });
+  document.getElementById("identify-viewer-prev").addEventListener("click", function () { show(at - 1); });
+  document.getElementById("identify-viewer-next").addEventListener("click", function () { show(at + 1); });
+  document.addEventListener("keydown", function (event) {
+    if (!$(viewer).hasClass("in")) { return; }
+    if (event.key === "ArrowLeft") { show(at - 1); }
+    if (event.key === "ArrowRight") { show(at + 1); }
+  });
+})();
+</script>
 {% endblock %}

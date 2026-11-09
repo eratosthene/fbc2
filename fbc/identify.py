@@ -11,7 +11,8 @@ What Discogs's API gives (checked against its docs and python3-discogs-client
   `identifiers` (type "Matrix / Runout"), so ranking by matrix costs one
   GET /releases/{id} per candidate.
 - Discogs allows 60 requests a minute when signed in. One identify is one
-  search plus up to MAX_CANDIDATES release fetches. When Discogs says 429 (too
+  one or two searches (the second is Discogs's text search for the matrix) plus
+  up to MAX_CANDIDATES release fetches. When Discogs says 429 (too
   many requests) the candidates not yet fetched are listed unranked, with a
   note. The client library doesn't retry or throttle itself.
 - A release is added to the collection by POST to
@@ -34,12 +35,13 @@ How a matrix is scored: both sides are put in capitals with everything but
 letters and digits removed ("A-1 / ST-12345 " is "A1ST12345").
 - Exact: it equals a matrix listed on the release.
 - Partial: the longest run of characters the two share is at least 4 long and
-  covers at least 60% of the shorter one. Partial scores between 20 and 49
+  covers at least 60% of the shorter one. Partial scores between 30 and 89
   by how much of the shorter one is covered.
 - No matrix listed: the release has none, so it can't be ruled in or out;
   look at its pictures. Scores 0.
-- Mismatch: it lists matrices and none is close. Scores -20.
-A matching country adds 30. Higher scores come first.
+- Mismatch: it lists matrices and none is close. Scores -30.
+Exact scores 100. A matching country adds 30 and a matching colour 10.
+Higher scores come first.
 """
 
 import datetime
@@ -57,6 +59,8 @@ logger = logging.getLogger()
 
 CACHE_SECONDS = 300
 MAX_CANDIDATES = 12
+# More when a matrix is given: it's what picks the release, so it's worth the calls.
+MAX_CANDIDATES_WITH_MATRIX = 20
 SEARCH_URL = "https://api.discogs.com/database/search"
 RELEASE_URL = "https://api.discogs.com/releases/"
 MASTER_URL = "https://api.discogs.com/masters/"
@@ -66,7 +70,7 @@ COUNTRY_NAMES = {"US": "US", "USA": "US", "UNITED STATES": "US", "UK": "UK"}
 
 MIN_PARTIAL_RUN = 4
 MIN_PARTIAL_COVER = 0.6
-EXACT_SCORE = 50
+EXACT_SCORE = 100
 COUNTRY_SCORE = 30
 COLOR_SCORE = 10
 # What the Type field offers: (label, the word Discogs lists in a release's
@@ -75,7 +79,7 @@ TYPES = [("LP", "LP"), ('7" (45 RPM)', '7"'), ('12"', '12"'), ("Any vinyl", None
 DEFAULT_TYPE = "LP"
 # Reissue: blank is either, so a record that might be either isn't hidden.
 REISSUE_CHOICES = [("", "Either"), ("yes", "Reissue"), ("no", "Not a reissue")]
-MISMATCH_SCORE = -20
+MISMATCH_SCORE = -30
 
 EXACT, PARTIAL, NOT_LISTED, MISMATCH, NOT_ASKED = (
     "exact",
@@ -158,7 +162,7 @@ def match_matrix(wanted, listed):
                 best = (cover, text, (start, start + size))
     if best:
         cover, text, span = best
-        return PARTIAL, 20 + int(cover * 29), text, span
+        return PARTIAL, 30 + int(cover * 60), text, span
     return MISMATCH, MISMATCH_SCORE, None, None
 
 
@@ -282,7 +286,15 @@ def _summary(release, result=None):
     result = result or {}
     formats = release.get("formats") or []
     labels = release.get("labels") or []
-    images = [i.get("uri150") or i.get("uri") for i in release.get("images") or []]
+    # Every picture: a small one to show and the full-size one to pop up.
+    images = [
+        {
+            "thumb": i.get("uri150") or i.get("uri"),
+            "full": i.get("uri") or i.get("uri150"),
+        }
+        for i in release.get("images") or []
+        if i.get("uri150") or i.get("uri")
+    ]
     return {
         # "Red Translucent", "Clear": where Discogs puts a record's colour.
         "format_text": ", ".join(f["text"] for f in formats if f.get("text")),
@@ -300,8 +312,18 @@ def _summary(release, result=None):
             sorted({lb.get("catno") for lb in labels if lb.get("catno")})
         )
         or result.get("catno"),
-        "thumb": result.get("thumb") or (images[0] if images else None),
-        "images": [i for i in images if i],
+        "thumb": result.get("thumb") or (images[0]["thumb"] if images else None),
+        "images": images,
+        "notes": (release.get("notes") or "").strip(),
+        "identifiers": [
+            {
+                "type": i.get("type") or "",
+                "value": i.get("value") or "",
+                "description": i.get("description") or "",
+            }
+            for i in release.get("identifiers") or []
+            if i.get("value")
+        ],
         "matrices": listed_matrices(release),
         "url": release.get("uri")
         or "https://www.discogs.com/release/"
@@ -341,7 +363,7 @@ def search(
     if (release_id or "").strip():
         return _one_release(release_id, country, matrix, color)
     type_word = dict(TYPES).get(vinyl_type, "LP")
-    params = {"type": "release", "per_page": 25}
+    params = {"type": "release", "per_page": 50}
     for key, value in (
         ("artist", artist),
         ("release_title", title),
@@ -350,10 +372,12 @@ def search(
     ):
         if (value or "").strip():
             params[key] = value.strip()
+    matrix_text = (matrix or "").strip()
+    has_fields = len(params) > 2
+    if not has_fields and not matrix_text:
+        return _failure("Give an artist, title, catalogue number, barcode or matrix.")
     # Both are narrowed again on the hits, which carry their formats.
     params["format"] = "Vinyl"
-    if len(params) == 3:
-        return _failure("Give an artist, title, catalogue number or barcode.")
     # Searching with the country keeps other pressings from filling the page.
     # Matching countries are ranked first either way, so a wrong country filter
     # only costs the other countries' releases; leaving it blank searches all.
@@ -366,11 +390,25 @@ def search(
         except discogs.DiscogsAuthError as e:
             return _failure(str(e))
         calls = 0
-        try:
+
+        def run(query):
+            nonlocal calls
             calls += 1
-            hits = (_get(client, SEARCH_URL + "?" + urlencode(params)) or {}).get(
+            return (_get(client, SEARCH_URL + "?" + urlencode(query)) or {}).get(
                 "results"
             ) or []
+
+        try:
+            hits = []
+            if matrix_text:
+                # Discogs's own text search may know the matrix, though its API
+                # documents no field for it. Anything it finds goes first, so
+                # the 20 releases checked are the likeliest.
+                found_by_matrix = run(dict(params, q=matrix_text))
+                hits += [dict(h, found_by_matrix=True) for h in found_by_matrix]
+            if has_fields:
+                seen = {h.get("id") for h in hits}
+                hits += [h for h in run(params) if h.get("id") not in seen]
         except RateLimited:
             return _failure(
                 "Discogs says too many requests; wait a minute and try again."
@@ -382,9 +420,11 @@ def search(
             return _failure("Couldn't reach Discogs: " + str(e))
         candidates, note = [], None
         hits = [h for h in hits if keep_hit(h, type_word, reissue)]
-        for hit in hits[:MAX_CANDIDATES]:
+        limit = MAX_CANDIDATES_WITH_MATRIX if matrix_text else MAX_CANDIDATES
+        for hit in hits[:limit]:
             if not hit.get("id"):
                 continue
+            unchecked = False
             try:
                 calls += 1
                 release = _release_record(client, hit["id"])
@@ -393,13 +433,14 @@ def search(
                     "Discogs's rate limit stopped the matrix check, so some"
                     " releases below are unchecked. Try again in a minute."
                 )
-                candidates.append(_summary({}, hit) | {"unchecked": True})
-                continue
+                release, unchecked = {}, True
             except Exception as e:
                 logger.warning("Couldn't fetch release %s: %s", hit.get("id"), e)
-                candidates.append(_summary({}, hit) | {"unchecked": True})
-                continue
-            candidates.append(_summary(release, hit))
+                release, unchecked = {}, True
+            candidate = _summary(release, hit)
+            candidate["unchecked"] = unchecked
+            candidate["found_by_matrix"] = bool(hit.get("found_by_matrix"))
+            candidates.append(candidate)
         return {
             "ok": True,
             "candidates": candidates,
@@ -408,14 +449,14 @@ def search(
             "total": len(hits),
         }
 
-    key = ("search", tuple(sorted(params.items())), type_word, reissue)
+    key = ("search", tuple(sorted(params.items())), type_word, reissue, matrix_text)
     found = _cached(key, fetch)
     if not found["ok"]:
         # Failures aren't kept, so fixing the cause and retrying works at once.
         with _lock:
             _cache.pop(key, None)
         return found
-    # Ranking is cheap and depends on the matrix, which isn't in the key.
+    # Ranking is cheap, so the colour and country aren't in the key.
     return dict(found, candidates=rank(found["candidates"], country, matrix, color))
 
 
