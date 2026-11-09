@@ -186,6 +186,26 @@ stays. If the app is running, it stops it first and starts it again after.
 or docker context. `-p` points them at a throwaway project instead of
 `fbc2-dev`, such as `fbc2-test`.
 
+### A proxy that re-signs HTTPS
+
+Some company networks (Zscaler, for one) re-sign every HTTPS request, so
+`pip install` and `apk add` fail while the image builds, with certificate
+errors. To fix that in the dev image only, put the proxy's root CA in
+`docker/dev-certs/` as a `.pem` or `.crt` file. On a Mac, if the CA is in the
+System keychain:
+
+```bash
+security find-certificate -a -c Zscaler -p /Library/Keychains/System.keychain > docker/dev-certs/zscaler.pem
+```
+
+Then rebuild: `docker compose -f docker/compose.dev.yml build app`. The image
+trusts the CA in its system store, in pip's settings and in certifi's bundle
+(which `requests` uses). The files are ignored by git. `docker/build.sh` and
+the CI image don't read the folder, so the live image is the same as before.
+
+Docker pulling `python` and `mariadb` is the Docker daemon's job, not the
+image's, so the CA also has to be trusted by Docker Desktop itself.
+
 ### A copy of live data
 
 `scripts/dump_for_dev.py` makes a dump of the live database to load here,
