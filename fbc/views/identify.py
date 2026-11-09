@@ -32,7 +32,11 @@ class IdentifyRecordView(BaseView):
             "color": request.args.get("color", ""),
             "lot": request.args.get("lot", ""),
             "release_id": request.args.get("release_id", ""),
+            "master": request.args.get("master", ""),
         }
+        # Everything on the form but what a link adds, to put it back after a
+        # "Use this master" or "Check the next 20" click.
+        keep = {k: v for k, v in form.items() if v or k == "country"}
         found = None
         if request.args.get("sample") and devmode.on():
             found = identify.sample(form["country"], form["matrix"], form["color"])
@@ -45,12 +49,30 @@ class IdentifyRecordView(BaseView):
                 reissue=form["reissue"],
                 color=form["color"],
                 release_id=form["release_id"],
+                master=form["master"],
+                offset=request.args.get("offset", 0),
             )
+        masters = None
+        if request.args.get("find_master"):
+            masters = identify.find_masters(form["artist"], form["title"])
         return self.render_template(
             "identify/search.html",
             title="Identify Record",
             form=form,
             found=found,
+            masters=masters,
+            master_links={
+                m["id"]: url_for(
+                    "IdentifyRecordView.search", **dict(keep, master=m["id"])
+                )
+                for m in (masters or {}).get("masters", [])
+            },
+            more_url=url_for(
+                "IdentifyRecordView.search",
+                **dict(keep, go=1, offset=found["next_offset"]),
+            )
+            if found and found.get("next_offset")
+            else None,
             lots=self._lots(),
             dev_mode=devmode.on(),
             default_country=identify.DEFAULT_COUNTRY,
