@@ -250,3 +250,12 @@ def test_many_orders_go_in_one_request(usps):
     assert tracking.refresh_orders(orders) == (3, None)
     assert len(usps["gets"]) == 1
     assert all(o.tracking_status == "On its way" for o in orders)
+
+
+def test_a_403_shows_what_usps_said(usps):
+    order = _usps_order()
+    usps["reply"] = _Response(
+        403, {"error": {"message": "Forbidden", "errors": [{"detail": "No access"}]}}
+    )
+    problem = tracking.refresh(order)
+    assert problem == "USPS answered HTTP 403: Forbidden; No access."

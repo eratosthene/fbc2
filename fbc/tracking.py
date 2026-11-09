@@ -162,6 +162,21 @@ def parse_usps(body):
     }
 
 
+def _why(r):
+    """ ": <message>" from a USPS error body (see its ErrorMessage), or ""."""
+    try:
+        error = r.json().get("error") or {}
+    except (ValueError, AttributeError):
+        return ""
+    messages = [error.get("message")] + [
+        e.get("detail") or e.get("code") for e in error.get("errors") or []
+    ]
+    text = "; ".join(m for m in messages if m)
+    if text:
+        logger.warning("USPS error body: " + text)
+    return ": " + text[:300] if text else ""
+
+
 def fetch_statuses(numbers):
     """
     Ask USPS about up to MAX_NUMBERS tracking numbers in one request. Returns
@@ -193,7 +208,7 @@ def fetch_statuses(numbers):
     # 207 is a mix: each entry has its own statusCode, and the ones that
     # failed are an error body with the tracking number.
     if r.status_code not in (200, 207):
-        raise TrackingError("USPS answered HTTP " + str(r.status_code) + ".")
+        raise TrackingError("USPS answered HTTP " + str(r.status_code) + _why(r) + ".")
     found = dict.fromkeys(numbers)
     for entry in r.json():
         if str(entry.get("statusCode", "200")) != "200" or entry.get("error"):
