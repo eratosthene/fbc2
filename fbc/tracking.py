@@ -21,9 +21,11 @@ from fbc import devmode
 logger = logging.getLogger()
 
 USPS_TOKEN_URL = "https://apis.usps.com/oauth2/v3/token"
-USPS_TRACKING_URL = "https://apis.usps.com/tracking/v3/tracking/"
-# The most orders one sync asks USPS about, as USPS's default limit is low.
-SYNC_LOOKUPS = 20
+# Tracking 3.2: one POST of up to 35 numbers, so a sync is one request.
+USPS_TRACKING_URL = "https://apis.usps.com/tracking/v3r2/tracking"
+MAX_NUMBERS = 35
+# The most orders one sync asks USPS about (one request).
+SYNC_LOOKUPS = MAX_NUMBERS
 
 # eBay's carrier codes (ShippingCarrierCodeType) to a name and a tracking page.
 CARRIERS = {
@@ -148,7 +150,7 @@ def parse_usps(body):
     field names are from USPS's docs as others describe them; anything
     missing leaves the matching value blank.
     """
-    status = (body.get("statusSummary") or body.get("status") or "").strip()
+    status = (body.get("status") or body.get("statusSummary") or "").strip()
     category = (body.get("statusCategory") or "").strip().lower()
     events = body.get("trackingEvents") or []
     times = [_parse_time(e.get("eventTimestamp")) for e in events]
@@ -160,18 +162,23 @@ def parse_usps(body):
     }
 
 
-def fetch_status(number):
-    """Ask USPS about a tracking number. Raises TrackingError."""
+def fetch_statuses(numbers):
+    """
+    Ask USPS about up to MAX_NUMBERS tracking numbers in one request. Returns
+    {number: result}, where result is parse_usps's dict, or None if USPS
+    doesn't know that number yet. Raises TrackingError if the request fails.
+    """
     if devmode.on():
         raise TrackingError(devmode.message("USPS tracking lookup"))
     if not configured():
         raise TrackingError("USPS_SETTINGS has no client ID and secret.")
+    numbers = list(numbers)[:MAX_NUMBERS]
     token = _get_token()
     try:
-        r = requests.get(
-            USPS_TRACKING_URL + quote(number, safe=""),
+        r = requests.post(
+            USPS_TRACKING_URL,
             headers={"Authorization": "Bearer " + token},
-            params={"expand": "DETAIL"},
+            json=[{"trackingNumber": n} for n in numbers],
             timeout=30,
         )
     except requests.RequestException as e:
@@ -182,14 +189,28 @@ def fetch_status(number):
     if r.status_code == 429:
         raise TrackingError("USPS says fbc has asked too often; try again later.")
     if r.status_code == 404:
-        return {
-            "status": "USPS has no scan yet",
-            "delivered": False,
-            "last_event": None,
-        }
-    if r.status_code != 200:
+        return dict.fromkeys(numbers)
+    # 207 is a mix: each entry has its own statusCode, and the ones that
+    # failed are an error body with the tracking number.
+    if r.status_code not in (200, 207):
         raise TrackingError("USPS answered HTTP " + str(r.status_code) + ".")
-    return parse_usps(r.json())
+    found = dict.fromkeys(numbers)
+    for entry in r.json():
+        if str(entry.get("statusCode", "200")) != "200" or entry.get("error"):
+            continue
+        if entry.get("trackingNumber") in found:
+            found[entry["trackingNumber"]] = parse_usps(entry)
+    return found
+
+
+def fetch_status(number):
+    """What USPS says about one tracking number (see fetch_statuses)."""
+    result = fetch_statuses([number])[number]
+    return result or {
+        "status": "USPS has no scan yet",
+        "delivered": False,
+        "last_event": None,
+    }
 
 
 def is_fresh(order, now=None):
@@ -202,34 +223,59 @@ def is_fresh(order, now=None):
     )
 
 
-def refresh(order, force=False):
-    """
-    Ask USPS about an order and keep the answer. Returns None when it was
-    done or left alone as fresh (unless force), else why it couldn't be.
-    A delivered order is never asked again. Doesn't commit.
-    """
-    if not can_check(order):
-        return "Only USPS shipments can be checked."
-    if order.tracking_delivered:
-        return None
-    if not force and is_fresh(order):
-        return None
-    try:
-        result = fetch_status(order.tracking_number)
-    except TrackingError as e:
-        return str(e)
+def _keep(order, result):
     order.tracking_status = result["status"]
     order.tracking_delivered = result["delivered"]
     order.tracking_last_event = result["last_event"] or order.tracking_last_event
     order.tracking_checked = _now()
-    return None
+
+
+def refresh_orders(orders, force=False):
+    """
+    Ask USPS about orders, MAX_NUMBERS to a request, and keep the answers.
+    Orders that aren't USPS, are delivered, or (unless force) were checked
+    within CACHE_MINUTES are left alone. Returns (how many it checked, why it
+    stopped early or None). Doesn't commit.
+    """
+    todo = [
+        o
+        for o in orders
+        if can_check(o) and not o.tracking_delivered and (force or not is_fresh(o))
+    ]
+    checked = 0
+    for i in range(0, len(todo), MAX_NUMBERS):
+        batch = todo[i : i + MAX_NUMBERS]
+        try:
+            found = fetch_statuses([o.tracking_number for o in batch])
+        except TrackingError as e:
+            return checked, str(e)
+        for o in batch:
+            _keep(
+                o,
+                found.get(o.tracking_number)
+                or {
+                    "status": "USPS has no scan yet",
+                    "delivered": False,
+                    "last_event": None,
+                },
+            )
+            checked += 1
+    return checked, None
+
+
+def refresh(order, force=False):
+    """refresh_orders for one order: None if it's fine, else why not."""
+    if not can_check(order):
+        return "Only USPS shipments can be checked."
+    return refresh_orders([order], force)[1]
 
 
 def refresh_pending(limit=SYNC_LOOKUPS):
     """
     Check the shipped, undelivered, unarchived USPS orders last checked
-    longest ago, up to limit. Does nothing without USPS keys, in dev mode
-    or if USPS pushes back. Returns how many it checked.
+    longest ago, up to limit. Does nothing without USPS keys or in dev mode,
+    and stops at the first problem (USPS pushing back, say). Returns how many
+    it checked.
     """
     from fbc import db
     from fbc.models.ebay import EbayOrder
@@ -248,20 +294,12 @@ def refresh_pending(limit=SYNC_LOOKUPS):
         )
         .all()
     )
-    done = 0
-    for order in orders:
-        if done >= limit:
-            break
-        if not can_check(order) or is_fresh(order):
-            continue
-        problem = refresh(order)
-        if problem:
-            # One failure (rate limit, USPS down) is likely to repeat.
-            logger.warning("Tracking lookup stopped: " + problem)
-            break
-        db.session.commit()
-        done += 1
-    return done
+    orders = [o for o in orders if can_check(o) and not is_fresh(o)][:limit]
+    checked, problem = refresh_orders(orders)
+    if problem:
+        logger.warning("Tracking lookup stopped: " + problem)
+    db.session.commit()
+    return checked
 
 
 def tracking_state(order, now=None):

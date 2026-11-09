@@ -288,24 +288,19 @@ class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
     def refresh_tracking(self, items):
         """Ask USPS for the selected orders' tracking status now."""
         from fbc import db
-        from fbc.tracking import can_check, refresh
+        from fbc.tracking import can_check, refresh_orders
 
         if not isinstance(items, list):
             items = [items]
-        checked = 0
-        for order in items:
-            if not can_check(order):
-                continue
-            problem = refresh(order, force=True)
-            if problem:
-                flash(problem, "warning")
-                break
-            checked += 1
+        if not any(can_check(o) for o in items):
+            flash("USPS only tracks USPS shipments; there are none here.", "info")
+            return redirect(self.get_redirect())
+        checked, problem = refresh_orders(items, force=True)
         db.session.commit()
         if checked:
             flash("Checked USPS for " + str(checked) + " order(s).", "success")
-        elif not any(can_check(o) for o in items):
-            flash("USPS only tracks USPS shipments; there are none here.", "info")
+        if problem:
+            flash(problem, "warning")
         return redirect(self.get_redirect())
 
     @expose("/ship/<pk>", methods=["GET", "POST"])

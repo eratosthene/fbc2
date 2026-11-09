@@ -97,18 +97,16 @@ def usps(app, monkeypatch):
     )
     monkeypatch.setitem(app.config, "DEV_MODE", False)
     tracking._token.update(value=None, expires=None)
-    seen = {"posts": [], "gets": [], "reply": _Response(200, {})}
+    seen = {"posts": [], "gets": [], "reply": _Response(200, [])}
 
     def post(url, **kw):
-        seen["posts"].append(url)
-        return _Response(200, {"access_token": "tok", "expires_in": 3600})
-
-    def get(url, **kw):
+        if url == tracking.USPS_TOKEN_URL:
+            seen["posts"].append(url)
+            return _Response(200, {"access_token": "tok", "expires_in": 3600})
         seen["gets"].append((url, kw))
         return seen["reply"]
 
     monkeypatch.setattr(tracking.requests, "post", post)
-    monkeypatch.setattr(tracking.requests, "get", get)
     return seen
 
 
@@ -118,7 +116,9 @@ def _usps_order():
     return db.session.query(EbayOrder).one()
 
 
+NUMBER = "9400111899223344556677"
 IN_TRANSIT = {
+    "trackingNumber": NUMBER,
     "statusCategory": "In Transit",
     "statusSummary": "Your item arrived at the post office",
     "trackingEvents": [
@@ -130,21 +130,30 @@ IN_TRANSIT = {
 
 def test_refresh_keeps_status_and_latest_event(usps):
     order = _usps_order()
-    usps["reply"] = _Response(200, IN_TRANSIT)
+    usps["reply"] = _Response(200, [IN_TRANSIT])
 
     assert tracking.refresh(order) is None
 
     assert order.tracking_status == "Your item arrived at the post office"
     assert not order.tracking_delivered
     assert order.tracking_last_event == datetime.datetime(2024, 1, 18, 10)
-    assert usps["gets"][0][0].endswith("/9400111899223344556677")
-    assert usps["gets"][0][1]["headers"]["Authorization"] == "Bearer tok"
+    url, kw = usps["gets"][0]
+    assert url == "https://apis.usps.com/tracking/v3r2/tracking"
+    assert kw["json"] == [{"trackingNumber": NUMBER}]
+    assert kw["headers"]["Authorization"] == "Bearer tok"
 
 
 def test_refresh_marks_delivered_and_never_asks_again(usps):
     order = _usps_order()
     usps["reply"] = _Response(
-        200, {"statusCategory": "Delivered", "statusSummary": "Delivered, Mailbox"}
+        200,
+        [
+            {
+                "trackingNumber": NUMBER,
+                "statusCategory": "Delivered",
+                "status": "Delivered, Mailbox",
+            }
+        ],
     )
     tracking.refresh(order)
     assert order.tracking_delivered
@@ -157,7 +166,7 @@ def test_refresh_marks_delivered_and_never_asks_again(usps):
 
 def test_refresh_is_cached_unless_forced(usps):
     order = _usps_order()
-    usps["reply"] = _Response(200, IN_TRANSIT)
+    usps["reply"] = _Response(200, [IN_TRANSIT])
     tracking.refresh(order)
     tracking.refresh(order)
     assert len(usps["gets"]) == 1
@@ -193,7 +202,7 @@ def test_no_movement_flag(usps):
 
 def test_refresh_pending_skips_delivered_other_carriers_and_stops_on_error(usps):
     order = _usps_order()
-    usps["reply"] = _Response(200, IN_TRANSIT)
+    usps["reply"] = _Response(200, [IN_TRANSIT])
     assert tracking.refresh_pending() == 1
     # Fresh now, so a second sync leaves it alone.
     assert tracking.refresh_pending() == 0
@@ -215,3 +224,29 @@ def test_without_keys_only_links(app):
     order = _usps_order()
     assert "client ID" in tracking.refresh(order)
     assert order.tracking_status is None
+
+
+def test_unknown_number_in_a_207_is_not_an_error(usps):
+    order = _usps_order()
+    usps["reply"] = _Response(
+        207, [{"statusCode": "404", "trackingNumber": NUMBER, "error": {"code": "x"}}]
+    )
+    assert tracking.refresh(order) is None
+    assert order.tracking_status == "USPS has no scan yet"
+
+
+def test_many_orders_go_in_one_request(usps):
+    orders = []
+    for n in range(3):
+        add_ebay_listing(_ebay_listing_payload())
+        add_ebay_order(
+            _shipped(_ebay_order_payload(order_id="O-" + str(n)), number="94" + str(n))
+        )
+    orders = db.session.query(EbayOrder).all()
+    usps["reply"] = _Response(
+        200,
+        [{"trackingNumber": o.tracking_number, "status": "On its way"} for o in orders],
+    )
+    assert tracking.refresh_orders(orders) == (3, None)
+    assert len(usps["gets"]) == 1
+    assert all(o.tracking_status == "On its way" for o in orders)

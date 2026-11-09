@@ -222,8 +222,8 @@ secret (see `config.py.tpl`). The Tracking column then shows USPS's last
 status, a green label once it's delivered, and an orange one when a shipped
 order's tracking hasn't moved for `NO_MOVEMENT_DAYS` (5 by default).
 
-- Every orders sync asks USPS about up to 20 shipped, undelivered, unarchived
-  orders, the longest unchecked first. An order isn't asked again within
+- Every orders sync asks USPS about up to 35 shipped, undelivered, unarchived
+  orders, the longest unchecked first, in one request. An order isn't asked again within
   `CACHE_MINUTES` (an hour by default), and a delivered one never is. If USPS
   says fbc has asked too often, the sync stops asking and the next one
   carries on.
