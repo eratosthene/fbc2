@@ -167,6 +167,20 @@ ARCHIVE_AFTER_DAYS = {
     'SALES_RECEIPTS': 365,
 }
 
+# USPS tracking (optional). With a client ID and secret from
+# developers.usps.com (add an app there), fbc asks USPS for each shipped eBay
+# Order's tracking status. Without them it only links to USPS's tracking page.
+USPS_SETTINGS = {
+    'CLIENT_ID': '',
+    'CLIENT_SECRET': '',
+    # Don't ask USPS about the same order again within this many minutes. USPS
+    # allows few requests an hour by default, so keep this generous.
+    'CACHE_MINUTES': 60,
+    # Flag an order shipped and not delivered whose tracking hasn't moved
+    # for this many days. 0 turns the flag off.
+    'NO_MOVEMENT_DAYS': 5,
+}
+
 # ebay settings
 EBAY_SETTINGS = {
     'APP_ID': '',

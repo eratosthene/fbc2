@@ -216,14 +216,27 @@ shows as text). They come from eBay with the orders sync, so an order shows
 them after the first Sync (or Sync New) that runs once its label is bought.
 The list's Tracking column is blank until then.
 
-fbc doesn't show whether a package has moved or been delivered. eBay only
-gives the number and carrier, and the progress is the carrier's to give, which
-needs a carrier account and keys. Click the link to see it. fbc can't print a
-label again either: eBay has no way to do that for a label bought on eBay, so
-open the order's Order Id link and use the label link there.
+eBay only gives the number and carrier, so for USPS shipments fbc also asks
+USPS what it knows, if `USPS_SETTINGS` in `config.py` has a client ID and
+secret (see `config.py.tpl`). The Tracking column then shows USPS's last
+status, a green label once it's delivered, and an orange one when a shipped
+order's tracking hasn't moved for `NO_MOVEMENT_DAYS` (5 by default).
 
-In Dev Mode nothing is fetched, so orders only show tracking that was already
-synced.
+- Every orders sync asks USPS about up to 20 shipped, undelivered, unarchived
+  orders, the longest unchecked first. An order isn't asked again within
+  `CACHE_MINUTES` (an hour by default), and a delivered one never is. If USPS
+  says fbc has asked too often, the sync stops asking and the next one
+  carries on.
+- To check now, select orders in the list (or open one) and use the
+  **Refresh Tracking** action. That ignores the cache and says if USPS
+  pushed back.
+- Without USPS keys, or for other carriers, only the link is shown.
+
+fbc can't print a label again: eBay has no way to do that for a label bought
+on eBay, so open the order's Order Id link and use the label link there.
+
+In Dev Mode nothing is asked of USPS or eBay; Refresh Tracking says it's
+not available, and orders only show what was already synced.
 
 ### Combining old Sales Receipts
 

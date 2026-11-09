@@ -104,11 +104,21 @@ it off.
 
 `fbc/tracking.py` reads each order's carrier and tracking number from the
 `GetOrders` sync (`ShipmentTrackingDetails`, which needs no new OAuth scope)
-and links to the carrier's page. It doesn't ask for tracking progress. To
-show it in fbc, add a carrier client (USPS's Tracking API v3 is the likely
-first, with its own developer account, OAuth client ID and secret, and a low
-default rate limit), keep its state on `EbayOrder`, and route every request
-through `fbc/devmode.py`'s guards.
+and links to the carrier's page. For USPS it also asks the Tracking API v3
+(`apis.usps.com`: an OAuth client-credentials token, then
+`GET /tracking/v3/tracking/{number}?expand=DETAIL`) with the client ID and
+secret in `USPS_SETTINGS`, from a developer account at developers.usps.com.
+USPS's default limit is about 60 requests an hour, hence the cache and the
+20-order cap per sync.
+
+The response fields (`statusCategory`, `statusSummary`, `trackingEvents`,
+`eventTimestamp`) were written from third-party descriptions, not checked
+against a live response; `parse_usps` leaves a value blank if one is missing.
+Check one real lookup after setting the keys.
+
+All of it goes through `fetch_status`, which refuses in Dev Mode, and
+`usps.com` is among the hosts Dev Mode blocks. Tests mock `requests`. A
+carrier other than USPS would need its own client in the same place.
 
 ## Testing with Docker
 

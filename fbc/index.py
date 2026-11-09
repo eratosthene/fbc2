@@ -8,7 +8,7 @@ from flask import jsonify, request, url_for
 from flask_appbuilder import IndexView
 from flask_appbuilder.views import expose
 
-from fbc import devmode, discogs, sync
+from fbc import devmode, discogs, sync, tracking
 from fbc.listing import OAuthError, trading
 from fbc.util import add_ebay_listing
 from fbc.util import add_ebay_order
@@ -363,6 +363,10 @@ class MyIndexView(IndexView):
                 # an order still without tracking checks whether it has some.
                 logger.info("Updating " + str(item["OrderID"]))
                 add_ebay_order(item)
+        # Then USPS, for the shipped orders whose status is out of date.
+        checked = tracking.refresh_pending()
+        if checked:
+            logger.info("Checked USPS tracking for " + str(checked) + " orders")
 
     def dosyncebayorders(self, doupdate, days, message):
         logger.info(message)

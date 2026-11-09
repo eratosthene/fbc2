@@ -1,4 +1,4 @@
-"""add shipping carrier and tracking number to ebay_order
+"""add shipping carrier, tracking number and tracking status to ebay_order
 
 Revision ID: b4c8e2d1f7a3
 Revises: 5a9d2e7c4b18
@@ -18,13 +18,29 @@ depends_on = None
 
 
 def upgrade():
-    # Both are NULL until the next orders sync that sees the order shipped.
+    # All blank until an orders sync sees the order shipped, and a USPS lookup
+    # (if USPS_SETTINGS is set) finds its status.
     with op.batch_alter_table("ebay_order", schema=None) as batch_op:
         batch_op.add_column(sa.Column("shipping_carrier", sa.String(length=40)))
         batch_op.add_column(sa.Column("tracking_number", sa.String(length=40)))
+        batch_op.add_column(sa.Column("tracking_status", sa.String(length=100)))
+        batch_op.add_column(
+            sa.Column(
+                "tracking_delivered",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.false(),
+            )
+        )
+        batch_op.add_column(sa.Column("tracking_last_event", sa.DateTime()))
+        batch_op.add_column(sa.Column("tracking_checked", sa.DateTime()))
 
 
 def downgrade():
     with op.batch_alter_table("ebay_order", schema=None) as batch_op:
+        batch_op.drop_column("tracking_checked")
+        batch_op.drop_column("tracking_last_event")
+        batch_op.drop_column("tracking_delivered")
+        batch_op.drop_column("tracking_status")
         batch_op.drop_column("tracking_number")
         batch_op.drop_column("shipping_carrier")
