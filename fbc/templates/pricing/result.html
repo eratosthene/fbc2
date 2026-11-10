@@ -22,10 +22,12 @@
 {% elif not d.ok %}
 <p class="text-danger">{{ d.error }}</p>
 {% else %}
-{% if d.genres or d.styles %}
+{% if d.genres or d.styles or d.master_genres or d.master_styles %}
 <p>
-  {% if d.genres %}<strong>Genre:</strong> {{ d.genres | join(', ') }}{% endif %}
-  {% if d.styles %}<br><strong>Style:</strong> {{ d.styles | join(', ') }}{% endif %}
+  {% if d.genres %}<strong>Genre:</strong> {{ d.genres | join(', ') }}<br>{% endif %}
+  {% if d.styles %}<strong>Style:</strong> {{ d.styles | join(', ') }}<br>{% endif %}
+  {% if d.master_genres %}<strong>Master's genre:</strong> {{ d.master_genres | join(', ') }}<br>{% endif %}
+  {% if d.master_styles %}<strong>Master's style:</strong> {{ d.master_styles | join(', ') }}{% endif %}
 </p>
 {% endif %}
 {% if d.suggestions %}
