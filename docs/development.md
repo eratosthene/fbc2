@@ -198,6 +198,11 @@ System keychain:
 security find-certificate -a -c Zscaler -p /Library/Keychains/System.keychain > docker/dev-certs/zscaler.pem
 ```
 
+Copy the file into the folder; don't symlink it. The build can't follow a
+symlink out of the folder, and fails with a message if it finds one. A
+worktree has its own `docker/dev-certs/`, so copy it there too:
+`cp <main checkout>/docker/dev-certs/zscaler.pem docker/dev-certs/`.
+
 Then rebuild: `docker compose -f docker/compose.dev.yml build app`. The image
 trusts the CA in its system store, in pip's settings and in certifi's bundle
 (which `requests` uses). The files are ignored by git. `docker/build.sh` and
