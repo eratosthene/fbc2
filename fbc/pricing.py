@@ -90,7 +90,10 @@ def discogs_research(release_id):
     """
     Discogs asking-price data for one release: {"ok": True, "suggestions":
     [(condition, price, currency)], "suggestions_note", "lowest", "num_for_sale",
-    "have", "want", "rating"} or {"ok": False, "error"}.
+    "have", "want", "rating", "genres", "styles", "master_genres",
+    "master_styles"} or {"ok": False, "error"}. Genres and styles are Discogs's
+    own, for the release and for its master if it has one, to help choose a
+    Storage Box.
     """
     from fbc import discogs
     from discogs_client.exceptions import DiscogsAPIError, HTTPError
@@ -112,6 +115,10 @@ def discogs_research(release_id):
                 "have": None,
                 "want": None,
                 "rating": None,
+                "genres": [],
+                "styles": [],
+                "master_genres": [],
+                "master_styles": [],
             }
             try:
                 suggestions = release.price_suggestions
@@ -129,6 +136,16 @@ def discogs_research(release_id):
                     "Discogs wouldn't give price suggestions (" + str(e) + "). They"
                     " need seller settings filled in on the Discogs account."
                 )
+            out["genres"] = [str(g) for g in getattr(release, "genres", None) or []]
+            out["styles"] = [str(g) for g in getattr(release, "styles", None) or []]
+            try:
+                master = getattr(release, "master", None)
+                if master is not None:
+                    out["master_genres"] = [str(g) for g in master.genres or []]
+                    out["master_styles"] = [str(g) for g in master.styles or []]
+            except (DiscogsAPIError, HTTPError):
+                # The master is extra; the release's own answer still shows.
+                pass
             stats = release.marketplace_stats
             if stats is not None:
                 out["lowest"] = _price(stats.lowest_price)

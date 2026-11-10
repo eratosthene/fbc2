@@ -13,10 +13,22 @@ def price(value, currency="USD"):
     return SimpleNamespace(value=value, currency=currency)
 
 
-def fake_release(suggestions=None, lowest=price(25.0), num=4, have=900, want=300):
+def fake_release(
+    suggestions=None,
+    lowest=price(25.0),
+    num=4,
+    have=900,
+    want=300,
+    genres=("Jazz",),
+    styles=("Fusion", "Latin Jazz"),
+    master=None,
+):
     stats = SimpleNamespace(lowest_price=lowest, num_for_sale=num)
     return SimpleNamespace(
         price_suggestions=suggestions,
+        genres=list(genres),
+        styles=list(styles),
+        master=master,
         marketplace_stats=stats,
         community=SimpleNamespace(
             have=have, want=want, rating=SimpleNamespace(average=4.5, count=10)
@@ -62,6 +74,48 @@ def test_discogs_gives_suggestions_stats_and_community(discogs_calls):
     assert r["lowest"] == (25.0, "USD")
     assert r["num_for_sale"] == 4
     assert (r["have"], r["want"], r["rating"]) == (900, 300, (4.5, 10))
+    assert r["genres"] == ["Jazz"]
+    assert r["styles"] == ["Fusion", "Latin Jazz"]
+
+
+def test_discogs_gives_the_masters_genres_and_styles(discogs_calls):
+    master = SimpleNamespace(genres=["Jazz", "Latin"], styles=["Bossa Nova"])
+    discogs_calls(fake_release(master=master))
+
+    r = pricing.discogs_research(123)
+
+    assert r["master_genres"] == ["Jazz", "Latin"]
+    assert r["master_styles"] == ["Bossa Nova"]
+
+
+def test_discogs_without_a_master_has_no_master_genres(discogs_calls):
+    discogs_calls(fake_release())
+
+    r = pricing.discogs_research(123)
+
+    assert r["master_genres"] == [] and r["master_styles"] == []
+
+
+def test_discogs_master_failing_keeps_the_release_answer(discogs_calls):
+    from discogs_client.exceptions import HTTPError
+
+    class Refusing:
+        def __getattr__(self, name):
+            raise HTTPError("Not found", 404)
+
+    discogs_calls(fake_release(master=Refusing()))
+
+    r = pricing.discogs_research(123)
+
+    assert r["ok"] and r["genres"] == ["Jazz"] and r["master_genres"] == []
+
+
+def test_discogs_release_without_genres_or_styles(discogs_calls):
+    discogs_calls(fake_release(genres=(), styles=()))
+
+    r = pricing.discogs_research(123)
+
+    assert r["ok"] and r["genres"] == [] and r["styles"] == []
 
 
 def test_discogs_without_seller_settings_still_gives_the_rest(discogs_calls):
