@@ -10,6 +10,13 @@ set -eu
 
 found=0
 for cert in /extra-ca/*.pem /extra-ca/*.crt; do
+    # A symlink to a file outside the folder arrives broken: BuildKit doesn't
+    # follow it out of the build context. Say so, rather than build an image
+    # that quietly lacks the CA.
+    if [ -L "$cert" ] && [ ! -f "$cert" ]; then
+        echo "ERROR: $(basename "$cert") in docker/dev-certs is a symlink the build can't follow. Copy the file there instead." >&2
+        exit 1
+    fi
     [ -f "$cert" ] || continue
     found=1
     name="$(basename "${cert%.*}")"
