@@ -13,10 +13,20 @@ def price(value, currency="USD"):
     return SimpleNamespace(value=value, currency=currency)
 
 
-def fake_release(suggestions=None, lowest=price(25.0), num=4, have=900, want=300):
+def fake_release(
+    suggestions=None,
+    lowest=price(25.0),
+    num=4,
+    have=900,
+    want=300,
+    genres=("Jazz",),
+    styles=("Fusion", "Latin Jazz"),
+):
     stats = SimpleNamespace(lowest_price=lowest, num_for_sale=num)
     return SimpleNamespace(
         price_suggestions=suggestions,
+        genres=list(genres),
+        styles=list(styles),
         marketplace_stats=stats,
         community=SimpleNamespace(
             have=have, want=want, rating=SimpleNamespace(average=4.5, count=10)
@@ -62,6 +72,16 @@ def test_discogs_gives_suggestions_stats_and_community(discogs_calls):
     assert r["lowest"] == (25.0, "USD")
     assert r["num_for_sale"] == 4
     assert (r["have"], r["want"], r["rating"]) == (900, 300, (4.5, 10))
+    assert r["genres"] == ["Jazz"]
+    assert r["styles"] == ["Fusion", "Latin Jazz"]
+
+
+def test_discogs_release_without_genres_or_styles(discogs_calls):
+    discogs_calls(fake_release(genres=(), styles=()))
+
+    r = pricing.discogs_research(123)
+
+    assert r["ok"] and r["genres"] == [] and r["styles"] == []
 
 
 def test_discogs_without_seller_settings_still_gives_the_rest(discogs_calls):

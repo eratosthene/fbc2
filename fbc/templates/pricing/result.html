@@ -22,6 +22,12 @@
 {% elif not d.ok %}
 <p class="text-danger">{{ d.error }}</p>
 {% else %}
+{% if d.genres or d.styles %}
+<p>
+  {% if d.genres %}<strong>Genre:</strong> {{ d.genres | join(', ') }}{% endif %}
+  {% if d.styles %}<br><strong>Style:</strong> {{ d.styles | join(', ') }}{% endif %}
+</p>
+{% endif %}
 {% if d.suggestions %}
 <table class="table table-condensed" style="width:auto">
   <caption>Discogs's suggested price for each condition</caption>

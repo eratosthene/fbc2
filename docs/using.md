@@ -159,7 +159,8 @@ to Discogs; fbc doesn't read it), then shows, each labelled with where it comes 
 - **Your own sales of this master**: the average sold price of your Units of
   the same Discogs master. This is also what pre-fills the Retail Price when
   you come from a Discogs release.
-- **Discogs, asking prices**: Discogs's suggested price for each condition
+- **Discogs, asking prices**: the release's Genre and Style on Discogs, to
+  help you choose a Storage Box, then Discogs's suggested price for each condition
   (Mint to Poor), the lowest price now for sale and how many are, and how many
   collections and wantlists have the release. Suggested prices need seller
   settings filled in on your Discogs account; without them the rest still
