@@ -193,6 +193,10 @@ EBAY_SETTINGS = {
         'POSTAL_CODE': '',
         'LOCATION': '',
         'BEST_OFFER': True,
+        # Free insertions eBay gives you a month (250 without a Store
+        # subscription; a Store raises it). The home page counts this
+        # month's against it, and publishing warns before going over.
+        'FREE_INSERTIONS': 250,
         # Starting package weight for a draft, in ounces packed per disc, by
         # record size: a 12" double LP starts at 2 x 16 = 32 oz (eBay needs a
         # weight for calculated shipping). Optionally also 'LENGTH', 'WIDTH',

@@ -142,6 +142,38 @@ def relist_ebay_listing(old_listing, item):
     logger.info("Relisted " + old_item_id + " -> " + new_item_id)
 
 
+def mark_ended_listings(remote_item_ids, previous_sync=None):
+    """
+    Mark every listing that isn't in eBay's active list as ended, and clear
+    the flag on one that is back in it. Only call this after reading the
+    whole active list (listing.fetch_active_items checks that it did), since
+    anything missing from `remote_item_ids` is taken as ended.
+
+    A listing's end_time is when the previous successful sync last saw it
+    active, since it ended some time after that; it's start_time when there
+    was no earlier sync, which counts the start and no renewals.
+    Returns how many were marked ended.
+    """
+    from fbc import db
+    from fbc.models.ebay import EbayListing
+
+    ended = 0
+    for listing in db.session.query(EbayListing).all():
+        if listing.item_id in remote_item_ids:
+            if listing.ended:
+                listing.ended = False
+                listing.end_time = None
+        elif not listing.ended:
+            seen = previous_sync
+            if seen is None or (listing.start_time and seen < listing.start_time):
+                seen = listing.start_time
+            listing.ended = True
+            listing.end_time = seen
+            ended += 1
+    db.session.commit()
+    return ended
+
+
 def _money(amount):
     """An amount from the Trading API ({"value": "4.37"}) as a float, or None."""
     try:

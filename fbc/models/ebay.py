@@ -27,6 +27,14 @@ class EbayListing(Model):
     price = Column(Float)
     url = Column(String(255))
     start_time = Column(DateTime)
+    # The listings sync sets these when a listing is no longer in eBay's
+    # active list. end_time is the last sync that still saw it active (or
+    # start_time if there was none), so "ended no later than"; see
+    # fbc/util.py mark_ended_listings. Times are UTC, as eBay sends them.
+    ended = Column(
+        Boolean, nullable=False, default=False, server_default=false(), index=True
+    )
+    end_time = Column(DateTime)
     # Hidden from the lists by default; see fbc/archive.py.
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True

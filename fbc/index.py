@@ -8,13 +8,14 @@ from flask import jsonify, request, url_for
 from flask_appbuilder import IndexView
 from flask_appbuilder.views import expose
 
-from fbc import devmode, discogs, sync
-from fbc.listing import OAuthError, trading
+from fbc import devmode, discogs, insertions, sync
+from fbc.listing import OAuthError, fetch_active_items, trading
 from fbc.util import add_ebay_listing
 from fbc.util import add_ebay_order
 from fbc.util import add_discogs_release
 from fbc.util import find_relisted_listing
 from fbc.util import forget_discogs_instance
+from fbc.util import mark_ended_listings
 from fbc.util import relist_ebay_listing
 
 logger = logging.getLogger()
@@ -171,6 +172,7 @@ def home_totals():
         "unit_total": unit_total,
         "box_totals": box_totals,
         "low_supplies": Supply.low_list(),
+        "listings": insertions.listing_summary(),
     }
 
 
@@ -274,41 +276,11 @@ class MyIndexView(IndexView):
         from fbc import db
         from fbc.models.ebay import EbayListing
 
-        totalpages = 1
-        currentpage = 1
-        all_items = []
-        while currentpage <= totalpages:
-            logger.info("Getting page " + str(currentpage) + "...")
-            try:
-                api = trading(compatibility=None)
-
-                response = api.execute(
-                    "GetMyeBaySelling",
-                    {
-                        "ActiveList": {
-                            "Include": True,
-                            "Sort": "StartTime",
-                            "Pagination": {
-                                "EntriesPerPage": 200,
-                                "PageNumber": currentpage,
-                            },
-                        }
-                    },
-                )
-                logging.info("eBay response: " + api.response_status())
-                resp = response.dict()
-                totalpages = int(
-                    resp["ActiveList"]["PaginationResult"]["TotalNumberOfPages"]
-                )
-                logging.info("Total pages: " + str(totalpages))
-                all_items.extend(resp["ActiveList"]["ItemArray"]["Item"])
-            except OAuthError as e:
-                logger.error(str(e))
-                break
-            except ConnectionError as e:
-                logging.error(e)
-                logging.error(e.response.dict())
-            currentpage += 1
+        # Reads all of eBay's active list or raises, which fails the sync
+        # before anything is marked ended.
+        previous_sync = sync.last_finished(sync.LISTINGS_SYNC)
+        started = sync.utcnow()
+        all_items = fetch_active_items()
 
         # Process every page's items together (rather than page by page) so
         # that a relisted item's old EbayListing -- which by definition has
@@ -338,6 +310,9 @@ class MyIndexView(IndexView):
                 else:
                     logger.info("Adding " + str(item["ItemID"]))
                     add_ebay_listing(item)
+        ended = mark_ended_listings(remote_item_ids, previous_sync)
+        logger.info("Marked " + str(ended) + " listings as ended.")
+        sync.record_finished(sync.LISTINGS_SYNC, started)
         logger.info("eBay listings sync finished.")
 
     def doebaysync(self, doupdate, api, response):

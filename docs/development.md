@@ -112,6 +112,26 @@ is `POST /tracking/v3r2/tracking` with a list of tracking numbers, if that
 changes. Any such client would keep its state on `EbayOrder` and go through
 `fbc/devmode.py`'s guards.
 
+## Active listings and free insertions
+
+`EbayListing.ended` and `end_time` are set only by the listings sync, through
+`util.mark_ended_listings`, after `listing.fetch_active_items` has read the
+whole active list (it raises unless every page came back and the items match
+eBay's `TotalNumberOfEntries`, and a failed sync records nothing).
+`sync.record_finished` and `sync.last_finished` keep when a sync last
+finished in the `sync_record` table, by name; the listings sync's is
+`sync.LISTINGS_SYNC`. Unlike the job files, it lasts.
+
+`fbc/insertions.py` holds the free-insertions maths in one place, with its
+assumptions in the docstring (Pacific calendar month, 30-day renewals, ended
+listings counted up to `end_time`). Change them there and in
+`tests/test_insertions.py`. Pacific time is worked out by hand, because the
+Alpine image has no tzdata for `zoneinfo`.
+
+Nothing here reaches eBay except the listings sync, which dev mode skips like
+the other syncs. There is no quick count refresh on the home page: the page
+only reads the database.
+
 ## Testing with Docker
 
 `docker/compose.dev.yml` runs the app from this checkout's code, with

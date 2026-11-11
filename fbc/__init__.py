@@ -63,6 +63,7 @@ if SKIP_VIEWS:
         "inventory",
         "sales",
         "supplies",
+        "sync",
     ):
         importlib.import_module("fbc.models." + _model_module)
 else:
@@ -247,6 +248,7 @@ def _register_views():
         SalesReceiptModelView,
     )
     from fbc.views.listing import EbayDraftModelView
+    from fbc.models.sync import SyncRecord  # noqa: F401  (so its table exists)
     from fbc.views.connect import ConnectDiscogsView, ConnectEbayView
     from fbc.views.supplies import (
         ReconcileSuppliesView,

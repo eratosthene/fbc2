@@ -19,6 +19,9 @@ import time
 
 logger = logging.getLogger()
 
+# The sync_record name of the eBay listings sync.
+LISTINGS_SYNC = "ebay-listings"
+
 # Job files older than this are deleted when the next job starts.
 KEEP_SECONDS = 24 * 60 * 60
 
@@ -236,3 +239,31 @@ def read(job_id, offset=0):
         "log": data.decode("utf-8", "replace"),
         "offset": max(offset, 0) + len(data),
     }
+
+
+def record_finished(name, when=None):
+    """Remember that the sync called `name` just finished successfully."""
+    from fbc import db
+    from fbc.models.sync import SyncRecord
+
+    when = when or utcnow()
+    record = db.session.get(SyncRecord, name)
+    if record is None:
+        db.session.add(SyncRecord(name=name, finished=when))
+    else:
+        record.finished = when
+    db.session.commit()
+
+
+def last_finished(name):
+    """The UTC time the sync called `name` last finished, or None."""
+    from fbc import db
+    from fbc.models.sync import SyncRecord
+
+    record = db.session.get(SyncRecord, name)
+    return record.finished if record else None
+
+
+def utcnow():
+    """Now as a naive UTC datetime, which is how fbc stores eBay's times."""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)

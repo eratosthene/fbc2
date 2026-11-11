@@ -32,7 +32,19 @@
 <form method="post" action="{{ url_for('EbayDraftModelView.verify', pk=draft.id) }}" style="display: inline">
   <button class="btn btn-info" {% if dev_mode %}disabled{% endif %}>Check with eBay</button>
 </form>
+{% if over_warning %}
+<div class="alert alert-warning" style="margin-top: 10px">{{ over_warning }}</div>
+{% endif %}
+{% if uncovered_fee %}
+<div class="alert alert-warning" style="margin-top: 10px">
+  eBay's last check charged an insertion fee of ${{ "%.2f"|format(uncovered_fee) }}
+  that no free insertion covers, so this month's free ones look used up.
+</div>
+{% endif %}
 <form method="post" action="{{ url_for('EbayDraftModelView.publish', pk=draft.id) }}" style="display: inline">
+  {% if over_warning %}
+  <label style="margin-right: 10px"><input type="checkbox" name="publish_anyway" value="1"> Publish anyway</label>
+  {% endif %}
   <button class="btn btn-primary" {% if problems or dev_mode %}disabled{% endif %}>Publish to eBay (goes live)</button>
 </form>
 {% if dev_mode %}

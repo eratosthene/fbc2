@@ -193,6 +193,39 @@ other or the form. In Dev Mode the block says "Not available in Dev Mode."
 eBay listings and orders, synced in. eBay Drafts turn a Unit into a listing,
 and Ship This turns an order into a Sales Receipt.
 
+### Active listings and free insertions
+
+The eBay listings sync reads eBay's whole active list. Any listing fbc has
+that isn't in it is marked Ended (the eBay Listings list shows a column, and
+can filter on it), and fbc remembers when the sync last finished. If a page
+doesn't come back, or the listings don't add up to the count eBay reports, the
+sync fails and changes nothing, so a bad answer can't mark listings ended.
+Run it again.
+
+The home page shows the active listings as of that sync, and this month's
+free insertions: used so far, renewals still due before the month ends, and
+the projected total, against the limit (250 unless
+`EBAY_SETTINGS['LISTING']['FREE_INSERTIONS']` in `config.py` says
+otherwise; a Store subscription raises it). It warns when the projected total
+is within 10 of the limit. Nothing shows until the first listings sync, as
+every listing looks active before it. After a sync, the Ended flags are right
+for the listings fbc already had, so the first one after an upgrade ends all
+the old listings that aren't on eBay now.
+
+The count is fbc's estimate, from these assumptions:
+
+- Each new listing, and each Good 'Til Cancelled renewal every 30 days from
+  the listing's start, uses one. Ending a listing early doesn't give it back.
+- The month is a calendar month in US Pacific time.
+- A listing that ended is counted up to the last sync that saw it active.
+  One fbc never saw before it ended is missed, so the count may be a little
+  low. Seller Hub's own counter is the check; eBay has no call for it.
+
+Publishing an eBay Draft that would take the projected count past the limit
+shows a warning and needs Publish anyway ticked, but still goes ahead. If the
+last Check with eBay reported an insertion fee that no discount covered, the
+draft page says so too: that is eBay saying the free ones are used up.
+
 ### Ship This
 
 Once the label is bought on eBay, Ship This on an order records its Sales

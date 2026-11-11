@@ -110,3 +110,22 @@ def test_archived_columns_start_false_on_existing_rows():
         for table in migration.TABLES:
             columns = [c["name"] for c in sa.inspect(conn).get_columns(table)]
             assert columns == ["id"]
+
+
+def test_existing_listings_start_not_ended_and_sync_record_is_created():
+    migration = _migration("d9e2b6f4a173_add_ended_to_ebay_listing_and_sync_record")
+    engine = sa.create_engine("sqlite://")
+    listing = sa.Table(
+        "ebay_listing",
+        sa.MetaData(),
+        sa.Column("item_id", sa.String(20), primary_key=True),
+    )
+    with engine.begin() as conn:
+        listing.create(conn)
+        conn.execute(listing.insert().values(item_id="1"))
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.upgrade()
+
+        row = conn.execute(sa.text("SELECT ended, end_time FROM ebay_listing")).one()
+        assert tuple(row) == (0, None)
+        assert "sync_record" in sa.inspect(conn).get_table_names()

@@ -13,6 +13,37 @@
     <a href="{{ url_for('ReconcileSuppliesView.reconcile') }}">Reconcile Supplies</a>.
   </div>
   {% endif %}
+  {% if listings.synced %}
+  <h2>
+    eBay listings: {{ listings.active }} active
+    <small>as of the last listings sync, {{ listings.synced_pacific.strftime("%b %-d %-I:%M %p") }} Pacific</small>
+  </h2>
+  <p>
+    Free insertions this month: <strong>{{ listings.used }}</strong> of
+    {{ listings.limit }} used, {{ listings.due }} more renewal{{ "" if listings.due == 1 else "s" }}
+    due before the month ends, {{ listings.projected }} projected. Each new
+    listing and each 30-day renewal counts, even if the listing ends early.
+  </p>
+  {% if listings.over %}
+  <div class="alert alert-danger">
+    This month is projected to go {{ listings.projected - listings.limit }} past
+    the {{ listings.limit }} free insertions. eBay charges a fee for each one.
+    End listings that won't sell before they renew.
+  </div>
+  {% elif listings.near %}
+  <div class="alert alert-warning">
+    This month is projected to use {{ listings.projected }} of the
+    {{ listings.limit }} free insertions. Only {{ listings.limit - listings.projected }}
+    new listings are left before eBay starts charging.
+  </div>
+  {% endif %}
+  {% else %}
+  <p>
+    Run <a href="{{ url_for('MyIndexView.syncebaylistings') }}">the eBay listings sync</a>
+    to see how many listings are active and how many free insertions this
+    month has used.
+  </p>
+  {% endif %}
   <h2>Total units in stock: {{ stock_total }}</h2>
   {% call lib.accordion_tag("stockbypurchaselot","Stock Details (by purchase
   lot)", False) %}
