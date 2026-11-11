@@ -205,8 +205,8 @@ class EbayListingModelView(ArchivableViewMixin, CustomModelView):
     datamodel = SQLAInterface(EbayListing)
     base_order = ("start_time", "desc")
     list_widget = EbayListingListWidget
-    list_columns = ["item_id", "title", "start_time", "fmt_price", "fmt_url"]
-    search_columns = ["item_id", "price", "title", "archived"]
+    list_columns = ["item_id", "title", "start_time", "ended", "fmt_price", "fmt_url"]
+    search_columns = ["item_id", "price", "title", "ended", "archived"]
     label_columns = {"fmt_price": "Price", "fmt_url": "URL"}
     related_views = [UnitModelView]
     add_columns = ["item_id", "title", "price", "url", "start_time"]

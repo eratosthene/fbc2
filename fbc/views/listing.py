@@ -7,7 +7,7 @@ from flask_appbuilder.models.sqla.interface import SQLAInterface
 from markupsafe import Markup
 from wtforms import TextAreaField
 
-from fbc import devmode
+from fbc import devmode, insertions
 from fbc.listing import (
     check_ready,
     describe_template,
@@ -118,6 +118,10 @@ class EbayDraftModelView(CustomModelView):
             related_views=self._related_views,
             draft=draft,
             problems=check_ready(draft),
+            over_warning=insertions.publish_warning(insertions.listing_summary()),
+            uncovered_fee=insertions.uncovered_insertion_fee(
+                json.loads(draft.messages) if draft.messages else None
+            ),
             result=json.loads(draft.messages) if draft.messages else None,
         )
 
@@ -214,6 +218,10 @@ class EbayDraftModelView(CustomModelView):
             return self._back(draft)
         if devmode.on():
             flash(devmode.message("publishing to eBay"), "warning")
+            return self._back(draft)
+        warning = insertions.publish_warning(insertions.listing_summary())
+        if warning and not request.form.get("publish_anyway"):
+            flash(warning + " Tick Publish anyway to go ahead.", "warning")
             return self._back(draft)
         summary = publish_draft(draft)
         draft.messages = json.dumps(summary)

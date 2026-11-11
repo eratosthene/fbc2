@@ -965,6 +965,62 @@ def _call(verb, data):
         return None, summary
 
 
+class ActiveListError(Exception):
+    """eBay's active list couldn't be read in full."""
+
+
+def fetch_active_items(page_size=200):
+    """
+    Every item in eBay's active list (GetMyeBaySelling, ActiveList), a page
+    at a time. Raises ActiveListError unless every page came back and the
+    items add up to the TotalNumberOfEntries eBay reports, so a caller can
+    take an item missing from the result as no longer active.
+    """
+    items = {}
+    total = None
+    page = 1
+    pages = 1
+    while page <= pages:
+        resp, summary = _call(
+            "GetMyeBaySelling",
+            {
+                "ActiveList": {
+                    "Include": True,
+                    "Sort": "StartTime",
+                    "Pagination": {"EntriesPerPage": page_size, "PageNumber": page},
+                }
+            },
+        )
+        if resp is None or summary["errors"]:
+            raise ActiveListError(
+                "Couldn't read page "
+                + str(page)
+                + " of eBay's active listings: "
+                + (" ".join(summary["errors"]) or "no response")
+            )
+        active = resp.get("ActiveList") or {}
+        paging = active.get("PaginationResult") or {}
+        try:
+            pages = int(paging["TotalNumberOfPages"])
+            total = int(paging["TotalNumberOfEntries"])
+        except (KeyError, TypeError, ValueError):
+            raise ActiveListError(
+                "eBay's reply for page " + str(page) + " had no listing count."
+            )
+        for item in _as_list((active.get("ItemArray") or {}).get("Item")):
+            items[str(item["ItemID"])] = item
+        page += 1
+    if len(items) != total:
+        raise ActiveListError(
+            "Read "
+            + str(len(items))
+            + " active listings but eBay says there are "
+            + str(total)
+            + ". Run the sync again."
+        )
+    return list(items.values())
+
+
 def check_ready(draft):
     """Problems fbc can spot before asking eBay; publishing needs none."""
     problems = []
