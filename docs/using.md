@@ -219,7 +219,15 @@ The count is fbc's estimate, from these assumptions:
 - The month is a calendar month in US Pacific time.
 - A listing that ended is counted up to the last sync that saw it active.
   One fbc never saw before it ended is missed, so the count may be a little
-  low. Seller Hub's own counter is the check; eBay has no call for it.
+  low. eBay has no call for the exact number, so the home page has a box for
+  the free listings left that the eBay app (or Seller Hub) shows.
+
+To calibrate, run the listings sync, then enter the app's number on the home
+page. fbc works out how far its own count was from it and adds that to the
+month's used count; its own count carries on from there. Enter it again any
+time, and the new number replaces the old one. A number applies to its month
+only: on the 1st the count starts from fbc's own again, so it's worth
+entering the app's number once early in each month to check.
 
 Publishing an eBay Draft that would take the projected count past the limit
 shows a warning and needs Publish anyway ticked, but still goes ahead. If the

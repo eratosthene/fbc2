@@ -53,6 +53,23 @@ class EbayListing(Model):
         return Markup('<a href="' + self.url + '">Listing</a>')
 
 
+class InsertionCalibration(Model):
+    """
+    What the eBay app said was left of a month's free insertions, and how far
+    fbc's own count was from it then (see fbc/insertions.py). One row a month,
+    keyed by the month's start, so a new month starts with none.
+    """
+
+    __tablename__ = "insertion_calibration"
+    # UTC start of the month, from insertions.month_bounds.
+    month_start = Column(DateTime, primary_key=True)
+    # Added to the month's used count: eBay's number less fbc's.
+    adjustment = Column(Integer, nullable=False)
+    # The free insertions the eBay app showed as left, and when it was entered.
+    remaining = Column(Integer, nullable=False)
+    entered = Column(DateTime, nullable=False)
+
+
 class EbayOrder(Model):
     __tablename__ = "ebay_order"
     order_id = Column(String(20), primary_key=True, unique=True)
