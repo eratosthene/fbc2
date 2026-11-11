@@ -20,8 +20,10 @@
   <div class="form-group">
     <label class="col-sm-2 control-label" for="folder">Folder</label>
     <div class="col-sm-6"><select class="form-control" id="folder" name="folder">
-      {% for id, name in form.folders %}<option value="{{ id }}" {{ 'selected' if values.get('folder') == id|string }}>{{ name }}</option>{% endfor %}
-    </select></div>
+      {% for id, name in form.folders %}<option value="{{ id }}" {{ 'selected' if (values.get('folder') or default_folder|string) == id|string }}>{{ name }}</option>{% endfor %}
+    </select>
+    {% if default_folder %}<p class="help-block">Chosen from the Purchase Lot's Discogs Folder. Change it if this copy belongs elsewhere.</p>{% endif %}
+    </div>
   </div>
   {% for f in form.fields %}
   {% set key = 'field_' ~ f.id %}

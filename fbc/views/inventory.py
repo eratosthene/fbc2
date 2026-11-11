@@ -184,14 +184,23 @@ class PurchaseLotModelView(CustomModelView):
         "name",
         "date",
         "purchase_price",
+        "folder",
         "notes",
         "list_total",
         "list_sold",
         "list_profit",
         "list_breakeven",
     ]
-    show_columns = ["name", "date", "purchase_price", "notes", "breakdown"]
+    show_columns = [
+        "name",
+        "date",
+        "purchase_price",
+        "folder",
+        "notes",
+        "breakdown",
+    ]
     label_columns = {
+        "folder": "Discogs Folder",
         "breakdown": "Breakdown",
         "list_total": "Units",
         "list_sold": "Sold",

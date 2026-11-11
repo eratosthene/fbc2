@@ -24,6 +24,10 @@ class PurchaseLot(Model):
     date = Column(Date, nullable=False)
     price = Column(Float, nullable=False)
     notes = Column(String(100))
+    # The Discogs Folder this lot's records are kept in, if it has one. Many
+    # lots may share a folder; Identify Record pre-selects it, nothing more.
+    folder_id = Column(Integer, ForeignKey("folder.folder_id"), nullable=True)
+    folder = relationship("Folder")
 
     @renders("price")
     def purchase_price(self):
