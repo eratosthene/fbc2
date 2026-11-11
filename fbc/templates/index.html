@@ -14,10 +14,10 @@
   </div>
   {% endif %}
   {% if listings.synced %}
-  <h2>
-    eBay listings: {{ listings.active }} active
-    <small>as of the last listings sync, {{ listings.synced_pacific.strftime("%b %-d %-I:%M %p") }} Pacific</small>
-  </h2>
+  <h2>eBay listings: {{ listings.active }} active</h2>
+  <p>
+    As of the last listings sync, {{ listings.synced_pacific.strftime("%b %-d %-I:%M %p") }} Pacific.
+  </p>
   <p>
     Free insertions this month: <strong>{{ listings.used }}</strong> of
     {{ listings.limit }} used, {{ listings.due }} more renewal{{ "" if listings.due == 1 else "s" }}
@@ -37,6 +37,22 @@
     new listings are left before eBay starts charging.
   </div>
   {% endif %}
+  <form method="post" action="{{ url_for('MyIndexView.calibrateinsertions') }}" class="form-inline">
+    <label for="remaining">The eBay app shows</label>
+    <input type="number" name="remaining" id="remaining" min="0" max="{{ listings.limit }}" required class="form-control" style="width: 6em">
+    <label for="remaining">free listings left.</label>
+    <button class="btn btn-default">Use that number</button>
+  </form>
+  <p class="text-muted">
+    {% if listings.calibration %}
+    Adjusted by {{ "%+d"|format(listings.calibration.adjustment) }} for this month,
+    from the {{ listings.calibration.remaining }} you entered on
+    {{ listings.calibration.entered_pacific.strftime("%b %-d %-I:%M %p") }} Pacific.
+    {% else %}
+    No number entered for this month, so this is fbc's own count.
+    {% endif %}
+    Run the listings sync first, so fbc's count is current.
+  </p>
   {% else %}
   <p>
     Run <a href="{{ url_for('MyIndexView.syncebaylistings') }}">the eBay listings sync</a>

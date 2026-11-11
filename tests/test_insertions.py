@@ -442,3 +442,72 @@ def test_the_draft_page_shows_an_insertion_fee_eBay_did_not_cover(client, monkey
     )
 
     assert "insertion fee of $0.35" in page
+
+
+# --- Calibrating with the eBay app's number ---
+
+
+def _synced_month(count=3):
+    sync.record_finished(sync.LISTINGS_SYNC, sync.utcnow())
+    for n in range(count):
+        _listing("c" + str(n), start=sync.utcnow())
+
+
+def test_calibrate_adds_the_difference_to_used(app):
+    _synced_month(3)
+
+    # eBay says 250 - 181 = 69 used; fbc counts 3.
+    assert insertions.calibrate(181) == 66
+
+    summary = insertions.listing_summary()
+    assert summary["used"] == 69
+    assert summary["projected"] == 69
+    assert summary["calibration"]["adjustment"] == 66
+
+
+def test_a_new_listing_after_calibrating_adds_to_the_count(app):
+    _synced_month(3)
+    insertions.calibrate(181)
+
+    _listing("later", start=sync.utcnow())
+
+    assert insertions.listing_summary()["used"] == 70
+
+
+def test_calibrating_again_replaces_the_last_entry(app):
+    _synced_month(3)
+    insertions.calibrate(181)
+    insertions.calibrate(200)
+
+    assert insertions.listing_summary()["used"] == 50
+
+
+def test_calibration_does_not_carry_into_the_next_month(app):
+    _synced_month(1)
+    last_month = sync.utcnow() - datetime.timedelta(days=40)
+    insertions.calibrate(100, now=last_month)
+
+    assert insertions.listing_summary()["calibration"] is None
+    assert insertions.listing_summary()["used"] == 1
+
+
+def test_calibrate_route_saves_the_number_and_the_home_page_says_so(app):
+    _synced_month(3)
+    client = app.test_client()
+
+    response = client.post("/calibrateinsertions", data={"remaining": "181"})
+    html = client.get("/").get_data(as_text=True)
+
+    assert response.status_code == 302
+    assert "Adjusted by +66" in html
+    assert "from the 181 you entered" in html
+
+
+@pytest.mark.parametrize("value", ["", "abc", "-1", "251"])
+def test_calibrate_route_rejects_a_bad_number(app, value):
+    _synced_month(3)
+    client = app.test_client()
+
+    client.post("/calibrateinsertions", data={"remaining": value})
+
+    assert insertions.listing_summary()["calibration"] is None

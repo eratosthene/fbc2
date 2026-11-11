@@ -128,6 +128,10 @@ listings counted up to `end_time`). Change them there and in
 `tests/test_insertions.py`. Pacific time is worked out by hand, because the
 Alpine image has no tzdata for `zoneinfo`.
 
+`insertions.calibrate` stores the eBay app's number as an adjustment in
+`insertion_calibration`, one row per month keyed by the month's start, so a
+new month ignores last month's row. `count_insertions` adds it to `used`.
+
 Nothing here reaches eBay except the listings sync, which dev mode skips like
 the other syncs. There is no quick count refresh on the home page: the page
 only reads the database.

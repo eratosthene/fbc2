@@ -129,3 +129,12 @@ def test_existing_listings_start_not_ended_and_sync_record_is_created():
         row = conn.execute(sa.text("SELECT ended, end_time FROM ebay_listing")).one()
         assert tuple(row) == (0, None)
         assert "sync_record" in sa.inspect(conn).get_table_names()
+
+
+def test_insertion_calibration_table_is_created():
+    migration = _migration("e3a7c1d9b250_add_insertion_calibration")
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as conn:
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.upgrade()
+        assert "insertion_calibration" in sa.inspect(conn).get_table_names()

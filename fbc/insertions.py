@@ -14,7 +14,8 @@ tests will say what moved:
   (the sync keeps the new listing and drops the old one).
 - A listing that ended is counted up to its end_time (see
   fbc/util.py mark_ended_listings). Listings fbc never synced before they
-  ended are missed, so the count can be a little low.
+  ended are missed, so the count can be a little low; entering the eBay
+  app's number (calibrate) corrects that for the rest of the month.
 - eBay has no call that says how many free listings are left; Seller Hub's
   counter is the check.
 """
@@ -72,13 +73,14 @@ def month_bounds(now):
     return utc_of(first), utc_of(following)
 
 
-def count_insertions(listings, now, limit=DEFAULT_LIMIT):
+def count_insertions(listings, now, limit=DEFAULT_LIMIT, adjustment=0):
     """
     This month's insertions, from `listings`: (start_time, end_time or None)
     pairs in UTC, end_time None for one still active. Returns a dict with
     `used` (up to now), `due` (renewals still to come this month),
     `projected` (the two together), `limit`, and `near` and `over` for the
-    projected count against the limit.
+    projected count against the limit. `adjustment` is added to `used`: what
+    the eBay app showed less fbc's own count, from calibrate().
     """
     month_start, month_end = month_bounds(now)
     renewal = datetime.timedelta(days=RENEWAL_DAYS)
@@ -98,6 +100,7 @@ def count_insertions(listings, now, limit=DEFAULT_LIMIT):
             else:
                 due += 1
             t += renewal
+    used += adjustment
     projected = used + due
     return {
         "used": used,
@@ -115,18 +118,10 @@ def free_insertions_limit():
     return int(listing_settings().get("FREE_INSERTIONS", DEFAULT_LIMIT))
 
 
-def listing_summary(now=None):
-    """
-    The home page's and Publish's view of the listings, from the database:
-    active listings and the month's insertions (see count_insertions), and
-    when the listings sync last finished. `synced` is None until it has, as
-    nothing is marked ended before then and the counts would be wrong.
-    """
-    from fbc import db, sync
+def _listing_pairs(now):
+    from fbc import db
     from fbc.models.ebay import EbayListing
 
-    now = now or sync.utcnow()
-    synced = sync.last_finished(sync.LISTINGS_SYNC)
     month_start, _ = month_bounds(now)
     rows = (
         db.session.query(
@@ -140,12 +135,66 @@ def listing_summary(now=None):
         )
         .all()
     )
-    pairs = [(start, (end or start) if ended else None) for start, ended, end in rows]
-    summary = count_insertions(pairs, now, free_insertions_limit())
+    return [(start, (end or start) if ended else None) for start, ended, end in rows]
+
+
+def listing_summary(now=None):
+    """
+    The home page's and Publish's view of the listings, from the database:
+    active listings and the month's insertions (see count_insertions), and
+    when the listings sync last finished. `synced` is None until it has, as
+    nothing is marked ended before then and the counts would be wrong.
+    `calibration` is this month's entry from the eBay app, or None.
+    """
+    from fbc import db, sync
+    from fbc.models.ebay import EbayListing, InsertionCalibration
+
+    now = now or sync.utcnow()
+    synced = sync.last_finished(sync.LISTINGS_SYNC)
+    month_start, _ = month_bounds(now)
+    calibration = db.session.get(InsertionCalibration, month_start)
+    summary = count_insertions(
+        _listing_pairs(now),
+        now,
+        free_insertions_limit(),
+        calibration.adjustment if calibration else 0,
+    )
     summary["active"] = db.session.query(EbayListing).filter_by(ended=False).count()
     summary["synced"] = synced
     summary["synced_pacific"] = to_pacific(synced) if synced else None
+    summary["calibration"] = None
+    if calibration:
+        summary["calibration"] = {
+            "adjustment": calibration.adjustment,
+            "remaining": calibration.remaining,
+            "entered_pacific": to_pacific(calibration.entered),
+        }
     return summary
+
+
+def calibrate(remaining, now=None):
+    """
+    Record the free insertions the eBay app shows as left, for this month,
+    replacing any earlier entry. The adjustment is eBay's used count (limit
+    less `remaining`) minus fbc's own at `now`; it stays for the month, and
+    fbc's own count carries on from there. Run the listings sync first, so
+    fbc's count is current. Returns the adjustment.
+    """
+    from fbc import db, sync
+    from fbc.models.ebay import InsertionCalibration
+
+    now = now or sync.utcnow()
+    limit = free_insertions_limit()
+    month_start, _ = month_bounds(now)
+    own = count_insertions(_listing_pairs(now), now, limit)["used"]
+    adjustment = (limit - remaining) - own
+    row = db.session.get(InsertionCalibration, month_start)
+    if row is None:
+        row = InsertionCalibration(month_start=month_start)
+        db.session.add(row)
+    row.adjustment, row.remaining, row.entered = adjustment, remaining, now
+    db.session.commit()
+    return adjustment
 
 
 def publish_warning(summary):

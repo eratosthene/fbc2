@@ -4,7 +4,7 @@ import logging
 from collections import Counter
 
 from ebaysdk.exception import ConnectionError
-from flask import jsonify, request, url_for
+from flask import flash, jsonify, redirect, request, url_for
 from flask_appbuilder import IndexView
 from flask_appbuilder.views import expose
 
@@ -185,6 +185,33 @@ class MyIndexView(IndexView):
         return self.render_template(
             self.index_template, appbuilder=self.appbuilder, **home_totals()
         )
+
+    @expose("/calibrateinsertions", methods=["POST"])
+    def calibrateinsertions(self):
+        """Save the free listings left that the eBay app shows."""
+        limit = insertions.free_insertions_limit()
+        try:
+            remaining = int(request.form.get("remaining", ""))
+        except ValueError:
+            remaining = -1
+        if not 0 <= remaining <= limit:
+            flash(
+                "Enter the number of free listings left that the eBay app shows,"
+                " from 0 to " + str(limit) + ".",
+                "danger",
+            )
+        else:
+            change = insertions.calibrate(remaining)
+            flash(
+                "Saved. fbc's count was "
+                + (
+                    "the same."
+                    if change == 0
+                    else str(abs(change)) + (" low." if change > 0 else " high.")
+                ),
+                "success",
+            )
+        return redirect(url_for("MyIndexView.index"))
 
     def _start_sync(self, kind, title, fn, fallback_url):
         """
