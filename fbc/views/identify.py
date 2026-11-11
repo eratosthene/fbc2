@@ -17,6 +17,13 @@ class IdentifyRecordView(BaseView):
     def _lots(self):
         return db.session.query(PurchaseLot).order_by(PurchaseLot.id.desc()).all()
 
+    def _lot_folder(self, lot):
+        """The Discogs Folder id linked to this Purchase Lot, or None."""
+        if not lot or not str(lot).isdigit():
+            return None
+        found = db.session.get(PurchaseLot, int(lot))
+        return found.folder_id if found else None
+
     @expose("/")
     @has_access
     def search(self):
@@ -164,4 +171,7 @@ class IdentifyRecordView(BaseView):
             lot=lot or "",
             matrix=matrix,
             values=request.form,
+            # Only a starting choice: the form's Folder can still be changed,
+            # and nothing goes to Discogs until its button is pressed.
+            default_folder=self._lot_folder(lot),
         )

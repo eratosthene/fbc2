@@ -535,6 +535,53 @@ def test_collect_page_posts_then_goes_to_add_unit(monkeypatch, client):
     assert "grading=NM+or+M-/VG%2B" in location
 
 
+def _lot_with_folder(folder_id):
+    from fbc.models.discogs import Folder
+
+    folder = fbc.db.session.get(Folder, folder_id) or Folder(
+        folder_id=folder_id, name="Folder %d" % folder_id
+    )
+    lot = PurchaseLot(
+        name="Linked lot",
+        date=datetime.date(2026, 1, 1),
+        price=10,
+        folder=folder,
+    )
+    fbc.db.session.add(lot)
+    fbc.db.session.commit()
+    return lot
+
+
+def _selected(html):
+    import re
+
+    return re.findall(r'<option value="(\d+)" selected', html.split('id="folder"')[1])
+
+
+def test_collect_form_preselects_the_purchase_lots_folder(monkeypatch, client):
+    fake = use_collection(monkeypatch)
+    lot = _lot_with_folder(2)
+    html = client.get("/identifyrecord/collect?release_id=9&lot=%d" % lot.id).get_data(
+        as_text=True
+    )
+    assert _selected(html)[:1] == ["2"]
+    assert "Chosen from the Purchase Lot" in html
+    assert fake.posts == []  # choosing a default writes nothing
+
+
+def test_collect_form_has_no_default_for_a_lot_without_a_folder(monkeypatch, client):
+    use_collection(monkeypatch)
+    lot = PurchaseLot(name="Bare", date=datetime.date(2026, 1, 1), price=1)
+    fbc.db.session.add(lot)
+    fbc.db.session.commit()
+    for lot_arg in ("%d" % lot.id, "", "abc", "99999"):
+        html = client.get(
+            "/identifyrecord/collect?release_id=9&lot=" + lot_arg
+        ).get_data(as_text=True)
+        assert _selected(html) == []
+        assert "Chosen from the Purchase Lot" not in html
+
+
 # --- Unit name and pressing ---
 
 

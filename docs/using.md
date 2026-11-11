@@ -19,6 +19,13 @@ range (`100-200`) or a mix (`5, 100-200`).
 Units (one copy of a record each), the Purchase Lots they came in and the
 Storage Boxes they're kept in.
 
+A Purchase Lot can be linked to a Discogs Folder (the Discogs Folder field on
+its form, chosen from the folders synced from Discogs). It's optional, and
+several lots may share a folder. The link is only a starting choice: Identify
+Record chooses that folder for you on its add-to-Discogs form, and nothing is
+added or moved on Discogs until you press that form's button. Run Sync Discogs
+first if a folder you made on Discogs isn't offered.
+
 The Purchase Lots list shows each lot's Units, how many are sold, its
 Profit and its B/E (the price a Unit must sell for to cover the lot after
 fees). Open a lot for its Breakdown. These come from the same maths as the
@@ -116,7 +123,8 @@ country. A matching country and a matching color move a release up too.
 Each result has two buttons.
 
 - **This one: add to Discogs** opens a form for a copy of the release in your
-  Discogs collection: Folder, Media Condition, Sleeve Condition, Notes, Dust
+  Discogs collection: Folder (the Discogs Folder set on the Purchase Lot, if it
+  has one, is chosen to start with; change it if you like), Media Condition, Sleeve Condition, Notes, Dust
   Jacket Condition and Extras Included (any of those not set up as custom
   fields on your Discogs account are left off, and it says which). Only its
   button, "Add to my Discogs collection and add the Unit", **writes to your
