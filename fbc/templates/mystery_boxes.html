@@ -1,0 +1,22 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h2>Mystery Boxes</h2>
+{% if listings %}
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>Listing</th><th>Storage Box</th><th>Units per sale</th><th>Boxes available</th></tr>
+  {% for listing, available in listings %}
+  <tr>
+    <td><a href="{{ url_for('EbayListingModelView.show', pk=listing.item_id) }}">{{ listing.title }}</a></td>
+    <td>{{ listing.pick_from_box.name }}</td>
+    <td>{{ listing.pick_count }}</td>
+    <td>{{ available }}{% if available == 0 %} <span class="text-danger">restock, or set the listing's quantity to 0 on eBay</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>
+  No active mystery box listings. To make one, set Mystery Box: Pick From
+  Storage Box and Mystery Box: Units Per Sale on an eBay Listing's edit page.
+</p>
+{% endif %}
+{% endblock %}

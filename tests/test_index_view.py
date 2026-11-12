@@ -117,6 +117,8 @@ def test_index_aggregates_totals_across_lots_and_boxes(app):
     assert captured["breakeven_per_unit"] == pytest.approx(50.0 / 0.9 + 5.0)
 
     box_totals = captured["box_totals"]
+    assert box_totals[box.id]["units"] == 2
+    assert box_totals[box.id]["sold_units"] == 1
     assert box_totals[box.id]["instock"] == 1
     assert box_totals[box.id]["gross"] == 60.0
     assert box_totals[box.id]["net"] == 54.0
@@ -128,6 +130,9 @@ def test_index_aggregates_totals_across_lots_and_boxes(app):
     assert lot_totals[lot.id]["gross"] == 60.0
     assert lot_totals[lot.id]["net"] == 54.0
     assert lot_totals[lot.id]["instock"] == 1
+    assert captured["totals"]["units"] == 2
+    assert captured["totals"]["sold_units"] == 1
+    assert captured["totals"]["instock"] == 1
 
 
 def test_index_handles_units_without_storage_box(app):
@@ -345,7 +350,7 @@ def test_index_takes_expenses_off_the_net_profit_by_category(app):
 
     with app.test_client() as client:
         html = client.get("/").get_data(as_text=True)
-    assert "Total other expenses: $16.50" in html
+    assert "Other expenses: <strong>$16.50</strong>" in html
     assert "Advertising (line 8)" in html
 
 
@@ -378,3 +383,37 @@ def test_index_counts_expenses_on_a_purchase_order_as_expenses_not_supplies(app)
     assert captured["expense_total"] == 40.0
     # The order's 100.0, counted once.
     assert captured["total_net_profit"] == -100.0
+
+
+def test_index_shows_units_sold_and_stock_beside_each_lot_and_box(app):
+    lot = _lot(name="Crate Find")
+    box = _box(name="Back Shelf")
+    _unit(lot, box=box, sold=False, name="Unsold")
+    _unit(lot, box=box, sold=True, sales_receipt=_receipt(50.0, 45.0), name="Sold")
+
+    with app.test_client() as client:
+        page = client.get("/").get_data(as_text=True)
+
+    assert "<th>Units Sold</th>" in page
+    for name in ("Crate Find", "Back Shelf"):
+        row = page.split("<td>" + name + "</td>")[1].split("</tr>")[0]
+        # Units, Units Sold, Stock
+        assert ">2<" in row and ">1<" in row
+
+
+def test_index_groups_its_alerts_above_the_listings(app):
+    lot = _lot()
+    supply = Supply(name="Mailers", quantity=0, min_quantity=5)
+    db.session.add(supply)
+    db.session.commit()
+    _unit(lot)
+
+    with app.test_client() as client:
+        page = client.get("/").get_data(as_text=True)
+
+    assert page.index("Time to reorder") < page.index("<h2>Listings</h2>")
+    assert page.index("<h2>Listings</h2>") < page.index("<h2>Stock</h2>")
+    assert page.index("<h2>Stock</h2>") < page.index("<h2>Money</h2>")
+    # The shop's name is a small footer, not a heading.
+    assert "<h1>" not in page
+    assert page.rindex("Fire &amp; Bones Collectibles") > page.index("<h2>Money</h2>")
