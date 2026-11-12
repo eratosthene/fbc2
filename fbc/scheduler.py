@@ -111,8 +111,10 @@ def run_due(schedule, failed_at, now=None):
     outcomes = {}
     for name in due(schedule, failed_at, now):
         job = JOBS[name]()
+        # No echo: the root logger already prints each line to the container's
+        # output, and echoing it too would print every line twice.
         try:
-            result = sync.run(job.kind, job.title, job.fn, echo=_echo)
+            result = sync.run(job.kind, job.title, job.fn, echo=None)
         except sync.Busy:
             logger.info("%s is already running; trying again next time.", job.title)
             outcomes[name] = "busy"
@@ -129,10 +131,6 @@ def run_due(schedule, failed_at, now=None):
             failed_at[name] = sync.utcnow()
             outcomes[name] = "failed"
     return outcomes
-
-
-def _echo(line):
-    print(line, flush=True)
 
 
 def loop(config, sleep=time.sleep):
