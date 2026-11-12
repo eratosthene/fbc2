@@ -3,7 +3,6 @@
 import random
 
 from fbc import db, mystery, shipping
-from fbc.index import home_totals
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import StorageBox, Unit
 from fbc.models.sales import SalesReceipt
@@ -244,8 +243,20 @@ def test_the_listing_needs_both_box_and_count(client):  # noqa: F811
     assert "Set both the Storage Box and Units Per Sale" in page
 
 
-def test_the_home_page_shows_boxes_available(app):
+def test_the_mystery_boxes_page_shows_boxes_available(client):  # noqa: F811
     box = _box(units=11)
     _mystery(box)
 
-    assert [n for _, n in home_totals()["mystery_boxes"]] == [2]
+    page = client.get("/mysteryboxes/").get_data(as_text=True)
+
+    assert "Mystery Box 900" in page
+    assert "<td>2</td>" in page
+    # It is in the Sales menu, and no longer on the home page.
+    assert 'href="/mysteryboxes/"' in client.get("/").get_data(as_text=True)
+    assert "Mystery boxes available" not in client.get("/").get_data(as_text=True)
+
+
+def test_the_mystery_boxes_page_says_when_there_are_none(client):  # noqa: F811
+    page = client.get("/mysteryboxes/").get_data(as_text=True)
+
+    assert "No active mystery box listings" in page

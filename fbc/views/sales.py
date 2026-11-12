@@ -1,5 +1,5 @@
 from flask import abort, flash, redirect, request, url_for
-from flask_appbuilder import expose, has_access
+from flask_appbuilder import BaseView, expose, has_access
 from flask_appbuilder.actions import action
 from markupsafe import Markup
 from wtforms.validators import Optional
@@ -468,3 +468,22 @@ class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
             supplies=supplies,
             values=values,
         )
+
+
+class MysteryBoxesView(BaseView):
+    """
+    Mystery Boxes, under Sales: each active mystery box listing and how many
+    more boxes its Storage Box can fill (see fbc.mystery).
+    """
+
+    route_base = "/mysteryboxes"
+    default_view = "boxes"
+
+    @expose("/")
+    @has_access
+    def boxes(self):
+        listings = [
+            (listing, mystery.boxes_available(listing))
+            for listing in mystery.active_listings()
+        ]
+        return self.render_template("mystery_boxes.html", listings=listings)
