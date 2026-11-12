@@ -11,11 +11,14 @@ from fbc import devmode, insertions
 from fbc.listing import (
     check_ready,
     describe_template,
+    fetch_picture,
     listing_details,
     listing_settings,
     new_draft,
     publish_draft,
+    rotate_picture,
     seller_profiles,
+    upright_picture,
     upload_picture,
     verify_draft,
 )
@@ -47,6 +50,7 @@ class EbayDraftModelView(CustomModelView):
         "can_from_unit",
         "can_pictures",
         "can_picture",
+        "can_rotate",
         "can_verify",
         "can_publish",
         "can_policies",
@@ -167,7 +171,9 @@ class EbayDraftModelView(CustomModelView):
             if len(urls) >= MAX_PICTURES:
                 flash("eBay allows at most 24 pictures.", "warning")
                 break
-            url, summary = upload_picture(f.stream, f.filename, f.mimetype)
+            url, summary = upload_picture(
+                upright_picture(f.stream), f.filename, f.mimetype
+            )
             self._flash_summary(summary)
             if url:
                 urls.append(url)
@@ -192,6 +198,43 @@ class EbayDraftModelView(CustomModelView):
             abort(400)
         draft.set_picture_list(urls)
         db.session.commit()
+        return self._back(draft)
+
+    @expose("/rotate/<int:pk>/<int:index>/<direction>", methods=["POST"])
+    @has_access
+    def rotate(self, pk, index, direction):
+        """
+        Turn a picture 90 degrees: fetch it from eBay, rotate it, upload it as
+        a new picture and put that in the old one's place. The old picture is
+        left on eBay.
+        """
+        from fbc import db
+
+        draft = self._draft(pk)
+        if draft.status != "draft" or direction not in ("left", "right"):
+            abort(404 if draft.status != "draft" else 400)
+        urls = draft.picture_list()
+        if index < 0 or index >= len(urls):
+            abort(404)
+        if devmode.on():
+            flash(devmode.message("rotating pictures"), "warning")
+            return self._back(draft)
+        data, error = fetch_picture(urls[index])
+        if error:
+            flash(error, "danger")
+            return self._back(draft)
+        try:
+            rotated, content_type = rotate_picture(data, direction)
+        except ValueError as e:
+            flash(str(e), "danger")
+            return self._back(draft)
+        filename = urls[index].rsplit("/", 1)[-1].split("?")[0] or "picture.jpg"
+        url, summary = upload_picture(rotated, filename, content_type)
+        self._flash_summary(summary)
+        if url:
+            urls[index] = url
+            draft.set_picture_list(urls)
+            db.session.commit()
         return self._back(draft)
 
     @expose("/verify/<int:pk>", methods=["POST"])

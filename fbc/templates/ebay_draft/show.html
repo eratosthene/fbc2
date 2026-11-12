@@ -14,6 +14,12 @@
     <form method="post" action="{{ url_for('EbayDraftModelView.picture', pk=draft.id, index=loop.index0, action='remove') }}" style="display: inline">
       <button class="btn btn-xs btn-danger">Remove</button>
     </form>
+    {% set picture_index = loop.index0 %}
+    {% for direction, label in (("left", "Rotate left"), ("right", "Rotate right")) %}
+    <form method="post" action="{{ url_for('EbayDraftModelView.rotate', pk=draft.id, index=picture_index, direction=direction) }}" style="display: inline">
+      <button class="btn btn-xs btn-default" {% if dev_mode %}disabled title="Dev Mode is turned on, rotating pictures disabled."{% endif %}>{{ label }}</button>
+    </form>
+    {% endfor %}
     {% endif %}
   </div>
   {% endfor %}
@@ -22,10 +28,135 @@
 {% if dev_mode %}
 <p class="text-warning">Dev Mode is turned on, picture uploads disabled.</p>
 {% else %}
-<form method="post" enctype="multipart/form-data" action="{{ url_for('EbayDraftModelView.pictures', pk=draft.id) }}" class="form-inline">
+<form id="picture-form" method="post" enctype="multipart/form-data" action="{{ url_for('EbayDraftModelView.pictures', pk=draft.id) }}" class="form-inline">
   <input type="file" name="pictures" accept="image/*" multiple class="form-control">
   <button class="btn btn-default">Upload to eBay</button>
+  <p class="text-muted" id="picture-help" hidden>Turn a picture here before it goes to eBay, if it is sideways or upside down.</p>
+  <div id="picture-previews" class="row" style="margin-top: 10px"></div>
+  <p class="text-danger" id="picture-error" hidden></p>
 </form>
+<script {% if csp_nonce is defined %}nonce="{{ csp_nonce() }}"{% endif %}>
+// Previews of the chosen pictures, with rotate buttons. The page only turns
+// them when you press Upload, then swaps the turned copies into the file
+// chooser and posts the form as usual. If anything here fails, the form still
+// works as a plain upload.
+(function () {
+  var form = document.getElementById("picture-form");
+  var input = form.querySelector("input[type=file]");
+  var box = document.getElementById("picture-previews");
+  var help = document.getElementById("picture-help");
+  var errorLine = document.getElementById("picture-error");
+  var button = form.querySelector("button");
+  var items = [];
+  if (!window.DataTransfer || !window.URL || !HTMLCanvasElement.prototype.toBlob) {
+    return;
+  }
+
+  function fail(text) {
+    errorLine.textContent = text;
+    errorLine.hidden = false;
+  }
+
+  function clearPreviews() {
+    items.forEach(function (item) { URL.revokeObjectURL(item.url); });
+    items = [];
+    box.innerHTML = "";
+    help.hidden = true;
+    errorLine.hidden = true;
+  }
+
+  function addPreview(file) {
+    var item = {file: file, turns: 0, url: URL.createObjectURL(file)};
+    items.push(item);
+    var cell = document.createElement("div");
+    cell.className = "col-xs-6 col-sm-3";
+    cell.style.marginBottom = "10px";
+    var frame = document.createElement("div");
+    frame.style.cssText = "width: 100%; height: 150px; overflow: hidden; text-align: center";
+    var img = document.createElement("img");
+    img.style.cssText = "max-width: 100%; max-height: 150px; transition: transform .15s";
+    img.alt = file.name;
+    // A file the browser can't show gets no buttons and uploads as it is.
+    img.onerror = function () { cell.removeChild(controls); item.broken = true; };
+    img.src = item.url;
+    frame.appendChild(img);
+    var controls = document.createElement("div");
+    [["Rotate left", -1], ["Rotate right", 1]].forEach(function (b) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-xs btn-default";
+      btn.style.marginRight = "4px";
+      btn.textContent = b[0];
+      btn.onclick = function () {
+        item.turns = (item.turns + b[1] + 4) % 4;
+        img.style.transform = "rotate(" + item.turns * 90 + "deg)";
+      };
+      controls.appendChild(btn);
+    });
+    cell.appendChild(frame);
+    cell.appendChild(controls);
+    box.appendChild(cell);
+  }
+
+  input.addEventListener("change", function () {
+    clearPreviews();
+    Array.prototype.forEach.call(input.files, addPreview);
+    help.hidden = items.length === 0;
+  });
+
+  // The picture's pixels turned by `turns` quarter turns, as a File.
+  function turned(item) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        var sideways = item.turns % 2 === 1;
+        var canvas = document.createElement("canvas");
+        canvas.width = sideways ? img.naturalHeight : img.naturalWidth;
+        canvas.height = sideways ? img.naturalWidth : img.naturalHeight;
+        var ctx = canvas.getContext("2d");
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(item.turns * Math.PI / 2);
+        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+        var type = item.file.type === "image/png" ? "image/png" : "image/jpeg";
+        canvas.toBlob(function (blob) {
+          canvas.width = canvas.height = 0;
+          if (!blob) { reject(new Error("The browser couldn't save " + item.file.name + ".")); return; }
+          resolve(new File([blob], item.file.name, {type: type, lastModified: Date.now()}));
+        }, type, 0.95);
+      };
+      img.onerror = function () { reject(new Error("The browser couldn't open " + item.file.name + ".")); };
+      img.src = item.url;
+    });
+  }
+
+  form.addEventListener("submit", function (event) {
+    if (!items.some(function (item) { return item.turns && !item.broken; })) {
+      return;
+    }
+    event.preventDefault();
+    errorLine.hidden = true;
+    button.disabled = true;
+    var label = button.textContent;
+    button.textContent = "Turning pictures...";
+    // One at a time, so only one big canvas is in memory.
+    var files = [];
+    items.reduce(function (chain, item) {
+      return chain.then(function () {
+        return item.turns && !item.broken ? turned(item) : item.file;
+      }).then(function (file) { files.push(file); });
+    }, Promise.resolve()).then(function () {
+      var transfer = new DataTransfer();
+      files.forEach(function (file) { transfer.items.add(file); });
+      input.files = transfer.files;
+      form.submit();
+    }).catch(function (e) {
+      fail(e.message + " Nothing was uploaded.");
+      button.disabled = false;
+      button.textContent = label;
+    });
+  });
+})();
+</script>
 {% endif %}
 <hr>
 <a href="{{ url_for('EbayDraftModelView.edit', pk=draft.id) }}" class="btn btn-default">Edit</a>

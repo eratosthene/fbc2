@@ -1376,6 +1376,93 @@ def upload_picture(fileobj, filename, content_type=None):
     return url, summary
 
 
+# JPEG quality for pictures fbc re-saves (a rotation or an EXIF fix), high so
+# the extra save costs little.
+PICTURE_QUALITY = 95
+
+
+def _save_picture(image, fmt):
+    """Encode a Pillow image in its original format; returns a BytesIO."""
+    import io
+
+    out = io.BytesIO()
+    kwargs = {}
+    if fmt == "JPEG":
+        kwargs = {"quality": PICTURE_QUALITY, "subsampling": 0}
+        if image.mode not in ("RGB", "L", "CMYK"):
+            image = image.convert("RGB")
+    if image.info.get("icc_profile"):
+        kwargs["icc_profile"] = image.info["icc_profile"]
+    image.save(out, format=fmt, **kwargs)
+    out.seek(0)
+    return out
+
+
+def upright_picture(fileobj):
+    """
+    Return a file with the picture's pixels the right way up. Phones often
+    store a photo sideways and set an EXIF orientation tag that some viewers
+    ignore; this applies the tag and drops it. A picture Pillow can't read
+    is passed on as it is, for eBay to judge.
+    """
+    from PIL import Image, ImageOps
+
+    try:
+        image = Image.open(fileobj)
+        fmt = image.format
+        if (
+            fmt not in ("JPEG", "PNG", "WEBP", "GIF")
+            or image.getexif().get(274, 1) == 1
+        ):
+            fileobj.seek(0)
+            return fileobj
+        return _save_picture(ImageOps.exif_transpose(image), fmt)
+    except Exception as e:
+        logger.warning("Couldn't straighten a picture: " + str(e))
+        fileobj.seek(0)
+        return fileobj
+
+
+def rotate_picture(data, direction):
+    """
+    Rotate picture bytes 90 degrees, "left" (anticlockwise) or "right".
+    Returns (BytesIO, content type). Raises ValueError if it isn't a picture
+    Pillow can read.
+    """
+    import io
+
+    from PIL import Image, ImageOps
+
+    try:
+        image = Image.open(io.BytesIO(data))
+        fmt = image.format
+        image = ImageOps.exif_transpose(image)
+    except Exception as e:
+        raise ValueError("Couldn't read the picture: " + str(e))
+    if fmt not in ("JPEG", "PNG", "WEBP", "GIF"):
+        raise ValueError("Can't rotate a " + str(fmt) + " picture.")
+    turn = (
+        Image.Transpose.ROTATE_90 if direction == "left" else Image.Transpose.ROTATE_270
+    )
+    return _save_picture(image.transpose(turn), fmt), Image.MIME[fmt]
+
+
+def fetch_picture(url):
+    """Download a picture from its eBay URL. Returns (bytes, error)."""
+    import requests
+
+    if devmode.on():
+        return None, devmode.message("fetching pictures")
+    try:
+        r = requests.get(url, timeout=30)
+    except requests.RequestException as e:
+        logger.error(e)
+        return None, "Couldn't fetch the picture from eBay: " + str(e)
+    if r.status_code != 200:
+        return None, "eBay's picture host answered " + str(r.status_code) + "."
+    return r.content, None
+
+
 def seller_profiles():
     """
     The seller's business policies from GetUserPreferences, as

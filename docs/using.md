@@ -275,6 +275,27 @@ shows a warning and needs Publish anyway ticked, but still goes ahead. If the
 last Check with eBay reported an insertion fee that no discount covered, the
 draft page says so too: that is eBay saying the free ones are used up.
 
+### Pictures on an eBay Draft
+
+Pictures go to eBay's picture hosting when you choose them on the draft page,
+and the draft keeps only their eBay addresses. Files you choose show as small
+previews with Rotate left and Rotate right buttons, so a sideways or upside
+down photo can be turned before it is uploaded. The turning happens in your
+browser when you press Upload to eBay, and the turned copy is saved as a JPEG
+at high quality. A file the browser can't show has no buttons and is uploaded
+as it is. A photo that is only upright
+through its phone's orientation tag is turned upright first, so it doesn't
+come out sideways on eBay.
+
+After upload, each picture has Rotate left and Rotate right buttons, next to Make main and
+Remove. fbc fetches the picture from eBay, turns it 90 degrees, uploads it as
+a new picture and puts it where the old one was. The old copy stays on eBay,
+unused. Each turn is saved again as a JPEG at high quality, so a picture
+turned many times loses a little. If the fetch or upload fails, the draft is
+left as it was and a message says why. This changes drafts only, not
+listings that are already published. Dev Mode turns the buttons off, since
+they reach eBay.
+
 ### Ship This
 
 Once the label is bought on eBay, Ship This on an order records its Sales
