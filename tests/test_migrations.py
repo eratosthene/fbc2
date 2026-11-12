@@ -138,3 +138,20 @@ def test_insertion_calibration_table_is_created():
         with Operations.context(MigrationContext.configure(conn)):
             migration.upgrade()
         assert "insertion_calibration" in sa.inspect(conn).get_table_names()
+
+
+def test_renews_at_is_added_empty():
+    migration = _migration("f4b8d2e6a391_add_renews_at_to_ebay_listing")
+    engine = sa.create_engine("sqlite://")
+    listing = sa.Table(
+        "ebay_listing",
+        sa.MetaData(),
+        sa.Column("item_id", sa.String(20), primary_key=True),
+    )
+    with engine.begin() as conn:
+        listing.create(conn)
+        conn.execute(listing.insert().values(item_id="1"))
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.upgrade()
+        row = conn.execute(sa.text("SELECT renews_at FROM ebay_listing")).one()
+        assert row[0] is None

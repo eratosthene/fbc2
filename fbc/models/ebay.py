@@ -35,6 +35,9 @@ class EbayListing(Model):
         Boolean, nullable=False, default=False, server_default=false(), index=True
     )
     end_time = Column(DateTime)
+    # When the listing renews next, from eBay's Time Left at the last
+    # listings sync (UTC); see insertions.renewal_time.
+    renews_at = Column(DateTime)
     # Hidden from the lists by default; see fbc/archive.py.
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True
