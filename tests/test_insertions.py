@@ -511,3 +511,70 @@ def test_calibrate_route_rejects_a_bad_number(app, value):
     client.post("/calibrateinsertions", data={"remaining": value})
 
     assert insertions.listing_summary()["calibration"] is None
+
+
+# --- Renewals from eBay's Time Left ---
+
+FETCHED = D(2026, 11, 12, 12)
+
+
+def test_renewal_time_adds_the_time_left_to_when_the_list_was_read():
+    item = {"TimeLeft": "P29DT3H2M1S"}
+    assert insertions.renewal_time(item, FETCHED) == D(2026, 12, 11, 15, 2, 1)
+    assert insertions.renewal_time({"TimeLeft": "PT5H"}, FETCHED) == D(2026, 11, 12, 17)
+
+
+def test_renewal_time_falls_back_to_the_end_time():
+    item = {"ListingDetails": {"EndTime": "2026-12-01T10:00:00.000Z"}}
+    assert insertions.renewal_time(item, FETCHED) == D(2026, 12, 1, 10)
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        {},
+        {"TimeLeft": "soon"},
+        {"TimeLeft": "P"},
+        {"TimeLeft": "P90D"},
+        {"ListingDetails": {"EndTime": "2099-12-31T00:00:00.000Z"}},
+    ],
+)
+def test_renewal_time_is_none_without_a_usable_date(item):
+    assert insertions.renewal_time(item, FETCHED) is None
+
+
+def test_renewals_follow_the_saved_date_not_the_start_time():
+    start = D(2026, 10, 3)
+    # By the start time it renewed Nov 2.
+    result = insertions.count_insertions([(start, None)], NOW, 250)
+    assert (result["used"], result["due"]) == (1, 0)
+    # eBay says the next renewal is Nov 20, so it renews then instead.
+    result = insertions.count_insertions([(start, None, D(2026, 11, 20))], NOW, 250)
+    assert (result["used"], result["due"]) == (0, 1)
+
+
+def test_a_saved_date_in_the_past_carries_forward_in_30_day_steps():
+    result = insertions.count_insertions(
+        [(D(2026, 8, 1), None, D(2026, 11, 3))], NOW, 250
+    )
+    assert (result["used"], result["due"]) == (1, 0)
+
+
+def test_an_ended_listing_uses_its_saved_date_up_to_its_end():
+    ended = (D(2026, 10, 1), D(2026, 11, 10), D(2026, 11, 5))
+    assert insertions.count_insertions([ended], NOW, 250)["used"] == 1
+    ended = (D(2026, 10, 1), D(2026, 11, 3), D(2026, 11, 5))
+    assert insertions.count_insertions([ended], NOW, 250)["used"] == 0
+
+
+def test_the_sync_saves_when_each_listing_renews(app, inline_sync, monkeypatch):
+    item = dict(_active_item("2"), TimeLeft="P10D")
+    monkeypatch.setattr("fbc.index.fetch_active_items", lambda: [item])
+
+    _sync(app.test_client())
+
+    db.session.expire_all()
+    renews = db.session.get(EbayListing, "2").renews_at
+    assert abs(
+        (renews - sync.utcnow()) - datetime.timedelta(days=10)
+    ) < datetime.timedelta(minutes=5)

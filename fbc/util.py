@@ -142,6 +142,19 @@ def relist_ebay_listing(old_listing, item):
     logger.info("Relisted " + old_item_id + " -> " + new_item_id)
 
 
+def save_renewals(items, fetched):
+    """Save when each of eBay's active `items` renews, as read at `fetched`."""
+    from fbc import db, insertions
+    from fbc.models.ebay import EbayListing
+
+    for item in items:
+        listing = db.session.get(EbayListing, item["ItemID"])
+        renews = insertions.renewal_time(item, fetched)
+        if listing is not None and renews is not None:
+            listing.renews_at = renews
+    db.session.commit()
+
+
 def mark_ended_listings(remote_item_ids, previous_sync=None):
     """
     Mark every listing that isn't in eBay's active list as ended, and clear

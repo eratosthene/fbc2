@@ -16,6 +16,7 @@ from fbc.util import add_discogs_release
 from fbc.util import find_relisted_listing
 from fbc.util import forget_discogs_instance
 from fbc.util import mark_ended_listings
+from fbc.util import save_renewals
 from fbc.util import relist_ebay_listing
 
 logger = logging.getLogger()
@@ -337,6 +338,7 @@ class MyIndexView(IndexView):
                 else:
                     logger.info("Adding " + str(item["ItemID"]))
                     add_ebay_listing(item)
+        save_renewals(all_items, started)
         ended = mark_ended_listings(remote_item_ids, previous_sync)
         logger.info("Marked " + str(ended) + " listings as ended.")
         sync.record_finished(sync.LISTINGS_SYNC, started)

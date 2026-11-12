@@ -9,7 +9,11 @@ plus guesses; change them here, in count_insertions and month_bounds, and the
 tests will say what moved:
 
 - The month is a calendar month in US Pacific time (eBay.com's time).
-- A renewal falls every 30 days from the listing's StartTime, until it ends.
+- A renewal falls when eBay's Time Left on the listing runs out, and then
+  every 30 days until it ends. The listings sync saves that date
+  (renews_at, from TimeLeft) each time, so it follows eBay however it counts
+  the cycle. A listing it hasn't a date for yet is taken to renew every 30
+  days from its StartTime.
 - A relist is a new listing with a new StartTime, so it starts a new cycle
   (the sync keeps the new listing and drops the old one).
 - A listing that ended is counted up to its end_time (see
@@ -21,6 +25,7 @@ tests will say what moved:
 """
 
 import datetime
+import re
 
 RENEWAL_DAYS = 30
 # Warn when the projected count is this close to the limit.
@@ -73,10 +78,43 @@ def month_bounds(now):
     return utc_of(first), utc_of(following)
 
 
+_DURATION = re.compile(
+    r"P(?:(?P<d>\d+)D)?(?:T(?:(?P<h>\d+)H)?(?:(?P<m>\d+)M)?(?:(?P<s>\d+)S)?)?$"
+)
+
+
+def renewal_time(item, fetched):
+    """
+    When a listing from eBay's active list next renews (UTC), or None. Uses
+    its TimeLeft (an ISO 8601 duration such as "P29DT3H2M1S") from `fetched`,
+    when the list was read; failing that, ListingDetails.EndTime. Anything
+    more than a renewal cycle away, such as a far-future placeholder, isn't
+    a renewal date and gives None.
+    """
+    left = (item.get("TimeLeft") or "").strip()
+    match = _DURATION.match(left) if left else None
+    if match and any(match.groupdict().values()):
+        parts = {k: int(v or 0) for k, v in match.groupdict().items()}
+        when = fetched + datetime.timedelta(
+            days=parts["d"], hours=parts["h"], minutes=parts["m"], seconds=parts["s"]
+        )
+    else:
+        raw = (item.get("ListingDetails") or {}).get("EndTime")
+        try:
+            when = datetime.datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S.000Z")
+        except (TypeError, ValueError):
+            return None
+    if when > fetched + datetime.timedelta(days=RENEWAL_DAYS + 1):
+        return None
+    return when
+
+
 def count_insertions(listings, now, limit=DEFAULT_LIMIT, adjustment=0):
     """
     This month's insertions, from `listings`: (start_time, end_time or None)
-    pairs in UTC, end_time None for one still active. Returns a dict with
+    pairs in UTC, end_time None for one still active, each optionally with a
+    third item, a date it renews on (see renewal_time), which the renewals
+    are counted from instead of the start time. Returns a dict with
     `used` (up to now), `due` (renewals still to come this month),
     `projected` (the two together), `limit`, and `near` and `over` for the
     projected count against the limit. `adjustment` is added to `used`: what
@@ -85,20 +123,28 @@ def count_insertions(listings, now, limit=DEFAULT_LIMIT, adjustment=0):
     month_start, month_end = month_bounds(now)
     renewal = datetime.timedelta(days=RENEWAL_DAYS)
     used = due = 0
-    for start, end in listings:
+    for start, end, *more in listings:
         if start is None:
             continue
+        anchor = more[0] if more and more[0] else start
         last = month_end if end is None else min(end, now)
-        # The first insertion at or after the start of the month.
-        k = 0
-        if start < month_start:
-            k = -(-(month_start - start) // renewal)
-        t = start + k * renewal
-        while t < month_end and t <= last:
-            if t <= now:
+        # The start is an insertion of its own.
+        if month_start <= start < month_end and start <= last:
+            if start <= now:
                 used += 1
             else:
                 due += 1
+        # Renewals fall on the anchor's cycle: the first one in the month.
+        if anchor >= month_start:
+            t = anchor - ((anchor - month_start) // renewal) * renewal
+        else:
+            t = anchor + -(-(month_start - anchor) // renewal) * renewal
+        while t < month_end and t <= last:
+            if t > start:
+                if t <= now:
+                    used += 1
+                else:
+                    due += 1
             t += renewal
     used += adjustment
     projected = used + due
@@ -125,7 +171,10 @@ def _listing_pairs(now):
     month_start, _ = month_bounds(now)
     rows = (
         db.session.query(
-            EbayListing.start_time, EbayListing.ended, EbayListing.end_time
+            EbayListing.start_time,
+            EbayListing.ended,
+            EbayListing.end_time,
+            EbayListing.renews_at,
         )
         .filter(EbayListing.start_time.isnot(None))
         .filter(
@@ -135,7 +184,10 @@ def _listing_pairs(now):
         )
         .all()
     )
-    return [(start, (end or start) if ended else None) for start, ended, end in rows]
+    return [
+        (start, (end or start) if ended else None, renews)
+        for start, ended, end, renews in rows
+    ]
 
 
 def listing_summary(now=None):
