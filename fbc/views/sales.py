@@ -4,6 +4,7 @@ from flask_appbuilder.actions import action
 from markupsafe import Markup
 from wtforms.validators import Optional
 
+from fbc import mystery
 from fbc.archive import ArchivableViewMixin
 from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
@@ -207,14 +208,63 @@ class EbayListingModelView(ArchivableViewMixin, CustomModelView):
     list_widget = EbayListingListWidget
     list_columns = ["item_id", "title", "start_time", "ended", "fmt_price", "fmt_url"]
     search_columns = ["item_id", "price", "title", "ended", "archived"]
-    label_columns = {"fmt_price": "Price", "fmt_url": "URL"}
+    label_columns = {
+        "fmt_price": "Price",
+        "fmt_url": "URL",
+        "pick_from_box": "Mystery Box: Pick From Storage Box",
+        "pick_count": "Mystery Box: Units Per Sale",
+        "fmt_boxes_available": "Mystery Boxes Available",
+    }
+    description_columns = {
+        "pick_from_box": "For a mystery box listing: the Storage Box its Units are"
+        " picked from at random. Leave blank for any other listing.",
+        "pick_count": "How many Units each sale gets, for a mystery box listing.",
+    }
     related_views = [UnitModelView]
-    add_columns = ["item_id", "title", "price", "url", "start_time"]
-    edit_columns = ["title", "price", "url", "start_time"]
+    show_columns = [
+        "item_id",
+        "title",
+        "price",
+        "url",
+        "start_time",
+        "ended",
+        "pick_from_box",
+        "pick_count",
+        "fmt_boxes_available",
+    ]
+    add_columns = [
+        "item_id",
+        "title",
+        "price",
+        "url",
+        "start_time",
+        "pick_from_box",
+        "pick_count",
+    ]
+    edit_columns = [
+        "title",
+        "price",
+        "url",
+        "start_time",
+        "pick_from_box",
+        "pick_count",
+    ]
     add_form_extra_fields = {
         "start_time": DateTimeLocalField("Start Time", validators=[Optional()])
     }
     edit_form_extra_fields = add_form_extra_fields
+
+    def _check_mystery_box(self, item):
+        if bool(item.pick_from_box) != bool(item.pick_count):
+            raise Exception(
+                "Set both the Storage Box and Units Per Sale for a mystery box, or"
+                " neither."
+            )
+        if item.pick_count is not None and item.pick_count < 1:
+            raise Exception("Units Per Sale must be 1 or more.")
+
+    pre_add = _check_mystery_box
+    pre_update = _check_mystery_box
 
 
 class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
@@ -311,6 +361,20 @@ class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
             )
             return back
 
+        # Mystery boxes have no Units yet: pick them, or keep the picks posted.
+        boxes = []
+        for box_listing, wanted in mystery.needs(orders):
+            picks = mystery.fill(box_listing, wanted, order.buyer, values)
+            boxes.append(dict(picks, listing=box_listing, wanted=wanted))
+        fixed_units = units
+        units = fixed_units + [u for b in boxes for u in b["units"]]
+        for b in boxes:
+            for note in b["notes"]:
+                flash(note, "warning")
+            b["other_boxes"] = (
+                mystery.other_boxes(b["listing"]) if b["short"] or b["fill_box"] else []
+            )
+
         supplies = supplies_plan(units)
         # Asked for again on a POST, so the receipt keeps eBay's lines as
         # they are when it's saved.
@@ -320,8 +384,28 @@ class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
         missing_items = earnings["items"] > known_items
         # A POST with anything wrong shows the page again with what was
         # entered, so it doesn't all need typing in again.
-        if values is not None and not missing_items:
+        # A mystery box's re-roll and swap buttons post the page too; only the
+        # Ship button ships.
+        ship_now = values is not None and (not boxes or values.get("action") == "ship")
+        if ship_now and not missing_items:
             problems = []
+            for b in boxes:
+                if b["short"]:
+                    problems.append(
+                        "Pick "
+                        + str(b["short"])
+                        + " more Unit"
+                        + ("" if b["short"] == 1 else "s")
+                        + " for "
+                        + b["listing"].title
+                        + ": its box doesn't have enough."
+                    )
+                elif b["changed"]:
+                    problems.append(
+                        "The picks for "
+                        + b["listing"].title
+                        + " changed, so check them and press Ship again."
+                    )
             try:
                 net_sold = float(values.get("net_sold", "").strip().lstrip("$"))
             except ValueError:
@@ -332,7 +416,16 @@ class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
             except ValueError as e:
                 problems.append(str(e))
             if not problems:
-                receipt = ship_order(orders, units, net_sold, used, earnings["lines"])
+                unit_prices = {}
+                for b in boxes:
+                    price = mystery.unit_price(
+                        [i for o in orders for i in o.items], b["listing"]
+                    )
+                    if price is not None:
+                        unit_prices.update({u.id: price for u in b["units"]})
+                receipt = ship_order(
+                    orders, units, net_sold, used, earnings["lines"], unit_prices
+                )
                 flash(
                     "Recorded a Sales Receipt for $"
                     + f"{net_sold:.2f}"
@@ -365,6 +458,8 @@ class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
             orders=orders,
             others=others,
             units=units,
+            fixed_units=fixed_units,
+            boxes=boxes,
             earnings=earnings,
             missing_items=missing_items,
             known_items=known_items,

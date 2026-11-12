@@ -13,6 +13,20 @@
     <a href="{{ url_for('ReconcileSuppliesView.reconcile') }}">Reconcile Supplies</a>.
   </div>
   {% endif %}
+  {% if mystery_boxes %}
+  <h2>Mystery boxes available</h2>
+  <table class="table table-bordered table-condensed" style="width: auto">
+    <tr><th>Listing</th><th>Storage Box</th><th>Units per sale</th><th>Boxes available</th></tr>
+    {% for listing, available in mystery_boxes %}
+    <tr>
+      <td><a href="{{ url_for('EbayListingModelView.show', pk=listing.item_id) }}">{{ listing.title }}</a></td>
+      <td>{{ listing.pick_from_box.name }}</td>
+      <td>{{ listing.pick_count }}</td>
+      <td>{{ available }}{% if available == 0 %} <span class="text-danger">restock, or set the listing's quantity to 0 on eBay</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
   {% if listings.synced %}
   <h2>eBay listings: {{ listings.active }} active</h2>
   <p>

@@ -155,3 +155,23 @@ def test_renews_at_is_added_empty():
             migration.upgrade()
         row = conn.execute(sa.text("SELECT renews_at FROM ebay_listing")).one()
         assert row[0] is None
+
+
+def test_mystery_box_columns_are_added_and_removed():
+    migration = _migration("a7c3e9d15b42_add_mystery_box_to_ebay_listing")
+    engine = sa.create_engine("sqlite://")
+    meta = sa.MetaData()
+    sa.Table("storage_box", meta, sa.Column("id", sa.Integer, primary_key=True))
+    sa.Table(
+        "ebay_listing", meta, sa.Column("item_id", sa.String(20), primary_key=True)
+    )
+    with engine.begin() as conn:
+        meta.create_all(conn)
+        conn.execute(sa.text("INSERT INTO ebay_listing (item_id) VALUES ('1')"))
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.upgrade()
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("ebay_listing")}
+            assert {"pick_from_box_id", "pick_count"} <= columns
+            migration.downgrade()
+        columns = {c["name"] for c in sa.inspect(conn).get_columns("ebay_listing")}
+        assert columns == {"item_id"}

@@ -122,17 +122,26 @@ def relist_ebay_listing(old_listing, item):
     referenced the old listing at the new one, and remove the old listing.
     """
     from fbc import db
-    from fbc.models.ebay import EbayOrder
+    from fbc.models.ebay import EbayListing, EbayOrder, EbayOrderItem
     from fbc.models.inventory import Unit
 
     old_item_id = old_listing.item_id
     add_ebay_listing(item)
     new_item_id = item["ItemID"]
 
+    # A mystery box stays one: it has no Units to find it by.
+    new_listing = db.session.get(EbayListing, new_item_id)
+    new_listing.pick_from_box_id = old_listing.pick_from_box_id
+    new_listing.pick_count = old_listing.pick_count
+
     db.session.query(Unit).filter_by(ebay_listing_id=old_item_id).update(
         {"ebay_listing_id": new_item_id}
     )
     db.session.query(EbayOrder).filter_by(ebay_listing_id=old_item_id).update(
+        {"ebay_listing_id": new_item_id}
+    )
+    # Ship This finds an order's Units through its items' listings.
+    db.session.query(EbayOrderItem).filter_by(ebay_listing_id=old_item_id).update(
         {"ebay_listing_id": new_item_id}
     )
     db.session.commit()

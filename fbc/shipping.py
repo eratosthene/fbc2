@@ -154,9 +154,10 @@ def shipment_units(orders):
     The Units shipping `orders` together sells, and []; or None and what
     stops Ship This finding them, which is left to be done by hand. Each
     listing on the orders needs exactly as many unsold Units on it as were
-    bought.
+    bought. A mystery box's Units are picked at Ship This (see fbc/mystery.py),
+    so it adds none here and is no problem.
     """
-    from fbc import db
+    from fbc import db, mystery
     from fbc.models.inventory import Unit
 
     wanted = {}
@@ -168,7 +169,10 @@ def shipment_units(orders):
             wanted[listing_id] = wanted.get(listing_id, 0) + quantity
     units = []
     problems = []
+    boxes = mystery.box_listings(wanted)
     for listing_id, quantity in wanted.items():
+        if listing_id in boxes:
+            continue
         unsold = (
             db.session.query(Unit)
             .filter_by(ebay_listing_id=listing_id, sold=False, sales_receipt_id=None)
@@ -626,13 +630,15 @@ def fmt_supplies(counts):
     return ", ".join(str(n) + " " + s.name for s, n in counts.items())
 
 
-def ship_order(orders, units, net_sold, supplies=None, lines=None):
+def ship_order(orders, units, net_sold, supplies=None, lines=None, unit_prices=None):
     """
     Record one Sales Receipt for `orders` (one EbayOrder or several shipped
     together), dated the first of them, with its earnings `lines` (as
     shipment_earnings gives them) and a manual adjustment if they don't add
     up to `net_sold`. Mark `units` (one Unit or several) sold with it and
-    take `supplies` ({supply: count}) out of stock. Returns the receipt.
+    take `supplies` ({supply: count}) out of stock. `unit_prices` ({unit id:
+    price}) is what Units picked for a mystery box sold for, as their order
+    items can't say. Returns the receipt.
     """
     from fbc import db
     from fbc.models.sales import SalesReceipt, item_prices
@@ -655,7 +661,9 @@ def ship_order(orders, units, net_sold, supplies=None, lines=None):
     for unit in units:
         unit.sold = True
         unit.sales_receipt_id = receipt.id
-        if len(units) > 1:
+        if unit_prices and unit.id in unit_prices:
+            unit.sold_price = unit_prices[unit.id]
+        elif len(units) > 1:
             unit.sold_price = prices.get(unit.ebay_listing_id)
     for supply, count in (supplies or {}).items():
         supply.use(count, SHIPPING, receipt=receipt)
