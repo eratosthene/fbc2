@@ -365,3 +365,182 @@ def test_fees_saved_before_discounts_still_show(client):
 
     assert "InsertionFee" in html
     assert "$0.35" in html
+
+
+def _jpeg(width, height, orientation=None):
+    from PIL import Image
+
+    image = Image.new("RGB", (width, height), "red")
+    exif = Image.Exif()
+    if orientation:
+        exif[274] = orientation
+    out = io.BytesIO()
+    image.save(out, format="JPEG", exif=exif)
+    return out.getvalue()
+
+
+def _size(fileobj):
+    from PIL import Image
+
+    image = Image.open(fileobj)
+    return image.size, image.getexif().get(274)
+
+
+@pytest.fixture
+def rotating(client, monkeypatch):
+    """A draft with three pictures, a fake eBay fetch and a fake upload."""
+    uploads = []
+    monkeypatch.setattr(
+        "fbc.views.listing.fetch_picture", lambda url: (_jpeg(40, 20), None)
+    )
+
+    def fake_upload(fileobj, filename, content_type=None):
+        uploads.append((_size(fileobj), filename, content_type))
+        return "https://i.ebayimg.com/new.jpg", {
+            "errors": [],
+            "warnings": [],
+            "fees": [],
+        }
+
+    monkeypatch.setattr("fbc.views.listing.upload_picture", fake_upload)
+    unit = _carnaval()
+    client.get("/ebaydraftmodelview/fromunit/" + str(unit.id))
+    draft = db.session.query(EbayDraft).one()
+    draft.set_picture_list(["https://i.ebayimg.com/" + n + ".jpg" for n in "abc"])
+    db.session.commit()
+    return draft, uploads
+
+
+@pytest.mark.parametrize("direction", ["left", "right"])
+def test_rotating_a_picture_swaps_its_size_and_keeps_its_place(
+    client, rotating, direction
+):
+    draft, uploads = rotating
+
+    client.post("/ebaydraftmodelview/rotate/%d/1/%s" % (draft.id, direction))
+    db.session.expire_all()
+
+    assert uploads == [(((20, 40), None), "b.jpg", "image/jpeg")]
+    assert draft.picture_list() == [
+        "https://i.ebayimg.com/a.jpg",
+        "https://i.ebayimg.com/new.jpg",
+        "https://i.ebayimg.com/c.jpg",
+    ]
+
+
+def test_rotating_left_and_right_go_opposite_ways():
+    from PIL import Image
+
+    from fbc.listing import rotate_picture
+
+    image = Image.new("RGB", (4, 2), "white")
+    image.putpixel((0, 0), (255, 0, 0))
+    out = io.BytesIO()
+    image.save(out, format="PNG")
+
+    left = Image.open(rotate_picture(out.getvalue(), "left")[0])
+    right = Image.open(rotate_picture(out.getvalue(), "right")[0])
+
+    assert left.getpixel((0, 3)) == (255, 0, 0)
+    assert right.getpixel((1, 0)) == (255, 0, 0)
+
+
+@pytest.mark.parametrize(
+    "path, status",
+    [("9/left", 404), ("-1/left", 404), ("0/up", 400)],
+)
+def test_rotate_refuses_a_bad_index_or_direction(client, rotating, path, status):
+    draft, uploads = rotating
+
+    r = client.post("/ebaydraftmodelview/rotate/%d/%s" % (draft.id, path))
+
+    assert r.status_code == status
+    assert uploads == []
+
+
+def test_rotate_refuses_a_missing_or_published_draft(client, rotating):
+    draft, uploads = rotating
+    assert client.post("/ebaydraftmodelview/rotate/999/0/left").status_code == 404
+    draft.status = "published"
+    db.session.commit()
+
+    r = client.post("/ebaydraftmodelview/rotate/%d/0/left" % draft.id)
+
+    assert r.status_code == 404
+    assert uploads == []
+
+
+def test_a_failed_fetch_leaves_the_pictures_alone(client, rotating, monkeypatch):
+    draft, uploads = rotating
+    monkeypatch.setattr(
+        "fbc.views.listing.fetch_picture", lambda url: (None, "Couldn't fetch it.")
+    )
+
+    page = client.post(
+        "/ebaydraftmodelview/rotate/%d/0/left" % draft.id, follow_redirects=True
+    )
+
+    assert "Couldn&#39;t fetch it." in page.get_data(as_text=True)
+    db.session.expire_all()
+    assert draft.picture_list()[0] == "https://i.ebayimg.com/a.jpg"
+    assert uploads == []
+
+
+def test_a_failed_upload_leaves_the_pictures_alone(client, rotating, monkeypatch):
+    draft, uploads = rotating
+    monkeypatch.setattr(
+        "fbc.views.listing.upload_picture",
+        lambda *a: (None, {"errors": ["eBay said no."], "warnings": [], "fees": []}),
+    )
+
+    page = client.post(
+        "/ebaydraftmodelview/rotate/%d/0/right" % draft.id, follow_redirects=True
+    )
+
+    assert "eBay said no." in page.get_data(as_text=True)
+    db.session.expire_all()
+    assert draft.picture_list()[0] == "https://i.ebayimg.com/a.jpg"
+
+
+def test_a_file_that_isnt_a_picture_leaves_the_pictures_alone(
+    client, rotating, monkeypatch
+):
+    draft, uploads = rotating
+    monkeypatch.setattr("fbc.views.listing.fetch_picture", lambda url: (b"junk", None))
+
+    page = client.post(
+        "/ebaydraftmodelview/rotate/%d/0/left" % draft.id, follow_redirects=True
+    )
+
+    assert "Couldn&#39;t read the picture" in page.get_data(as_text=True)
+    assert uploads == []
+
+
+def test_new_uploads_are_straightened_by_their_exif_tag(client, monkeypatch):
+    seen = []
+
+    def fake_upload(fileobj, filename, content_type=None):
+        seen.append(_size(fileobj))
+        return "https://i.ebayimg.com/" + filename, {
+            "errors": [],
+            "warnings": [],
+            "fees": [],
+        }
+
+    monkeypatch.setattr("fbc.views.listing.upload_picture", fake_upload)
+    unit = _carnaval()
+    client.get("/ebaydraftmodelview/fromunit/" + str(unit.id))
+    draft = db.session.query(EbayDraft).one()
+
+    client.post(
+        "/ebaydraftmodelview/pictures/" + str(draft.id),
+        data={
+            "pictures": [
+                (io.BytesIO(_jpeg(40, 20, orientation=6)), "sideways.jpg"),
+                (io.BytesIO(_jpeg(40, 20)), "plain.jpg"),
+            ]
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert seen == [((20, 40), None), ((40, 20), None)]

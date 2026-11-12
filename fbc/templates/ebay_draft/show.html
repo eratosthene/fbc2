@@ -14,6 +14,12 @@
     <form method="post" action="{{ url_for('EbayDraftModelView.picture', pk=draft.id, index=loop.index0, action='remove') }}" style="display: inline">
       <button class="btn btn-xs btn-danger">Remove</button>
     </form>
+    {% set picture_index = loop.index0 %}
+    {% for direction, label in (("left", "Rotate left"), ("right", "Rotate right")) %}
+    <form method="post" action="{{ url_for('EbayDraftModelView.rotate', pk=draft.id, index=picture_index, direction=direction) }}" style="display: inline">
+      <button class="btn btn-xs btn-default" {% if dev_mode %}disabled title="Dev Mode is turned on, rotating pictures disabled."{% endif %}>{{ label }}</button>
+    </form>
+    {% endfor %}
     {% endif %}
   </div>
   {% endfor %}

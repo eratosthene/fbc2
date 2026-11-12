@@ -427,3 +427,23 @@ def test_no_banner_without_dev_mode(client):
     html = client.get("/unitmodelview/list/").get_data(as_text=True)
 
     assert "Dev Mode" not in html
+
+
+def test_pictures_arent_rotated_in_dev_mode(client, dev_mode, monkeypatch):
+    monkeypatch.setattr("fbc.views.listing.upload_picture", _fails)
+    monkeypatch.setattr("requests.get", _fails)
+    draft = _draft()
+
+    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
+        as_text=True
+    )
+    page = client.post(
+        "/ebaydraftmodelview/rotate/%d/0/left" % draft.id, follow_redirects=True
+    )
+
+    assert "rotating pictures disabled" in html
+    assert "Dev Mode is turned on, rotating pictures disabled." in page.get_data(
+        as_text=True
+    )
+    db.session.expire_all()
+    assert draft.picture_list() == ["https://i.ebayimg.com/a.jpg"]
