@@ -1,11 +1,10 @@
 import logging
-from collections import Counter
 
 from flask import flash, jsonify, redirect, request, url_for
 from flask_appbuilder import IndexView
 from flask_appbuilder.views import expose
 
-from fbc import insertions, mystery, sync, syncjobs
+from fbc import insertions, sync, syncjobs
 
 logger = logging.getLogger()
 
@@ -27,10 +26,7 @@ def home_totals():
     inv = finance.Inventory()
     units = inv.units
     # sold=False, like filter_by(sold=False), leaves out NULL as well as True.
-    unsold = [u for u in units if u.sold is False]
-    unsold_per_box = Counter(u.storage_box_id for u in unsold)
-
-    stock_total = len(unsold)
+    stock_total = sum(1 for u in units if u.sold is False)
     unit_total = len(units)
     lots = db.session.query(PurchaseLot).all()
     boxes = db.session.query(StorageBox).all()
@@ -39,6 +35,9 @@ def home_totals():
     pos = db.session.query(PurchaseOrder).all()
     supply_total = 0
     totals = {
+        "units": len(units),
+        "sold_units": 0,
+        "instock": 0,
         "capital": 0,
         "gross": 0,
         "net": 0,
@@ -50,13 +49,17 @@ def home_totals():
     for b in boxes:
         box_totals[b.id] = {}
         box_totals[b.id]["name"] = b.name
-        box_totals[b.id]["instock"] = unsold_per_box[b.id]
+        box_totals[b.id]["units"] = 0
+        box_totals[b.id]["sold_units"] = 0
+        box_totals[b.id]["instock"] = 0
         box_totals[b.id]["capital"] = 0.0
         box_totals[b.id]["gross"] = 0.0
         box_totals[b.id]["net"] = 0.0
     box_totals[0] = {}
     box_totals[0]["name"] = "No Box Assigned"
-    box_totals[0]["instock"] = unsold_per_box[None]
+    box_totals[0]["units"] = 0
+    box_totals[0]["sold_units"] = 0
+    box_totals[0]["instock"] = 0
     box_totals[0]["capital"] = 0.0
     box_totals[0]["gross"] = 0.0
     box_totals[0]["net"] = 0.0
@@ -71,6 +74,13 @@ def home_totals():
     for u in units:
         # A unit whose box no longer exists counts as having no box.
         box = box_totals[u.storage_box_id if u.storage_box_id in box_ids else 0]
+        box["units"] += 1
+        if u.sold is True:
+            box["sold_units"] += 1
+            totals["sold_units"] += 1
+        if u.sold is False:
+            box["instock"] += 1
+            totals["instock"] += 1
         # A unit with no lot (or whose lot no longer exists) adds no
         # capital, but its sales still count toward its box and the totals.
         lot_total = lot_totals.get(u.purchase_lot_id)
@@ -162,10 +172,6 @@ def home_totals():
         "box_totals": box_totals,
         "low_supplies": Supply.low_list(),
         "listings": insertions.listing_summary(),
-        "mystery_boxes": [
-            (listing, mystery.boxes_available(listing))
-            for listing in mystery.active_listings()
-        ],
     }
 
 

@@ -1,8 +1,8 @@
-{% import 'appbuilder/general/lib.html' as lib %} {% extends
-"appbuilder/base.html" %} 
+{% import 'appbuilder/general/lib.html' as lib %}
+{% extends "appbuilder/base.html" %}
 {% block content %}
 <div class="container">
-  <h1>Fire & Bones Collectibles</h1>
+  {# The alerts that need doing something about come first, together. #}
   {% if low_supplies %}
   <div class="alert alert-warning">
     <strong>Time to reorder:</strong>
@@ -13,60 +13,37 @@
     <a href="{{ url_for('ReconcileSuppliesView.reconcile') }}">Reconcile Supplies</a>.
   </div>
   {% endif %}
-  {% if mystery_boxes %}
-  <h2>Mystery boxes available</h2>
-  <table class="table table-bordered table-condensed" style="width: auto">
-    <tr><th>Listing</th><th>Storage Box</th><th>Units per sale</th><th>Boxes available</th></tr>
-    {% for listing, available in mystery_boxes %}
-    <tr>
-      <td><a href="{{ url_for('EbayListingModelView.show', pk=listing.item_id) }}">{{ listing.title }}</a></td>
-      <td>{{ listing.pick_from_box.name }}</td>
-      <td>{{ listing.pick_count }}</td>
-      <td>{{ available }}{% if available == 0 %} <span class="text-danger">restock, or set the listing's quantity to 0 on eBay</span>{% endif %}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% endif %}
-  {% if listings.synced %}
-  <h2>eBay listings: {{ listings.active }} active</h2>
-  <p>
-    As of the last listings sync, {{ listings.synced_pacific.strftime("%b %-d %-I:%M %p") }} Pacific.
-  </p>
-  <p>
-    Free insertions this month: <strong>{{ listings.used }}</strong> of
-    {{ listings.limit }} used, {{ listings.due }} more renewal{{ "" if listings.due == 1 else "s" }}
-    due before the month ends, {{ listings.projected }} projected. Each new
-    listing and each 30-day renewal counts, even if the listing ends early.
-  </p>
-  {% if listings.over %}
+  {% if listings.synced and listings.over %}
   <div class="alert alert-danger">
     This month is projected to go {{ listings.projected - listings.limit }} past
     the {{ listings.limit }} free insertions. eBay charges a fee for each one.
     End listings that won't sell before they renew.
   </div>
-  {% elif listings.near %}
+  {% elif listings.synced and listings.near %}
   <div class="alert alert-warning">
     This month is projected to use {{ listings.projected }} of the
     {{ listings.limit }} free insertions. Only {{ listings.limit - listings.projected }}
     new listings are left before eBay starts charging.
   </div>
   {% endif %}
+
+  <h2>Listings</h2>
+  {% if listings.synced %}
+  <p>
+    <strong>{{ listings.active }}</strong> active on eBay.
+    Free insertions this month: <strong>{{ listings.used }}</strong> of
+    {{ listings.limit }} used, {{ listings.due }} more renewal{{ "" if listings.due == 1 else "s" }}
+    due before the month ends, {{ listings.projected }} projected. Each new
+    listing and each 30-day renewal counts, even if the listing ends early.
+  </p>
+  {% call lib.accordion_tag("calibrateinsertions","Calibrate with the eBay app", False) %}
   <form method="post" action="{{ url_for('MyIndexView.calibrateinsertions') }}" class="form-inline">
     <label for="remaining">The eBay app shows</label>
     <input type="number" name="remaining" id="remaining" min="0" max="{{ listings.limit }}" required class="form-control" style="width: 6em">
     <label for="remaining">free listings left.</label>
     <button class="btn btn-default">Use that number</button>
   </form>
-  <p class="text-muted">
-    {% if listings.calibration %}
-    Adjusted by {{ "%+d"|format(listings.calibration.adjustment) }} for this month,
-    from the {{ listings.calibration.remaining }} you entered on
-    {{ listings.calibration.entered_pacific.strftime("%b %-d %-I:%M %p") }} Pacific.
-    {% else %}
-    No number entered for this month, so this is fbc's own count.
-    {% endif %}
-    Run the listings sync first, so fbc's count is current.
-  </p>
+  {% endcall %}
   {% else %}
   <p>
     Run <a href="{{ url_for('MyIndexView.syncebaylistings') }}">the eBay listings sync</a>
@@ -74,59 +51,15 @@
     month has used.
   </p>
   {% endif %}
-  <h2>Total units in stock: {{ stock_total }}</h2>
-  {% call lib.accordion_tag("stockbypurchaselot","Stock Details (by purchase
-  lot)", False) %}
-  <table
-    class="table table-bordered table-condensed table-hover"
-    style="width: auto"
-  >
-    <tr>
-      <th>Lot</th>
-      <th>Stock</th>
-    </tr>
-    {% for lot in lots %}
-    <tr>
-      <td>{{ lot.name }}</td>
-      <td>{{ lot_totals[lot.id]['instock'] }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% endcall %} {% call lib.accordion_tag("stockbystoragebox","Stock Details (by
-  storage box)", False) %}
-  <table
-    class="table table-bordered table-condensed table-hover"
-    style="width: auto"
-  >
-    <tr>
-      <th>Box</th>
-      <th>Stock</th>
-    </tr>
-    {% for box in box_totals %}
-    <tr>
-      <td>{{ box_totals[box]['name'] }}</td>
-      <td>{{ box_totals[box]['instock'] }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% endcall %}
-  <h2>Total supply cost: {{ "${:,.2f}".format(supply_total|float) }}</h2>
-  {% call lib.accordion_tag("supplydetails","Supply Details", False) %}
-  <p>
-    Supply cost per unit ({{ unit_total }} units): {{
-    "${:,.2f}".format(supply_per_unit|float) }}
-  </p>
-  <p>
-    Breakeven per unit, including supplies: {{
-    "${:,.2f}".format(breakeven_per_unit|float) }}
-  </p>
-  {% endcall %}
-  <h2>Total other expenses: {{ "${:,.2f}".format(expense_total|float) }}</h2>
+
+  <h2>Stock</h2>
+  <p>Units in stock: <strong>{{ stock_total }}</strong></p>
+
+  <h2>Money</h2>
+  <p>Supply cost: <strong>{{ "${:,.2f}".format(supply_total|float) }}</strong></p>
+  <p>Other expenses: <strong>{{ "${:,.2f}".format(expense_total|float) }}</strong></p>
   {% call lib.accordion_tag("expensedetails","Expense Details", False) %}
-  <table
-    class="table table-bordered table-condensed table-hover"
-    style="width: auto"
-  >
+  <table class="table table-bordered table-condensed table-hover" style="width: auto">
     <tr>
       <th>Category</th>
       <th>Amount</th>
@@ -143,22 +76,22 @@
     {% endfor %}
   </table>
   {% endcall %}
-  <h2>
-    Total net profit: {% if (total_net_profit|float < 0) %}
-    <span style="color: red">
-      {% endif %} {{ "${:,.2f}".format(total_net_profit|float) }} ({{
-      "{:,.2f}%".format(profit_margin|float) }} profit
-      margin) {% if (total_net_profit|float < 0) %}
-    </span>
-    {% endif %}
-  </h2>
-  {% call lib.accordion_tag("profitdetails","Profit Details", False) %}
-  <table
-    class="table table-bordered table-condensed table-hover"
-    style="width: auto"
-  >
+  <p>
+    Net profit:
+    <strong>{% if (total_net_profit|float < 0) %}<span style="color: red">{% endif %}{{ "${:,.2f}".format(total_net_profit|float) }} ({{
+    "{:,.2f}%".format(profit_margin|float) }} profit margin){% if (total_net_profit|float < 0) %}</span>{% endif %}</strong>
+  </p>
+  <p>
+    Breakeven per unit, including supplies (a supply cost of {{ "${:,.2f}".format(supply_per_unit|float) }} per unit):
+    <strong>{{ "${:,.2f}".format(breakeven_per_unit|float) }}</strong>
+  </p>
+  {% call lib.accordion_tag("profitdetails","Profit Details (by Purchase Lot and Storage Box)", False) %}
+  <table class="table table-bordered table-condensed table-hover" style="width: auto">
     <tr>
       <th>Lot</th>
+      <th>Units</th>
+      <th>Units Sold</th>
+      <th>Stock</th>
       <th>Capital</th>
       <th>Sold For</th>
       <th>Fees</th>
@@ -170,6 +103,9 @@
     {% for lot in lots %}
     <tr>
       <td>{{ lot.name }}</td>
+      <td>{{ lot_totals[lot.id]['units'] }}</td>
+      <td>{{ lot_totals[lot.id]['sold_units'] }}</td>
+      <td>{{ lot_totals[lot.id]['instock'] }}</td>
       <td>{{ "${:,.2f}".format(lot.price|float) }}</td>
       <td>{{ "${:,.2f}".format(lot_totals[lot.id]['gross']|float) }}</td>
       <td>{{ "${:,.2f}".format(lot_totals[lot.id]['fees']|float) }}</td>
@@ -181,6 +117,9 @@
     {% endfor %}
     <tr>
       <th>Total</th>
+      <th>{{ totals['units'] }}</th>
+      <th>{{ totals['sold_units'] }}</th>
+      <th>{{ totals['instock'] }}</th>
       <th>{{ "${:,.2f}".format(totals['capital']|float) }}</th>
       <th>{{ "${:,.2f}".format(totals['gross']|float) }}</th>
       <th>{{ "${:,.2f}".format(totals['fees']|float) }}</th>
@@ -190,12 +129,12 @@
       <th>{{ "{:,.2f}%".format(totals['roi']|float) }}</th>
     </tr>
   </table>
-  <table
-    class="table table-bordered table-condensed table-hover"
-    style="width: auto"
-  >
+  <table class="table table-bordered table-condensed table-hover" style="width: auto">
     <tr>
       <th>Storage Box</th>
+      <th>Units</th>
+      <th>Units Sold</th>
+      <th>Stock</th>
       <th>Capital</th>
       <th>Sold For</th>
       <th>Fees</th>
@@ -207,6 +146,9 @@
     {% for box in box_totals %}
     <tr>
       <td>{{ box_totals[box]['name'] }}</td>
+      <td>{{ box_totals[box]['units'] }}</td>
+      <td>{{ box_totals[box]['sold_units'] }}</td>
+      <td>{{ box_totals[box]['instock'] }}</td>
       <td>{{ "${:,.2f}".format(box_totals[box]['capital']|float) }}</td>
       <td>{{ "${:,.2f}".format(box_totals[box]['gross']|float) }}</td>
       <td>{{ "${:,.2f}".format(box_totals[box]['fees']|float) }}</td>

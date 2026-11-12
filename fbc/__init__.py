@@ -310,6 +310,7 @@ def _register_views():
     from fbc.views.sales import (
         EbayOrderModelView,
         EbayListingModelView,
+        MysteryBoxesView,
         SalesReceiptModelView,
     )
     from fbc.views.listing import EbayDraftModelView
@@ -369,6 +370,7 @@ def _register_views():
         appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
         appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
         appbuilder.add_view(EbayDraftModelView, "eBay Drafts", category="Sales")
+        appbuilder.add_view(MysteryBoxesView, "Mystery Boxes", category="Sales")
         appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Sales")
         appbuilder.add_view(SupplyModelView, "Supply List", category="Supplies")
         appbuilder.add_view(

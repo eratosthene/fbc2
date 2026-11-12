@@ -330,7 +330,7 @@ def test_the_home_page_shows_listings_and_insertions(app):
 
     html = app.test_client().get("/").get_data(as_text=True)
 
-    assert "eBay listings: 1 active" in html
+    assert "<strong>1</strong> active on eBay" in html
     assert "2</strong> of" in html
 
 
@@ -491,7 +491,7 @@ def test_calibration_does_not_carry_into_the_next_month(app):
     assert insertions.listing_summary()["used"] == 1
 
 
-def test_calibrate_route_saves_the_number_and_the_home_page_says_so(app):
+def test_calibrate_route_saves_the_number_and_the_home_page_uses_it(app):
     _synced_month(3)
     client = app.test_client()
 
@@ -499,8 +499,8 @@ def test_calibrate_route_saves_the_number_and_the_home_page_says_so(app):
     html = client.get("/").get_data(as_text=True)
 
     assert response.status_code == 302
-    assert "Adjusted by +66" in html
-    assert "from the 181 you entered" in html
+    assert insertions.listing_summary()["calibration"]["adjustment"] == 66
+    assert "<strong>69</strong> of" in html
 
 
 @pytest.mark.parametrize("value", ["", "abc", "-1", "251"])

@@ -14,6 +14,21 @@ or order id; for Discogs Releases, the release id). Where the id is a plain
 number, "Matches id" is the first choice, and it takes a single id (`42`), a
 range (`100-200`) or a mix (`5, 100-200`).
 
+## The home page
+
+It has the alerts first (supplies to reorder, and free insertions close to
+or over the limit), then three sections:
+
+- **Listings**: the active listings and this month's free insertions (see
+  below).
+- **Stock**: the Units in stock.
+- **Money**: supply cost, other expenses, net profit and the breakeven price
+  per Unit, with Expense Details and Profit Details to open. Profit Details
+  has a table by Purchase Lot and one by Storage Box, each with its Units,
+  Units Sold and Stock.
+
+Every page has the shop's name in small type at the bottom.
+
 ## Inventory
 
 Units (one copy of a record each), the Purchase Lots they came in and the
@@ -228,8 +243,8 @@ The count is fbc's estimate, from these assumptions:
   low. eBay has no call for the exact number, so the home page has a box for
   the free listings left that the eBay app (or Seller Hub) shows.
 
-To calibrate, run the listings sync, then enter the app's number on the home
-page. fbc works out how far its own count was from it and adds that to the
+To calibrate, run the listings sync, then open Calibrate with the eBay app on
+the home page and enter the app's number. fbc works out how far its own count was from it and adds that to the
 month's used count; its own count carries on from there. Enter it again any
 time, and the new number replaces the old one. A number applies to its month
 only: on the 1st the count starts from fbc's own again, so it's worth
@@ -293,12 +308,12 @@ and marks them sold, takes out supplies for all of them and removes each
 Unit's own copy from Discogs. The receipt's price is split evenly over the
 Units.
 
-The home page's Mystery boxes available, and the listing's page, show how many
+Sales > Mystery Boxes, and the listing's page, show how many
 more boxes the Storage Box can fill: its unsold Units without a listing of
 their own, divided by the Units per sale, rounded down. eBay keeps selling as
 many boxes as the listing's quantity says, so lower the quantity on eBay when
 it runs out. fbc doesn't set it for you. Listings that have ended aren't on
-the home page.
+the Mystery Boxes page.
 
 ### Shipment tracking
 
