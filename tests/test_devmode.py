@@ -227,19 +227,19 @@ def test_new_draft_skips_the_discogs_lookup_in_dev_mode(app, dev_mode, monkeypat
 @pytest.mark.parametrize(
     "path, sync",
     [
-        ("/syncdiscogs", "dosyncdiscogs"),
-        ("/syncebaylistings", "dosyncebaylistings"),
-        ("/syncebayorders", "dosyncebayorders"),
-        ("/syncebayordersdeep", "dosyncebayorders"),
+        ("/syncdiscogs", "sync_discogs"),
+        ("/syncebaylistings", "sync_ebay_listings"),
+        ("/syncebayorders", "sync_ebay_orders"),
+        ("/syncebayordersdeep", "sync_ebay_orders"),
     ],
 )
 def test_syncs_do_nothing_and_succeed_in_dev_mode(
     app, dev_mode, inline_sync, monkeypatch, caplog, path, sync
 ):
-    from fbc.index import MyIndexView
+    from fbc import syncjobs
 
     caplog.set_level(logging.INFO)
-    monkeypatch.setattr(MyIndexView, sync, _fails)
+    monkeypatch.setattr(syncjobs, sync, _fails)
     client = app.test_client()
 
     response = client.get(path, headers={"Accept": "application/json"})

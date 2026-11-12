@@ -271,7 +271,7 @@ def test_the_sync_marks_ended_and_records_when_it_finished(
     app, inline_sync, monkeypatch
 ):
     gone = _listing("1")
-    monkeypatch.setattr("fbc.index.fetch_active_items", lambda: [_active_item("2")])
+    monkeypatch.setattr("fbc.syncjobs.fetch_active_items", lambda: [_active_item("2")])
 
     job = _sync(app.test_client())
 
@@ -290,7 +290,7 @@ def test_a_failed_sync_marks_nothing_and_records_nothing(app, inline_sync, monke
             "Read 0 active listings but eBay says there are 5."
         )
 
-    monkeypatch.setattr("fbc.index.fetch_active_items", fail)
+    monkeypatch.setattr("fbc.syncjobs.fetch_active_items", fail)
 
     job = _sync(app.test_client())
 
@@ -306,7 +306,7 @@ def test_the_second_sync_ends_a_listing_from_the_first_syncs_time(
     first = D(2026, 11, 1)
     sync.record_finished(sync.LISTINGS_SYNC, first)
     row = _listing("1")
-    monkeypatch.setattr("fbc.index.fetch_active_items", lambda: [])
+    monkeypatch.setattr("fbc.syncjobs.fetch_active_items", lambda: [])
 
     _sync(app.test_client())
 
@@ -569,7 +569,7 @@ def test_an_ended_listing_uses_its_saved_date_up_to_its_end():
 
 def test_the_sync_saves_when_each_listing_renews(app, inline_sync, monkeypatch):
     item = dict(_active_item("2"), TimeLeft="P10D")
-    monkeypatch.setattr("fbc.index.fetch_active_items", lambda: [item])
+    monkeypatch.setattr("fbc.syncjobs.fetch_active_items", lambda: [item])
 
     _sync(app.test_client())
 

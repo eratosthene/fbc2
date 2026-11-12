@@ -97,6 +97,27 @@ Keep both files readable only by you, since they hold the live credentials:
 chmod 600 config.py docker/.env
 ```
 
+## Running a sync
+
+Each sync the Sync buttons run can be run from the command line in the live
+container. It prints the same log lines as the button's window and exits 1 if
+it failed or couldn't start:
+
+```bash
+docker/live-flask.sh sync discogs
+docker/live-flask.sh sync ebay-listings
+docker/live-flask.sh sync ebay-orders
+docker/live-flask.sh sync ebay-orders --deep
+```
+
+`ebay-orders --update` also refreshes the orders fbc already has, and
+`--deep` looks back 88 days, not 10. A sync that is already running, from a
+button or another command, makes the new one stop with "... is already
+running" and exit 1. Run them in the live container (not a second one), since
+that is where the web server and the commands see each other's jobs. Each
+sync records when it last finished successfully, which the home page shows for
+the eBay listings sync.
+
 ## Archiving
 
 The archive column comes with a migration, which the container runs when it

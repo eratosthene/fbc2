@@ -63,6 +63,7 @@ def test_flask_commands_that_dont_need_the_views_skip_them():
         ["flask", "--app", "fbc", "backfill-earnings"],
         ["flask", "combine-receipts", "--apply"],
         ["flask", "set-listing-skus", "--item", "1"],
+        ["flask", "--app", "fbc", "sync", "ebay-orders", "--deep"],
     ):
         assert _skip_views_for(argv)[0], argv
 
