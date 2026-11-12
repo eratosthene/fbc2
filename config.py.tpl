@@ -116,6 +116,16 @@ IMG_UPLOAD_URL = "/static/uploads/"
 # is fbc-sync-jobs in the system temp folder.
 # SYNC_JOB_FOLDER = "/tmp/fbc-sync-jobs"
 
+# The scheduler runs in the live container and keeps the syncs fresh (see
+# "Scheduled syncs" in docs/production.md). SCHEDULER = False turns it off. It's
+# always off in dev mode. The intervals are minutes between one sync finishing
+# and the next being due (at least 1); a sync that failed waits the retry delay.
+# SCHEDULER = True
+# SCHEDULER_EBAY_ORDERS_MINUTES = 15
+# SCHEDULER_EBAY_LISTINGS_MINUTES = 30
+# SCHEDULER_DISCOGS_MINUTES = 120
+# SCHEDULER_RETRY_MINUTES = 10
+
 # Supplies > Expenses. The categories an expense can have, as
 # {key: label}; the key is what's stored, so keep it once expenses use it.
 # Left out, the list in fbc/models/expenses.py is used, named after

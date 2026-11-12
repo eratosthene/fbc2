@@ -118,6 +118,33 @@ that is where the web server and the commands see each other's jobs. Each
 sync records when it last finished successfully, which the home page shows for
 the eBay listings sync.
 
+## Scheduled syncs
+
+The container runs a scheduler next to the web server. It runs the eBay
+orders sync every 15 minutes, the eBay listings sync every 30 and the Discogs
+sync every 120, counting from when each last finished, whether the scheduler
+or you started it. A sync that is already running is skipped and tried a
+minute later. One that failed is tried again after 10 minutes. The scheduler's
+messages and each sync's log are in the container's logs:
+
+```bash
+docker/live-logs.sh
+```
+
+Change the intervals, or turn it off, in `config.py` (see `config.py.tpl`):
+
+```python
+SCHEDULER = False                    # off
+SCHEDULER_EBAY_ORDERS_MINUTES = 10   # minutes between syncs, at least 1
+SCHEDULER_EBAY_LISTINGS_MINUTES = 60
+SCHEDULER_DISCOGS_MINUTES = 240
+SCHEDULER_RETRY_MINUTES = 30
+```
+
+A change to `config.py` needs the container recreated (`docker/live-up.sh -n`).
+The same settings can be set in `docker/.env` as `FBC_CONFIG_SCHEDULER=false`
+and the like. It does not run in dev mode. There is no migration.
+
 ## Archiving
 
 The archive column comes with a migration, which the container runs when it

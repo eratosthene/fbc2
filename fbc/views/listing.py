@@ -29,6 +29,11 @@ logger = logging.getLogger()
 MAX_PICTURES = 24
 
 
+# Filter preset on the eBay Drafts list by the Tasks menu link: status Equal to
+# draft (string filter 3), as fbc.tasks.DRAFT_STATUS.
+DRAFTS_TO_LIST_FILTERS = {"_flt_3_status": "draft"}
+
+
 class EbayDraftModelView(CustomModelView):
     datamodel = SQLAInterface(EbayDraft)
     show_template = "ebay_draft/show.html"
