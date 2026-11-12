@@ -27,7 +27,7 @@ or over the limit), then three sections:
   has a table by Purchase Lot and one by Storage Box, each with its Units,
   Units Sold and Stock.
 
-The shop's name is in small type at the bottom.
+Every page has the shop's name in small type at the bottom.
 
 ## Inventory
 

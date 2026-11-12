@@ -1,5 +1,6 @@
 {% extends 'appbuilder/baselayout.html' %}
-{# Every page's layout: Flask-AppBuilder's, with our stylesheet and a banner in dev mode (see fbc/devmode.py). #}
+{# Every page's layout: Flask-AppBuilder's, with our stylesheet, a small footer in place of Flask-AppBuilder's (an empty
+three-column row under a rule) and a banner in dev mode (see fbc/devmode.py). #}
 {% block head_css %}
 {{ super() }}
 <link href="{{ url_for('static', filename='css/fbc.css') }}" rel="stylesheet">
@@ -12,4 +13,9 @@
 </div>
 {% endif %}
 {{ super() }}
+{% endblock %}
+{% block footer %}
+<footer class="container text-muted text-center">
+  <small>Fire &amp; Bones Collectibles</small>
+</footer>
 {% endblock %}

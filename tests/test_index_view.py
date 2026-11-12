@@ -417,3 +417,5 @@ def test_index_groups_its_alerts_above_the_listings(app):
     # The shop's name is a small footer, not a heading.
     assert "<h1>" not in page
     assert page.rindex("Fire &amp; Bones Collectibles") > page.index("<h2>Money</h2>")
+    # One footer, without Flask-AppBuilder's rule.
+    assert page.count("<footer") == 1 and "<hr" not in page
