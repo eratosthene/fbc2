@@ -8,7 +8,7 @@ from flask import flash, jsonify, redirect, request, url_for
 from flask_appbuilder import IndexView
 from flask_appbuilder.views import expose
 
-from fbc import devmode, discogs, insertions, sync
+from fbc import devmode, discogs, insertions, mystery, sync
 from fbc.listing import OAuthError, fetch_active_items, trading
 from fbc.util import add_ebay_listing
 from fbc.util import add_ebay_order
@@ -174,6 +174,10 @@ def home_totals():
         "box_totals": box_totals,
         "low_supplies": Supply.low_list(),
         "listings": insertions.listing_summary(),
+        "mystery_boxes": [
+            (listing, mystery.boxes_available(listing))
+            for listing in mystery.active_listings()
+        ],
     }
 
 

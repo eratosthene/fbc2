@@ -37,12 +37,14 @@ come from eBay and only take the label off once it's bought.</p>
 </form>
 {% endif %}
 
+{% if fixed_units or not boxes %}
 <h4>Units</h4>
 <ul>
-  {% for unit in units %}
+  {% for unit in fixed_units %}
   <li><a href="{{ url_for('UnitModelView.show', pk=unit.id) }}">{{ unit.name }}</a></li>
   {% endfor %}
 </ul>
+{% endif %}
 
 <h4>Earnings</h4>
 {% for e in earnings.errors %}<div class="alert alert-danger">{{ e }}</div>{% endfor %}
@@ -69,6 +71,46 @@ back for combined shipping.{% endif %}</div>
   {% for o in orders %}{% if o.order_id != order.order_id %}
   <input type="hidden" name="combine" value="{{ o.order_id }}">
   {% endif %}{% endfor %}
+  {# Enter in a field only updates the page, never ships. #}
+  <button name="action" value="update" style="display: none" tabindex="-1" aria-hidden="true"></button>
+  {% for b in boxes %}
+  {% set item = b.listing.item_id %}
+  <h4>Pull list: {{ b.listing.title }}</h4>
+  <p>{{ b.wanted }} random Unit{{ "" if b.wanted == 1 else "s" }} from
+  {{ b.listing.pick_from_box.name }} ({{ b.box }} to pick from). Nothing is saved
+  until you press Ship. Re-roll a record that's damaged or missing, or type a Unit's
+  id to swap it in.</p>
+  {% if b.short %}
+  <div class="alert alert-danger">The box is {{ b.short }} Unit{{ "" if b.short == 1 else "s" }}
+  short of what this order needs, so it can't ship yet. Restock it, or pick the
+  rest from another box:
+  <select name="fill-{{ item }}" class="form-control input-sm" style="width: auto; display: inline-block">
+    <option value="">Another box...</option>
+    {% for box, count in b.other_boxes %}
+    <option value="{{ box.id }}">{{ box.name }} ({{ count }})</option>
+    {% endfor %}
+  </select>
+  <button name="action" value="update" class="btn btn-default btn-sm">Pick from it</button></div>
+  {% elif b.fill_box %}
+  <div class="alert alert-info">Short picks are filled from {{ b.fill_box.name }}.
+  <input type="hidden" name="fill-{{ item }}" value="{{ b.fill_box.id }}"></div>
+  {% endif %}
+  <table class="table table-bordered table-condensed" style="width: auto">
+    <tr><th>Unit</th><th>Type</th><th>Grading</th><th>Box</th><th>Swap in Unit</th><th></th></tr>
+    {% for unit in b.units %}
+    <tr>
+      <td><input type="hidden" name="pick-{{ item }}" value="{{ unit.id }}">
+        <a href="{{ url_for('UnitModelView.show', pk=unit.id) }}">{{ unit.name }}</a> (#{{ unit.id }})</td>
+      <td>{{ unit.unit_type }}</td>
+      <td>{{ unit.grading }}</td>
+      <td>{{ unit.storage_box.name if unit.storage_box else "" }}</td>
+      <td><input type="text" name="swap-{{ unit.id }}" class="form-control input-sm" style="width: 6em"></td>
+      <td><button name="action" value="reroll:{{ unit.id }}" class="btn btn-default btn-sm">Re-roll</button></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <button name="action" value="update" class="btn btn-default btn-sm">Apply swaps</button>
+  {% endfor %}
   <div class="form-group" style="max-width: 200px">
     <label for="net_sold">Net Sold</label>
     <input type="text" id="net_sold" name="net_sold" class="form-control" required
@@ -118,7 +160,7 @@ back for combined shipping.{% endif %}</div>
   {% if units|length > 1 %}the Units{% else %}the Unit{% endif %} sold with it,
   takes the supplies used out of stock and removes only the ticked Units' own
   copies from Discogs.</p>
-  <button class="btn btn-primary" {% if missing_items %}disabled{% endif %}>Ship</button>
+  <button name="action" value="ship" class="btn btn-primary" {% if missing_items or boxes|sum(attribute='short') %}disabled{% endif %}>Ship</button>
   <a href="{{ url_for('EbayOrderModelView.list') }}" class="btn btn-default">Cancel</a>
 </form>
 {% endblock %}

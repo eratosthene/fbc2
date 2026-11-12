@@ -38,6 +38,14 @@ class EbayListing(Model):
     # When the listing renews next, from eBay's Time Left at the last
     # listings sync (UTC); see insertions.renewal_time.
     renews_at = Column(DateTime)
+    # A mystery box listing sells `pick_count` random Units from one Storage
+    # Box with each sale, so none of those Units is linked to it. Columns,
+    # not a SKU: fbc doesn't keep SKUs, and these show on the edit page.
+    # util.relist_ebay_listing carries them to the relisted listing. Both set
+    # or both blank; see fbc/mystery.py.
+    pick_from_box_id = Column(Integer, ForeignKey("storage_box.id"), index=True)
+    pick_from_box = relationship("StorageBox")
+    pick_count = Column(Integer)
     # Hidden from the lists by default; see fbc/archive.py.
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True
@@ -54,6 +62,17 @@ class EbayListing(Model):
 
     def fmt_url(self):
         return Markup('<a href="' + self.url + '">Listing</a>')
+
+    def is_mystery_box(self):
+        return bool(self.pick_from_box_id and self.pick_count)
+
+    def fmt_boxes_available(self):
+        """How many more mystery boxes the Storage Box can fill, or blank."""
+        from fbc import mystery
+
+        if not self.is_mystery_box():
+            return ""
+        return mystery.boxes_available(self)
 
 
 class InsertionCalibration(Model):

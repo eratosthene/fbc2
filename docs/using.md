@@ -264,6 +264,42 @@ label cost, and how much to refund on one of the orders on eBay to pass on
 the saving. Reload the page once it's refunded, so the refund is in the
 earnings.
 
+### Mystery boxes
+
+Some listings sell several random Units from one Storage Box with each sale,
+like "5 albums selected at random". On the listing's edit page, set Mystery
+Box: Pick From Storage Box and Mystery Box: Units Per Sale. Set both, or
+neither. No Unit is linked to such a listing. When eBay relists it, fbc keeps
+both settings.
+
+Ship This on a mystery box order picks the Units, as many as the sale's Units
+per sale times the boxes bought, from the Storage Box's unsold Units. It
+leaves out Units with a listing of their own that is still active, and
+prefers records whose release or master this buyer didn't get on an earlier
+Sales Receipt. The picks show as a pull list:
+
+- Re-roll replaces one pick with another random one, for a record that's
+  damaged or missing.
+- To swap one for a Unit you choose, type that Unit's id in its Swap in Unit
+  box and press Apply swaps.
+- The picks stay on the page, so posting it again doesn't re-roll them. Reloading
+  the page after Ship This first opens it does. Nothing is saved until Ship.
+- If the box has too few unsold Units, Ship This says how many are missing and
+  can't ship. Restock the box, or pick the rest from another Storage Box with
+  Pick from it.
+
+Ship records one Sales Receipt for the order, linked to every picked Unit,
+and marks them sold, takes out supplies for all of them and removes each
+Unit's own copy from Discogs. The receipt's price is split evenly over the
+Units.
+
+The home page's Mystery boxes available, and the listing's page, show how many
+more boxes the Storage Box can fill: its unsold Units without a listing of
+their own, divided by the Units per sale, rounded down. eBay keeps selling as
+many boxes as the listing's quantity says, so lower the quantity on eBay when
+it runs out. fbc doesn't set it for you. Listings that have ended aren't on
+the home page.
+
 ### Shipment tracking
 
 Each eBay Order shows its carrier and tracking number, linked to the
