@@ -544,3 +544,16 @@ def test_new_uploads_are_straightened_by_their_exif_tag(client, monkeypatch):
     )
 
     assert seen == [((20, 40), None), ((40, 20), None)]
+
+
+def test_draft_page_has_the_rotate_before_upload_preview(client):
+    unit = _carnaval()
+    client.get("/ebaydraftmodelview/fromunit/" + str(unit.id))
+    draft = db.session.query(EbayDraft).one()
+
+    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
+        as_text=True
+    )
+
+    assert 'id="picture-previews"' in html
+    assert "Rotate left" in html
