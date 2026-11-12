@@ -26,7 +26,7 @@ import logging
 import time
 from collections import namedtuple
 
-from fbc import devmode, sync, syncjobs
+from fbc import db, devmode, sync, syncjobs
 
 logger = logging.getLogger()
 
@@ -84,6 +84,11 @@ def read_schedule(config):
 
 def due(schedule, failed_at, now):
     """The names of the syncs that are due at `now` (naive UTC), in run order."""
+    # The syncs record their finish from their own app context, so a session
+    # that is still in its first transaction would never see it (MariaDB's
+    # default isolation shows a transaction one snapshot), and every sync would
+    # look due on every tick. Start each look from a fresh session.
+    db.session.remove()
     names = []
     for name in JOBS:
         last = sync.last_finished(name)

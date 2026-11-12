@@ -198,3 +198,17 @@ def test_a_sync_that_logs_an_error_and_records_nothing_waits_to_retry(
 
     assert outcomes == {"ebay-orders": "failed"}
     assert scheduler.due(schedule, failed_at, sync.utcnow() + MIN) == []
+
+
+def test_each_look_at_what_is_due_starts_from_a_fresh_session(schedule, monkeypatch):
+    # The syncs record their finish from another session, which a long-lived
+    # one on MariaDB wouldn't see, so every sync looked due on every tick.
+    from fbc import db
+
+    removed = []
+    real = db.session.remove
+    monkeypatch.setattr(db.session, "remove", lambda: (removed.append(1), real()))
+
+    scheduler.due(schedule, {}, NOW)
+
+    assert removed
