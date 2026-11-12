@@ -6,9 +6,15 @@ return at once, and the page then polls for the sync's log until it's done.
 A job's state and log are kept in files under SYNC_JOB_FOLDER (a folder in the
 system temp folder by default), not in memory: under gunicorn the request that
 polls a job may reach a different worker process from the one running it.
+
+The `flask sync` commands run the same jobs in the foreground (see `run`),
+through the same files, so a command and a button, or two commands, never run
+the same sync at once, even from different processes in one container.
 """
 
+import contextlib
 import datetime
+import fcntl
 import json
 import logging
 import os
@@ -36,6 +42,17 @@ def _folder():
     )
     os.makedirs(folder, exist_ok=True)
     return folder
+
+
+@contextlib.contextmanager
+def _claiming(folder):
+    """
+    Hold a lock while checking for a running job and writing a new one's state,
+    so two processes can't both see none running and both start.
+    """
+    with open(os.path.join(folder, "lock"), "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
 
 
 def _state_path(folder, job_id):
@@ -127,8 +144,9 @@ def _running_job(folder, kind):
 class _JobLogHandler(logging.Handler):
     """Copies the log records of one thread to a job's log file."""
 
-    def __init__(self, folder, job_id, thread_id):
+    def __init__(self, folder, job_id, thread_id, echo=None):
         super().__init__(logging.INFO)
+        self.echo = echo
         self.folder = folder
         self.job_id = job_id
         self.thread_id = thread_id
@@ -143,13 +161,70 @@ class _JobLogHandler(logging.Handler):
         if record.levelno >= logging.ERROR:
             self.errors += 1
         try:
-            _append_log(self.folder, self.job_id, self.format(record))
+            line = self.format(record)
+            _append_log(self.folder, self.job_id, line)
+            if self.echo:
+                self.echo(line)
         except Exception:
             self.handleError(record)
 
 
 def _spawn(target):
     threading.Thread(target=target, name="fbc-sync", daemon=True).start()
+
+
+def _claim(kind, title, return_url):
+    """
+    Write the state of a new running job of this kind and return (state, None),
+    or (None, id) of the one already running.
+    """
+    import uuid
+
+    folder = _folder()
+    with _claiming(folder):
+        running = _running_job(folder, kind)
+        if running:
+            return None, running
+        job_id = uuid.uuid4().hex
+        state = {
+            "id": job_id,
+            "kind": kind,
+            "title": title,
+            "return_url": return_url,
+            "pid": os.getpid(),
+            "status": "running",
+            "started": _now(),
+            "finished": None,
+            "errors": 0,
+        }
+        open(_log_path(folder, job_id), "w").close()
+        _write_state(folder, state)
+    return state, None
+
+
+def _execute(state, fn, echo=None):
+    """
+    Run fn() in an app context in this thread, logging to the job's log (and
+    to echo, if given), and write the job's final state. Returns it.
+    """
+    from fbc import app
+
+    folder = _folder()
+    root = logging.getLogger()
+    handler = _JobLogHandler(folder, state["id"], threading.get_ident(), echo)
+    root.addHandler(handler)
+    status = "failed"
+    try:
+        with app.app_context():
+            fn()
+        status = "done"
+    except Exception:
+        logger.exception(state["title"] + " failed")
+    finally:
+        root.removeHandler(handler)
+        state = dict(state, status=status, finished=_now(), errors=handler.errors)
+        _write_state(folder, state)
+    return state
 
 
 def start(kind, title, fn, return_url):
@@ -159,50 +234,29 @@ def start(kind, title, fn, return_url):
     the same kind is still running, return that one's id instead of starting
     another, so two syncs don't add the same things twice.
     """
-    import uuid
-
-    from fbc import app
-
-    folder = _folder()
-    running = _running_job(folder, kind)
+    state, running = _claim(kind, title, return_url)
     if running:
         return running
+    _spawn(lambda: _execute(state, fn))
+    return state["id"]
 
-    job_id = uuid.uuid4().hex
-    state = {
-        "id": job_id,
-        "kind": kind,
-        "title": title,
-        "return_url": return_url,
-        "pid": os.getpid(),
-        "status": "running",
-        "started": _now(),
-        "finished": None,
-        "errors": 0,
-    }
-    open(_log_path(folder, job_id), "w").close()
-    _write_state(folder, state)
 
-    def run():
-        root = logging.getLogger()
-        handler = _JobLogHandler(folder, job_id, threading.get_ident())
-        root.addHandler(handler)
-        status = "failed"
-        try:
-            with app.app_context():
-                fn()
-            status = "done"
-        except Exception:
-            logger.exception(title + " failed")
-        finally:
-            root.removeHandler(handler)
-            _write_state(
-                folder,
-                dict(state, status=status, finished=_now(), errors=handler.errors),
-            )
+class Busy(Exception):
+    """A job of the kind is already running, in this or another process."""
 
-    _spawn(run)
-    return job_id
+
+def run(kind, title, fn, echo=print):
+    """
+    Run fn() now, in this thread, as `start` would in the background: the same
+    job files (so the Sync button's modal can show it) and the same refusal,
+    as Busy, if a job of the kind is already running. Each log line is also
+    passed to echo. Returns the job's final state; its status is "done" or
+    "failed", and its errors count the errors it logged and carried on from.
+    """
+    state, running = _claim(kind, title, "/")
+    if running:
+        raise Busy(title + " is already running.")
+    return _execute(state, fn, echo)
 
 
 def read(job_id, offset=0):

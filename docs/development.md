@@ -68,7 +68,7 @@ doesn't need any of it.
 Set `FBC_SKIP_VIEWS=1` and `import fbc` skips the views. `app`, `db`, the
 models and everything outside `fbc/views/` still work; `fbc.appbuilder` and
 the pages don't exist. The scripts in `scripts/` and `dev-scripts/`, and the
-`combine-receipts` and `backfill-earnings` commands, already turn it on (a
+`combine-receipts`, `backfill-earnings` and `sync` commands, already turn it on (a
 value in the environment, such as `FBC_SKIP_VIEWS=0`, wins). A new script
 sets it before importing `fbc`:
 
@@ -99,6 +99,50 @@ New command-line jobs, such as sync commands and `flask set-listing-skus`,
 should use it: take `app` and `db` from `fbc`, and don't touch
 `appbuilder`. A script that needs the web app, such as a test client, leaves
 it off.
+
+## Running the syncs from the command line
+
+Each sync the Sync buttons run has a `flask sync` command. The command and
+the button call the same function in `fbc/syncjobs.py`, so they do the same
+thing. A new sync goes there too, with a command beside the others in
+`fbc/__init__.py`.
+
+| Command                           | Button                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------- |
+| `flask sync discogs`              | Sync Discogs                                                                    |
+| `flask sync ebay-listings`        | Sync eBay listings                                                              |
+| `flask sync ebay-orders`          | Sync eBay orders (adds new orders, and checks ones without items or tracking)   |
+| `flask sync ebay-orders --update` | Sync eBay orders with `?doupdate=True`, which also refreshes the orders fbc has |
+| `flask sync ebay-orders --deep`   | Deep sync, looking back 88 days, not 10                                         |
+
+```bash
+pipenv run flask --app fbc sync ebay-orders --deep
+```
+
+The command prints the log lines the button's window shows, and exits 1 if
+the sync failed, logged an error and carried on (some syncs do, such as eBay
+not being connected), or couldn't start. It couldn't start when the same sync
+is already running, from a button or another command, even in another
+process: a command and a button for the same sync never run together. The
+two order syncs count as one sync, so `ebay-orders` and
+`ebay-orders --deep` also keep out of each other's way. A command's job shows
+up to the Sync buttons the same way, so a button pressed meanwhile joins its
+log.
+
+The job files (`fbc/sync.py`) are in `SYNC_JOB_FOLDER`, which defaults to a
+folder in the system temp folder. A command and the web server have to use the
+same folder to see each other, so run commands in the same container as the
+web server.
+
+Each sync records when it last finished successfully: `discogs`,
+`ebay-orders` (either order sync) and `ebay-listings`, in the `sync_record`
+table. `sync.last_finished(name)` reads it. A sync that fails records
+nothing.
+
+In dev mode a command logs "Dev Mode is turned on, external syncing
+disabled" and finishes without reaching eBay or Discogs, as the buttons do.
+The commands skip view registration (see Writing scripts), so they start in
+about a second.
 
 ## Shipment tracking
 

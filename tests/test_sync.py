@@ -176,12 +176,12 @@ def test_the_job_state_is_json_on_disk(inline_sync, sync_job_folder):
 def test_sync_link_from_the_page_script_gets_the_job_as_json(
     app, monkeypatch, inline_sync
 ):
-    from fbc import index
+    from fbc import syncjobs
 
     def no_discogs():
         raise DiscogsAuthError("Connect fbc to Discogs first.")
 
-    monkeypatch.setattr(index.discogs, "client", no_discogs)
+    monkeypatch.setattr(syncjobs.discogs, "client", no_discogs)
     client = app.test_client()
 
     response = client.get(
@@ -202,9 +202,9 @@ def test_sync_link_from_the_page_script_gets_the_job_as_json(
 
 
 def test_sync_link_opened_as_a_page_shows_the_job(app, monkeypatch, inline_sync):
-    from fbc import index
+    from fbc import syncjobs
 
-    monkeypatch.setattr(index.MyIndexView, "dosyncdiscogs", lambda self: None)
+    monkeypatch.setattr(syncjobs, "sync_discogs", lambda: None)
     client = app.test_client()
 
     response = client.get("/syncdiscogs", headers={"Accept": "text/html"})
