@@ -19,7 +19,7 @@ depends_on = None
 
 def upgrade():
     # Nullable, and nothing is filled in: the next listings sync sets it from
-    # eBay's Time Left. Until then a listing renews 30 days from its start.
+    # eBay's Time Left. Until then a listing renews monthly on its start's day.
     with op.batch_alter_table("ebay_listing", schema=None) as batch_op:
         batch_op.add_column(sa.Column("renews_at", sa.DateTime(), nullable=True))
 

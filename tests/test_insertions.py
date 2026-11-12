@@ -553,7 +553,7 @@ def test_renewals_follow_the_saved_date_not_the_start_time():
     assert (result["used"], result["due"]) == (0, 1)
 
 
-def test_a_saved_date_in_the_past_carries_forward_in_30_day_steps():
+def test_a_saved_date_in_the_month_is_used_even_when_past():
     result = insertions.count_insertions(
         [(D(2026, 8, 1), None, D(2026, 11, 3))], NOW, 250
     )
@@ -578,3 +578,64 @@ def test_the_sync_saves_when_each_listing_renews(app, inline_sync, monkeypatch):
     assert abs(
         (renews - sync.utcnow()) - datetime.timedelta(days=10)
     ) < datetime.timedelta(minutes=5)
+
+
+# --- Monthly renewals, from three real listings ---
+
+
+@pytest.mark.parametrize(
+    "start, time_left, renews",
+    [
+        # Read Nov 12 2026 00:26:54 UTC. Each renews on its start's day of
+        # the month at its start's Pacific time, in standard time by then.
+        ("2024-08-22T23:40:43", (11, 0, 13, 49), D(2026, 11, 23, 0, 40, 43)),
+        ("2025-03-07T02:51:30", (25, 2, 24, 36), D(2026, 12, 7, 2, 51, 30)),
+        ("2025-04-10T20:23:20", (28, 20, 56, 26), D(2026, 12, 10, 21, 23, 20)),
+    ],
+)
+def test_real_listings_renew_monthly_on_their_start_day_in_pacific_time(
+    start, time_left, renews
+):
+    fetched = D(2026, 11, 12, 0, 26, 54)
+    days, hours, minutes, seconds = time_left
+    item = {"TimeLeft": f"P{days}DT{hours}H{minutes}M{seconds}S"}
+    assert insertions.renewal_time(item, fetched) == renews
+    began = D.fromisoformat(start)
+    # With no saved date, the count must put the November renewal where
+    # eBay's own Time Left puts it, when that is in November.
+    if renews.month == 11:
+        result = insertions.count_insertions([(began, None)], fetched, 250)
+        assert (result["used"], result["due"]) == (0, 1)
+        with_saved = insertions.count_insertions([(began, None, renews)], fetched, 250)
+        assert with_saved == result
+
+
+def test_a_listing_renews_exactly_once_a_month_whatever_the_month_length():
+    for now in (D(2026, 2, 20), D(2026, 3, 20), D(2026, 12, 20)):
+        result = insertions.count_insertions([(D(2025, 5, 10, 18), None)], now, 250)
+        assert result["projected"] == 1
+
+
+def test_a_listing_started_on_the_31st_renews_on_the_last_day_of_a_short_month():
+    start = D(2025, 12, 31, 20)  # Dec 31 12:00 Pacific
+    result = insertions.count_insertions([(start, None)], D(2026, 2, 10), 250)
+    assert (result["used"], result["due"]) == (0, 1)
+    result = insertions.count_insertions([(start, None)], D(2026, 3, 1, 12), 250)
+    assert result["due"] == 1
+
+
+def test_a_renewal_keeps_its_pacific_time_across_daylight_saving():
+    start = D(2025, 7, 15, 19)  # 12:00 PDT
+    result = insertions.count_insertions([(start, None)], D(2026, 1, 10), 250)
+    # Jan 15 12:00 PST is 20:00 UTC, so it's due on Jan 15 at 20:00, not 19:00.
+    assert result["due"] == 1
+    assert (
+        insertions.count_insertions([(start, None)], D(2026, 1, 15, 19, 30), 250)["due"]
+        == 1
+    )
+    assert (
+        insertions.count_insertions([(start, None)], D(2026, 1, 15, 20, 30), 250)[
+            "used"
+        ]
+        == 1
+    )

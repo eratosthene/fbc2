@@ -214,11 +214,14 @@ the old listings that aren't on eBay now.
 
 The count is fbc's estimate, from these assumptions:
 
-- Each new listing, and each Good 'Til Cancelled renewal, uses one. The
-  listings sync saves when each listing renews from eBay's Time Left, so the
-  renewal dates follow eBay; after the first renewal it counts every 30 days
-  from there, and the next sync corrects it if eBay counts months. A listing
-  not synced since this was added counts from its start until it is. Ending a listing early doesn't give it back.
+- Each new listing, and each Good 'Til Cancelled renewal, uses one. A
+  listing renews once a month, on the day of the month and the Pacific clock
+  time it started, so every active listing uses one insertion a month. That
+  matches eBay's Time Left on the three listings I checked. A listing that
+  started on the 29th to 31st is taken to renew on the last day of a shorter
+  month, which is a guess. The listings sync saves the date eBay's Time Left
+  gives, and when it falls in the month, fbc uses that date instead. Ending
+  a listing early doesn't give the insertion back.
 - The month is a calendar month in US Pacific time.
 - A listing that ended is counted up to the last sync that saw it active.
   One fbc never saw before it ended is missed, so the count may be a little

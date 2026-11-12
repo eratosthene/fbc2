@@ -123,8 +123,8 @@ finished in the `sync_record` table, by name; the listings sync's is
 `sync.LISTINGS_SYNC`. Unlike the job files, it lasts.
 
 `fbc/insertions.py` holds the free-insertions maths in one place, with its
-assumptions in the docstring (Pacific calendar month, renewals from `EbayListing.renews_at`, which the
-listings sync sets from eBay's `TimeLeft`, then every 30 days, ended
+assumptions in the docstring (Pacific calendar month, a renewal each month on the start's Pacific day and time, with
+`EbayListing.renews_at` (the listings sync sets it from eBay's `TimeLeft`) winning when it falls in the month, ended
 listings counted up to `end_time`). Change them there and in
 `tests/test_insertions.py`. Pacific time is worked out by hand, because the
 Alpine image has no tzdata for `zoneinfo`.

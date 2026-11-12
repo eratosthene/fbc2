@@ -9,11 +9,13 @@ plus guesses; change them here, in count_insertions and month_bounds, and the
 tests will say what moved:
 
 - The month is a calendar month in US Pacific time (eBay.com's time).
-- A renewal falls when eBay's Time Left on the listing runs out, and then
-  every 30 days until it ends. The listings sync saves that date
-  (renews_at, from TimeLeft) each time, so it follows eBay however it counts
-  the cycle. A listing it hasn't a date for yet is taken to renew every 30
-  days from its StartTime.
+- A renewal falls once a month, on the day of the month and the Pacific
+  clock time the listing started (checked on three real listings against
+  their Time Left; eBay's help says only "monthly"). A listing that started
+  on the 29th to 31st is taken to renew on the month's last day when it has
+  no such day, which is a guess. The listings sync also saves the date eBay's
+  Time Left gives (renews_at); when it falls in the month, that date is used
+  instead, so eBay's own answer wins.
 - A relist is a new listing with a new StartTime, so it starts a new cycle
   (the sync keeps the new listing and drops the old one).
 - A listing that ended is counted up to its end_time (see
@@ -24,15 +26,15 @@ tests will say what moved:
   counter is the check.
 """
 
+import calendar
 import datetime
 import re
 
-RENEWAL_DAYS = 30
+# A GTC listing's Time Left is never more than a month.
+MAX_TIME_LEFT_DAYS = 31
 # Warn when the projected count is this close to the limit.
 WARN_WITHIN = 10
 DEFAULT_LIMIT = 250
-
-_DAY = datetime.timedelta(days=1)
 
 
 def _nth_sunday(year, month, n):
@@ -57,6 +59,11 @@ def pacific_offset(utc):
     if start <= utc < end:
         return datetime.timedelta(hours=-7)
     return datetime.timedelta(hours=-8)
+
+
+def pacific_offset_local(local):
+    """Pacific's offset from UTC at a Pacific wall-clock time."""
+    return datetime.timedelta(hours=-7 if _is_pacific_dst(local) else -8)
 
 
 def to_pacific(utc):
@@ -88,8 +95,8 @@ def renewal_time(item, fetched):
     When a listing from eBay's active list next renews (UTC), or None. Uses
     its TimeLeft (an ISO 8601 duration such as "P29DT3H2M1S") from `fetched`,
     when the list was read; failing that, ListingDetails.EndTime. Anything
-    more than a renewal cycle away, such as a far-future placeholder, isn't
-    a renewal date and gives None.
+    more than a month away, such as a far-future placeholder, isn't a
+    renewal date and gives None.
     """
     left = (item.get("TimeLeft") or "").strip()
     match = _DURATION.match(left) if left else None
@@ -104,7 +111,7 @@ def renewal_time(item, fetched):
             when = datetime.datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S.000Z")
         except (TypeError, ValueError):
             return None
-    if when > fetched + datetime.timedelta(days=RENEWAL_DAYS + 1):
+    if when > fetched + datetime.timedelta(days=MAX_TIME_LEFT_DAYS):
         return None
     return when
 
@@ -113,39 +120,44 @@ def count_insertions(listings, now, limit=DEFAULT_LIMIT, adjustment=0):
     """
     This month's insertions, from `listings`: (start_time, end_time or None)
     pairs in UTC, end_time None for one still active, each optionally with a
-    third item, a date it renews on (see renewal_time), which the renewals
-    are counted from instead of the start time. Returns a dict with
+    third item, the date it renews next (see renewal_time), used for the
+    month's renewal when it falls in the month. Returns a dict with
     `used` (up to now), `due` (renewals still to come this month),
     `projected` (the two together), `limit`, and `near` and `over` for the
     projected count against the limit. `adjustment` is added to `used`: what
     the eBay app showed less fbc's own count, from calibrate().
     """
     month_start, month_end = month_bounds(now)
-    renewal = datetime.timedelta(days=RENEWAL_DAYS)
+    local_now = to_pacific(now)
+    days_in_month = calendar.monthrange(local_now.year, local_now.month)[1]
     used = due = 0
     for start, end, *more in listings:
         if start is None:
             continue
-        anchor = more[0] if more and more[0] else start
+        saved = more[0] if more else None
         last = month_end if end is None else min(end, now)
+        events = []
         # The start is an insertion of its own.
-        if month_start <= start < month_end and start <= last:
-            if start <= now:
-                used += 1
-            else:
-                due += 1
-        # Renewals fall on the anchor's cycle: the first one in the month.
-        if anchor >= month_start:
-            t = anchor - ((anchor - month_start) // renewal) * renewal
-        else:
-            t = anchor + -(-(month_start - anchor) // renewal) * renewal
-        while t < month_end and t <= last:
-            if t > start:
+        if month_start <= start < month_end:
+            events.append(start)
+        # Then one renewal a month, on the start's day and Pacific time.
+        local_start = to_pacific(start)
+        local_renewal = local_start.replace(
+            year=local_now.year,
+            month=local_now.month,
+            day=min(local_start.day, days_in_month),
+        )
+        renewal = local_renewal - pacific_offset_local(local_renewal)
+        if saved and month_start <= saved < month_end:
+            renewal = saved
+        if renewal > start:
+            events.append(renewal)
+        for t in events:
+            if t <= last:
                 if t <= now:
                     used += 1
                 else:
                     due += 1
-            t += renewal
     used += adjustment
     projected = used + due
     return {
