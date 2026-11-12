@@ -13,6 +13,20 @@
     <a href="{{ url_for('ReconcileSuppliesView.reconcile') }}">Reconcile Supplies</a>.
   </div>
   {% endif %}
+  {% set task_total = tasks.orders + tasks.releases + tasks.units + tasks.drafts %}
+  {% if task_total %}
+  <div class="alert alert-info">
+    <strong>To do:</strong>
+    {% if tasks.orders %}<a href="{{ url_for('OrdersToShipView.list') }}">{{ tasks.orders }}
+      eBay order{{ "" if tasks.orders == 1 else "s" }} to ship</a>{% endif %}
+    {% if tasks.releases %}<a href="{{ url_for('ReleasesNeedingUnitsView.list') }}">{{ tasks.releases }}
+      Discogs release{{ "" if tasks.releases == 1 else "s" }} that need a Unit</a>{% endif %}
+    {% if tasks.units %}<a href="{{ url_for('UnitsNeedingDraftsView.list') }}">{{ tasks.units }}
+      Unit{{ "" if tasks.units == 1 else "s" }} that need an eBay Draft</a>{% endif %}
+    {% if tasks.drafts %}<a href="{{ url_for('EbayDraftModelView.list', _flt_3_status='draft') }}">{{ tasks.drafts }}
+      eBay Draft{{ "" if tasks.drafts == 1 else "s" }} to list</a>{% endif %}
+  </div>
+  {% endif %}
   {% if listings.synced and listings.over %}
   <div class="alert alert-danger">
     This month is projected to go {{ listings.projected - listings.limit }} past

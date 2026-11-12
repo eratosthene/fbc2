@@ -4,7 +4,7 @@ from flask import flash, jsonify, redirect, request, url_for
 from flask_appbuilder import IndexView
 from flask_appbuilder.views import expose
 
-from fbc import insertions, sync, syncjobs
+from fbc import insertions, sync, syncjobs, tasks
 
 logger = logging.getLogger()
 
@@ -172,6 +172,7 @@ def home_totals():
         "box_totals": box_totals,
         "low_supplies": Supply.low_list(),
         "listings": insertions.listing_summary(),
+        "tasks": tasks.counts(),
     }
 
 

@@ -16,8 +16,8 @@ range (`100-200`) or a mix (`5, 100-200`).
 
 ## The home page
 
-It has the alerts first (supplies to reorder, and free insertions close to
-or over the limit), then three sections:
+It has the alerts first (supplies to reorder, a To do banner, and free
+insertions close to or over the limit), then three sections:
 
 - **Listings**: the active listings and this month's free insertions (see
   below).
@@ -28,6 +28,26 @@ or over the limit), then three sections:
   Units Sold and Stock.
 
 Every page has the shop's name in small type at the bottom.
+
+### Tasks
+
+The shop keeps the Discogs and eBay syncs up to date by itself, every few
+minutes to a couple of hours (see "Scheduled syncs" in
+[Running fbc in production](production.md)). What they bring in becomes a task.
+The To do banner on the home page counts each kind and links to its list, and
+the Tasks menu has the same four lists. A task leaves its list as soon as the
+work is done, so there is nothing to tick off:
+
+- **Orders to Ship**: eBay Orders that have no Sales Receipt yet. Use Ship This
+  on each. Archived orders are left out.
+- **Releases to Make Units**: Discogs Releases with more copies in your Discogs
+  collection than unsold Units. Add a Unit for the new copy and price it. A
+  copy that sold leaves the collection, so its sold Unit doesn't count.
+- **Units to Draft**: unsold Units priced over $2, with no eBay Listing and no
+  eBay Draft. (Cheaper Units go in the discount boxes.) Make an eBay Draft
+  from the Unit.
+- **Drafts to List**: eBay Drafts that aren't published yet. Take the pictures
+  and publish.
 
 ## Inventory
 

@@ -144,6 +144,41 @@ disabled" and finishes without reaching eBay or Discogs, as the buttons do.
 The commands skip view registration (see Writing scripts), so they start in
 about a second.
 
+## The scheduler and the tasks lists
+
+`flask scheduler` (`fbc/scheduler.py`) runs the syncs on intervals. It's a
+Flask command rather than cron or a shell loop because it reuses the app's
+settings and dev mode check, runs the same jobs as the buttons (`fbc/syncjobs.py`)
+and logs to the container's output. `docker/docker-entrypoint.sh` starts it in
+the background, next to gunicorn, only when the container is running gunicorn:
+the jobs' lock is in that container's job files and PIDs. The entrypoint
+starts it again 30 seconds after a crash. The scheduler exits 0 when it's off,
+which ends that loop.
+
+Every minute it asks `sync.last_finished` what is due. A sync is due when it
+has never finished, or finished more than its interval ago, so a sync run by
+hand counts. Each runs in the scheduler's process, one at a time, orders
+first. A sync that is already running (`sync.Busy`) is skipped until the next
+minute. A sync that failed records nothing, so the scheduler remembers the
+failure in memory and waits `SCHEDULER_RETRY_MINUTES` before trying it again.
+The scheduler runs `ebay-orders` without `--update`; refreshing old orders
+stays a manual job.
+
+The settings are in `config.py.tpl`: `SCHEDULER` (`False` turns it off), and
+`SCHEDULER_EBAY_ORDERS_MINUTES`, `SCHEDULER_EBAY_LISTINGS_MINUTES`,
+`SCHEDULER_DISCOGS_MINUTES` and `SCHEDULER_RETRY_MINUTES`. In dev mode it logs
+that scheduled syncs are off and exits, so it never reaches eBay or Discogs,
+and `docker/compose.dev.yml` runs `flask run`, so it doesn't start one at all.
+To try it by hand, run `flask scheduler` with a short interval in a throwaway
+setup; with `FBC_DEV_MODE=1` it does nothing.
+
+The Tasks menu and the home page's To do banner (`fbc/tasks.py`) have no table
+of their own: each task is a query that stops matching once the work is done.
+The lists are the existing ones with a filter (`fbc/views/tasks.py`), and eBay
+Drafts to List is a filter link on the eBay Drafts list. `fbc/tasks.py` says
+what each one means. A new kind of task is a new function there, a view or
+filter link, and a count for the banner.
+
 ## Shipment tracking
 
 `fbc/tracking.py` reads each order's carrier and tracking number from the

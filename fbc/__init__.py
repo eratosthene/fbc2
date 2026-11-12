@@ -47,6 +47,7 @@ SKIP_VIEWS_COMMANDS = {
     "set-listing-skus",
     "archive",
     "sync",
+    "scheduler",
 }
 _skip_views = os.environ.get("FBC_SKIP_VIEWS")
 if _skip_views is None:
@@ -243,6 +244,14 @@ def sync_ebay_orders_command(update, deep):
     _run_sync(syncjobs.ebay_orders_job(update=update, deep=deep))
 
 
+@app.cli.command("scheduler")
+def scheduler_command():
+    """Run the syncs on their intervals, until stopped (see fbc/scheduler.py)."""
+    from fbc import scheduler
+
+    scheduler.loop(app.config)
+
+
 @app.cli.command("set-listing-skus")
 @click.option(
     "--apply", is_flag=True, help="Change the listings; without it, only show."
@@ -313,7 +322,12 @@ def _register_views():
         MysteryBoxesView,
         SalesReceiptModelView,
     )
-    from fbc.views.listing import EbayDraftModelView
+    from fbc.views.listing import EbayDraftModelView, DRAFTS_TO_LIST_FILTERS
+    from fbc.views.tasks import (
+        OrdersToShipView,
+        ReleasesNeedingUnitsView,
+        UnitsNeedingDraftsView,
+    )
     from fbc.models.sync import SyncRecord  # noqa: F401  (so its table exists)
     from fbc.views.connect import ConnectDiscogsView, ConnectEbayView
     from fbc.views.supplies import (
@@ -369,9 +383,21 @@ def _register_views():
         appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
         appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
         appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
-        appbuilder.add_view(EbayDraftModelView, "eBay Drafts", category="Sales")
+        drafts = appbuilder.add_view(
+            EbayDraftModelView, "eBay Drafts", category="Sales"
+        )
         appbuilder.add_view(MysteryBoxesView, "Mystery Boxes", category="Sales")
         appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Sales")
+        appbuilder.add_view(OrdersToShipView, "Orders to Ship", category="Tasks")
+        appbuilder.add_view(
+            ReleasesNeedingUnitsView, "Releases to Make Units", category="Tasks"
+        )
+        appbuilder.add_view(UnitsNeedingDraftsView, "Units to Draft", category="Tasks")
+        appbuilder.add_link(
+            "Drafts to List",
+            href=drafts.route_base + "/list/?" + urlencode(DRAFTS_TO_LIST_FILTERS),
+            category="Tasks",
+        )
         appbuilder.add_view(SupplyModelView, "Supply List", category="Supplies")
         appbuilder.add_view(
             ReconcileSuppliesView, "Reconcile Supplies", category="Supplies"
