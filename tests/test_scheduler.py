@@ -174,3 +174,27 @@ def test_the_command_exits_at_once_in_dev_mode(app, monkeypatch):
 def test_the_real_jobs_are_the_ones_the_buttons_run():
     assert scheduler.JOBS["discogs"] is syncjobs.discogs_job
     assert scheduler.JOBS["ebay-listings"] is syncjobs.ebay_listings_job
+
+
+def test_a_sync_that_logs_an_error_and_records_nothing_waits_to_retry(
+    schedule, monkeypatch
+):
+    # The eBay syncs do this when eBay isn't connected: log, return, record
+    # nothing. It must not be retried on every tick.
+    import logging
+    from collections import namedtuple
+
+    Job = namedtuple("Job", "kind title fn")
+
+    def fn():
+        logging.getLogger().error("eBay isn't connected")
+
+    monkeypatch.setattr(
+        scheduler, "JOBS", {"ebay-orders": lambda: Job("ebay-orders", "Orders", fn)}
+    )
+    failed_at = {}
+
+    outcomes = scheduler.run_due(schedule, failed_at, NOW)
+
+    assert outcomes == {"ebay-orders": "failed"}
+    assert scheduler.due(schedule, failed_at, sync.utcnow() + MIN) == []

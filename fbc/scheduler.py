@@ -112,9 +112,12 @@ def run_due(schedule, failed_at, now=None):
             logger.info("%s is already running; trying again next time.", job.title)
             outcomes[name] = "busy"
             continue
-        # A sync that logged errors and carried on still recorded its finish,
-        # so it waits its interval like any other; only a failure retries.
-        if result["status"] == "done":
+        # A sync can also log an error and return without recording that it
+        # finished (eBay not connected, a call that failed), which is a
+        # failure as far as being due again goes. One that logged errors but
+        # still recorded its finish isn't due until its interval is up, so
+        # the retry delay changes nothing for it.
+        if result["status"] == "done" and not result["errors"]:
             failed_at.pop(name, None)
             outcomes[name] = "done"
         else:
