@@ -54,7 +54,7 @@ def ran(monkeypatch):
 def test_everything_is_due_before_any_sync_has_finished(schedule, ran):
     outcomes = scheduler.run_due(schedule, {}, NOW)
 
-    assert ran == ["ebay-orders", "ebay-listings", "discogs"]
+    assert ran == ["ebay-orders", "ebay-listings", "discogs", "discogs-listings"]
     assert set(outcomes.values()) == {"done"}
 
 
@@ -62,6 +62,7 @@ def test_a_sync_is_due_once_its_interval_has_passed(schedule, ran):
     sync.record_finished("ebay-orders", NOW - 14 * MIN)
     sync.record_finished("ebay-listings", NOW - 31 * MIN)
     sync.record_finished("discogs", NOW - 119 * MIN)
+    sync.record_finished("discogs-listings", NOW - 29 * MIN)
 
     assert scheduler.due(schedule, {}, NOW) == ["ebay-listings"]
 
@@ -119,7 +120,7 @@ def test_the_loop_runs_what_is_due_then_sleeps(app, ran):
             app.config, sleep=lambda s: (_ for _ in ()).throw(KeyboardInterrupt)
         )
 
-    assert ran == ["ebay-orders", "ebay-listings", "discogs"]
+    assert ran == ["ebay-orders", "ebay-listings", "discogs", "discogs-listings"]
 
 
 def test_the_loop_survives_a_failing_tick(app, monkeypatch):
@@ -174,6 +175,7 @@ def test_the_command_exits_at_once_in_dev_mode(app, monkeypatch):
 def test_the_real_jobs_are_the_ones_the_buttons_run():
     assert scheduler.JOBS["discogs"] is syncjobs.discogs_job
     assert scheduler.JOBS["ebay-listings"] is syncjobs.ebay_listings_job
+    assert scheduler.JOBS["discogs-listings"] is syncjobs.discogs_listings_job
 
 
 def test_a_sync_that_logs_an_error_and_records_nothing_waits_to_retry(

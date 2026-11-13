@@ -108,6 +108,35 @@ and then, such as monthly.
 The Discogs collection, synced in, with Add Unit for releases that have none
 yet.
 
+### Discogs Listings
+
+Discogs keeps what you have **for sale** (the Marketplace inventory) apart from
+your collection. The Discogs Listings list (Discogs menu) shows that
+inventory as fbc last read it, with each listing's release, price,
+condition, sleeve condition, status, location and when it was posted. Press
+Sync on that list, run `flask sync discogs-listings`, or let the scheduler do
+it every 30 minutes.
+
+The sync only reads from Discogs. It never lists, changes or deletes
+anything there, so a listing is changed on Discogs and the next sync shows it.
+It reads every status, not just For Sale, so Drafts and Expired items show
+too. A listing made by hand on the Discogs site shows up as well.
+
+- A listing links to its Unit when its External ID (the Private Comments on
+  Discogs) is `fbc-<Unit ID>`, as eBay's SKU is. Listings made by hand
+  usually have none, so they have no Unit. That is fine; nothing is lost.
+- A listing that is no longer in the Discogs inventory (you deleted it
+  there) is marked Ended. It comes back if it reappears. Only a listing with
+  status For Sale that isn't Ended is on the Marketplace.
+- If a page of the inventory doesn't come back, or the listings don't add up
+  to the count Discogs reports, the sync fails and changes nothing, so a bad
+  answer can't mark listings ended. Run it again.
+- Pictures can't be sent to Discogs from fbc. Add them on the Discogs site
+  (Add Photos on the listing). See "The Discogs Marketplace" in
+  `docs/development.md`.
+
+Nothing here lists a Unit on Discogs yet.
+
 ### Identify Record
 
 Inventory > Identify Record finds the Discogs release a record in hand is.

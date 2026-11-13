@@ -110,6 +110,7 @@ thing. A new sync goes there too, with a command beside the others in
 | Command                           | Button                                                                          |
 | --------------------------------- | ------------------------------------------------------------------------------- |
 | `flask sync discogs`              | Sync Discogs                                                                    |
+| `flask sync discogs-listings`     | Sync on the Discogs Listings list (reads the Marketplace inventory)             |
 | `flask sync ebay-listings`        | Sync eBay listings                                                              |
 | `flask sync ebay-orders`          | Sync eBay orders (adds new orders, and checks ones without items or tracking)   |
 | `flask sync ebay-orders --update` | Sync eBay orders with `?doupdate=True`, which also refreshes the orders fbc has |
@@ -135,7 +136,7 @@ same folder to see each other, so run commands in the same container as the
 web server.
 
 Each sync records when it last finished successfully: `discogs`,
-`ebay-orders` (either order sync) and `ebay-listings`, in the `sync_record`
+`discogs-listings`, `ebay-orders` (either order sync) and `ebay-listings`, in the `sync_record`
 table. `sync.last_finished(name)` reads it. A sync that fails records
 nothing.
 
@@ -166,7 +167,8 @@ stays a manual job.
 
 The settings are in `config.py.tpl`: `SCHEDULER` (`False` turns it off), and
 `SCHEDULER_EBAY_ORDERS_MINUTES`, `SCHEDULER_EBAY_LISTINGS_MINUTES`,
-`SCHEDULER_DISCOGS_MINUTES` and `SCHEDULER_RETRY_MINUTES`. In dev mode it logs
+`SCHEDULER_DISCOGS_MINUTES`, `SCHEDULER_DISCOGS_LISTINGS_MINUTES` and
+`SCHEDULER_RETRY_MINUTES`. In dev mode it logs
 that scheduled syncs are off and exits, so it never reaches eBay or Discogs,
 and `docker/compose.dev.yml` runs `flask run`, so it doesn't start one at all.
 To try it by hand, run `flask scheduler` with a short interval in a throwaway
@@ -178,6 +180,68 @@ The lists are the existing ones with a filter (`fbc/views/tasks.py`), and eBay
 Drafts to List is a filter link on the eBay Drafts list. `fbc/tasks.py` says
 what each one means. A new kind of task is a new function there, a view or
 filter link, and a count for the banner.
+
+## The Discogs Marketplace
+
+Notes for selling on Discogs (issue #63), found while building the Discogs
+listings sync. They come from the `discogs_client` 2.10 source and a mirror of
+Discogs's Marketplace OpenAPI spec
+(`artifacts.apis.io/discogs/openapi/discogs-marketplace-api-openapi.yml`).
+The official docs (`discogs.com/developers`) refuse automated requests, and
+nothing here was run against Discogs, so check anything that matters against
+a real response before building on it.
+
+**Pictures.** A listing can't have pictures set through the API. The listing
+fields to create or edit are release, condition, sleeve condition, price,
+comments, allow offers, status, external ID, location, weight and format
+quantity. There is no photo field, and no endpoint for one among the
+Marketplace operations. The website's Add Photos button on a seller's item has
+no API behind it. Pictures for a Discogs listing are added by hand on the
+site, so a local copy of a Unit's pictures (#140) can't be pushed to Discogs.
+
+**Inventory.** `GET /users/{username}/inventory`, which is
+`identity().inventory` in the client. It returns `pagination` and `listings`.
+The `status` filter defaults to **For Sale**, so Drafts and Expired items don't
+come back unless it's asked for. Its values are For Sale, All, Draft, Expired,
+Sold, Violation, Suspended and Deleted. (The sync asks for All.) It pages from
+page 1, up to 100 a page (the client defaults to 50;
+`inventory.per_page = 100`), and `len(inventory)` is the item count. It sorts by
+listed, price, item, artist, label, catno, audio, status or location.
+Someone other than the owner sees only For Sale items.
+
+**Listings.** A listing's JSON has `id` (a big number), `status`, `price`
+(`value` and `currency`), `condition`, `sleeve_condition`, `posted`
+(ISO 8601 with a zone), `uri`, `release` (`id` and a `description` like
+"Artist - Title"), `comments`, `allow_offers`, `ships_from`, `weight` (grams),
+`format_quantity`, `external_id` and `location`. The release can be one that
+isn't in your collection. Only For Sale, Draft and Expired listings can be
+edited; others can only be deleted. A new listing's status is For Sale or
+Draft.
+
+**`external_id` and `location`.** Both are free text set by the seller. The
+spec describes `external_id` as the seller's private comments, which is where
+Discogs shows it, so someone can type over it by hand. fbc will write
+`fbc-<Unit ID>` there, the same as eBay's SKU (`listing.sku`,
+`listing.unit_id_from_sku`), and treat anything else as "no Unit". `location`
+is the Storage Box's place for the Unit.
+
+**Fees and earnings.** `client.fee_for(price)` gives Discogs's selling fee
+for a price (`GET /marketplace/fee/{price}`, as a `Price`). An order has `fee`
+(Discogs's fee), `total`, `shipping`, `items`, `status`, `next_status`,
+`created`, `last_activity`, `buyer`, `additional_instructions` and messages.
+Nothing in it says what payment processing took, so Net Sold from a Discogs
+order is the total less that fee, and the payment fee has to be typed in or
+left out. Order statuses are New Order, Buyer Contacted, Invoice Sent, Payment
+Pending, Payment Received, In Progress, Shipped, Refund Sent and Cancelled.
+
+**What the sync does.** `syncjobs.sync_discogs_listings` reads the whole
+inventory (checking it got as many items as `len(inventory)` says), saves each
+as a `DiscogsListing` (`util.save_discogs_listing`), links it to its Unit by
+`external_id` if the Unit exists, and then marks every listing not in that read
+as ended (`util.mark_ended_discogs_listings`). It only reads; there is no
+write to Discogs in it, and it goes through `discogs.client()`, so dev mode
+stops it. The `sync_record` name is `discogs-listings`. There's no Task for it:
+a Task needs a way to list a Unit on Discogs first.
 
 ## Shipment tracking
 

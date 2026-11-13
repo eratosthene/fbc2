@@ -196,6 +196,82 @@ def mark_ended_listings(remote_item_ids, previous_sync=None):
     return ended
 
 
+def _naive_utc(when):
+    """A datetime from Discogs (with a zone, or none) as naive UTC, as fbc stores it."""
+    if when is None or when.tzinfo is None:
+        return when
+    return when.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+
+def save_discogs_listing(data, seen):
+    """
+    Add or update the DiscogsListing for one item of Discogs's seller
+    inventory (`data` is the item's JSON), and link it to its Unit by
+    external_id ("fbc-<unit id>"). `seen` is the sync's start time.
+
+    A listing with no external_id, or one that names a Unit fbc doesn't have,
+    is kept with no Unit. A Unit is only linked from here, never unlinked: it
+    stays with the listing even when the listing is no longer for sale.
+    Returns the DiscogsListing.
+    """
+    from discogs_client.utils import parse_timestamp
+
+    from fbc import db
+    from fbc.listing import unit_id_from_sku
+    from fbc.models.discogs import DiscogsListing
+    from fbc.models.inventory import Unit
+
+    listing_id = int(data["id"])
+    row = db.session.get(DiscogsListing, listing_id)
+    if row is None:
+        row = DiscogsListing(listing_id=listing_id)
+        db.session.add(row)
+    release = data.get("release") or {}
+    price = data.get("price") or {}
+    row.release_id = release.get("id")
+    row.title = (release.get("description") or "")[:255] or None
+    row.price = price.get("value")
+    row.currency = price.get("currency")
+    row.condition = data.get("condition")
+    row.sleeve_condition = data.get("sleeve_condition")
+    row.status = data.get("status")
+    row.posted = (
+        _naive_utc(parse_timestamp(data["posted"])) if data.get("posted") else None
+    )
+    row.url = data.get("uri")
+    row.external_id = (data.get("external_id") or "")[:255] or None
+    row.location = (data.get("location") or "")[:255] or None
+    row.last_seen = seen
+    row.ended = False
+    unit_id = unit_id_from_sku(row.external_id)
+    if unit_id is not None and db.session.get(Unit, unit_id):
+        row.unit_id = unit_id
+    db.session.commit()
+    return row
+
+
+def mark_ended_discogs_listings(seen_ids):
+    """
+    Mark every DiscogsListing that isn't in the seller inventory as ended, and
+    clear the flag on one that is back in it, as mark_ended_listings does for
+    eBay. Only call this after reading the whole inventory (the sync checks
+    that it did), since anything missing from `seen_ids` is taken as gone.
+    Returns how many were marked ended.
+    """
+    from fbc import db
+    from fbc.models.discogs import DiscogsListing
+
+    ended = 0
+    for row in db.session.query(DiscogsListing).all():
+        if row.listing_id in seen_ids:
+            row.ended = False
+        elif not row.ended:
+            row.ended = True
+            ended += 1
+    db.session.commit()
+    return ended
+
+
 def _money(amount):
     """An amount from the Trading API ({"value": "4.37"}) as a float, or None."""
     try:

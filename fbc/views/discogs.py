@@ -8,12 +8,14 @@ from flask_appbuilder.models.filters import BaseFilter
 
 from fbc.models.discogs import (
     Artist,
+    DiscogsListing,
     DiscogsRelease,
     Folder,
     Genre,
     Style,
 )
 from fbc.widgets import (
+    DiscogsListingListWidget,
     DiscogsReleaseListWidget,
 )
 from fbc.views.inventory import UnitModelView
@@ -130,3 +132,68 @@ class FolderModelView(CustomModelView):
     base_order = ("name", "desc")
     add_columns = ["folder_id", "name"]
     related_views = [DiscogsReleaseModelView]
+
+
+class DiscogsListingModelView(CustomModelView):
+    """
+    The Discogs Marketplace inventory as the last sync read it. Read only:
+    listings are changed on Discogs and the sync picks the change up.
+    """
+
+    datamodel = SQLAInterface(DiscogsListing)
+    base_permissions = ["can_list", "can_show"]
+    base_order = ("posted", "desc")
+    list_widget = DiscogsListingListWidget
+    list_columns = [
+        "listing_id",
+        "title",
+        "unit",
+        "status",
+        "ended",
+        "posted",
+        "fmt_price",
+        "condition",
+        "sleeve_condition",
+        "location",
+        "fmt_url",
+    ]
+    search_columns = [
+        "listing_id",
+        "release_id",
+        "title",
+        "unit",
+        "status",
+        "ended",
+        "price",
+        "condition",
+        "sleeve_condition",
+        "external_id",
+        "location",
+    ]
+    show_columns = [
+        "listing_id",
+        "release_id",
+        "title",
+        "unit",
+        "status",
+        "ended",
+        "last_seen",
+        "posted",
+        "fmt_price",
+        "condition",
+        "sleeve_condition",
+        "external_id",
+        "location",
+        "fmt_url",
+    ]
+    label_columns = {
+        "listing_id": "Listing ID",
+        "release_id": "Release ID",
+        "fmt_price": "Price",
+        "fmt_url": "URL",
+        "external_id": "External ID (Private Comments)",
+    }
+    description_columns = {
+        "ended": "True once the listing is no longer in the Discogs inventory.",
+        "unit": "Found from the External ID, which fbc sets to fbc-<Unit ID>.",
+    }

@@ -11,6 +11,9 @@ from sqlalchemy import (
     DateTime,
     Text,
     BigInteger,
+    Boolean,
+    Float,
+    false,
 )
 from sqlalchemy.orm import relationship
 import re
@@ -306,3 +309,75 @@ class DiscogsOAuthToken(Model):
 
     def __repr__(self):
         return "DiscogsOAuthToken " + str(self.id)
+
+
+class DiscogsListing(Model):
+    """
+    One item in the seller inventory on the Discogs Marketplace, as the
+    Discogs listings sync last read it (fbc/syncjobs.py). The sync only reads:
+    nothing here is ever sent back to Discogs.
+    """
+
+    __tablename__ = "discogs_listing"
+    # Not an autoincrement: Discogs gives the ID. It's a BigInteger because
+    # Discogs's IDs keep growing.
+    listing_id = Column(BigInteger, primary_key=True, autoincrement=False)
+    # Not a foreign key: a listing made by hand can be of a release that
+    # isn't in the collection, so it isn't a DiscogsRelease.
+    release_id = Column(Integer, index=True)
+    release = relationship(
+        "DiscogsRelease",
+        primaryjoin="foreign(DiscogsListing.release_id) == DiscogsRelease.release_id",
+        viewonly=True,
+    )
+    # Discogs's own description of the release, "Artist - Title".
+    title = Column(String(255))
+    # The Unit named by external_id ("fbc-<unit id>"), when there is one.
+    unit_id = Column(Integer, ForeignKey("unit.id"), index=True)
+    unit = relationship("Unit")
+    price = Column(Float)
+    currency = Column(String(3))
+    condition = Column(String(30))
+    sleeve_condition = Column(String(30))
+    # Discogs's word: For Sale, Draft, Expired, Sold and so on. Only For Sale
+    # is on the Marketplace; see is_for_sale.
+    status = Column(String(20), index=True)
+    # UTC, as Discogs sends it.
+    posted = Column(DateTime)
+    url = Column(String(255))
+    # Shown on Discogs as the seller's private comments. fbc writes the
+    # Unit's "fbc-<id>" there; a listing made by hand can have anything.
+    external_id = Column(String(255))
+    location = Column(String(255))
+    # The listings sync sets these. last_seen is the UTC start of the last
+    # sync that found the listing in the inventory. A listing that has left
+    # the inventory (deleted on Discogs) is marked ended, as eBay Listings
+    # are; see fbc/util.py mark_ended_discogs_listings.
+    last_seen = Column(DateTime)
+    ended = Column(
+        Boolean, nullable=False, default=False, server_default=false(), index=True
+    )
+
+    def __unicode__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        return str(self.listing_id) + ": " + (self.title or "")
+
+    def is_for_sale(self):
+        """Live on the Marketplace now, as of the last sync."""
+        return not self.ended and self.status == "For Sale"
+
+    def fmt_price(self):
+        if self.price is None:
+            return ""
+        return ("$" if self.currency in (None, "USD") else self.currency + " ") + (
+            f"{self.price:.2f}"
+        )
+
+    def fmt_url(self):
+        if not (self.url or "").startswith("https://"):
+            return ""
+        return Markup('<a href="{}" target="_blank" rel="noopener">Listing</a>').format(
+            self.url
+        )
