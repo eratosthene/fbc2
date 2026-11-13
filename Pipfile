@@ -11,7 +11,7 @@ pymysql = "~=1.1"
 python3-discogs-client = "~=2.8"
 certifi = "*"
 ebaysdk = "~=2.2"
-gunicorn = "~=26.2"
+gunicorn = "~=27.0"
 flask-migrate = "~=4.1"
 # Only here to keep out 4.0.0 (pip-audit, CVE-2026-49272). Needed by the Discogs client.
 oauthlib = "*"
