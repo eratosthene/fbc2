@@ -1,0 +1,23 @@
+{% extends "crud/show.html" %}
+{% block show_form %}
+{{ super() }}
+<hr>
+{% for text, link in ebay_notes %}
+<div class="alert alert-warning"><strong>Also on eBay.</strong> {{ text }}
+  {% if link %}<a href="{{ link }}">Look at it</a>.{% endif %}</div>
+{% endfor %}
+{% if listing.status == "Draft" and not listing.ended %}
+<div class="alert alert-info">
+  This is a <strong>Draft</strong>: buyers can't see it. Open it on Discogs, add pictures
+  there (the API can't), then come back and make it For Sale.
+  {% if listing.url %}<a href="{{ listing.url }}" target="_blank" rel="noopener">Open on Discogs</a>{% endif %}
+</div>
+{% if can_make_for_sale %}
+<form method="post" action="{{ url_for('DiscogsListingModelView.make_for_sale', pk=listing.listing_id) }}" style="display: inline">
+  {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+  <button class="btn btn-primary" {% if dev_mode %}disabled{% endif %}>Make it For Sale (goes live)</button>
+</form>
+{% endif %}
+{% if dev_mode %}<p class="text-warning" style="margin-top: 10px">Dev Mode is turned on, selling on Discogs disabled.</p>{% endif %}
+{% endif %}
+{% endblock %}

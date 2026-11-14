@@ -1,0 +1,69 @@
+{% extends "appbuilder/base.html" %}
+{# List a Unit on Discogs: fields filled in from the Unit. Only the button posts. #}
+{% macro options(choices, chosen) %}
+  <option value="">(choose)</option>
+  {% for c in choices %}<option {{ 'selected' if chosen == c }}>{{ c }}</option>{% endfor %}
+{% endmacro %}
+{% block content %}
+<h3>List on Discogs</h3>
+<p><strong>{{ unit.name }}</strong>, graded <code>{{ unit.grading or "not graded" }}</code>.
+  The button below <strong>posts this to your Discogs account as a Draft</strong>. A Draft isn't
+  shown to buyers. Next you add pictures on Discogs, then use Make it For Sale to make it live.</p>
+{% for e in errors %}<div class="alert alert-danger">{{ e }}</div>{% endfor %}
+{% for text, link in ebay_notes %}
+<div class="alert alert-warning"><strong>Also on eBay.</strong> {{ text }}
+  {% if link %}<a href="{{ link }}">Look at it</a>.{% endif %}
+  You can still list it here, but it could sell on both.</div>
+{% endfor %}
+{% if not values.condition %}
+<div class="alert alert-info">The Media Condition isn't set because the Unit's grading
+  (<code>{{ unit.grading or "blank" }}</code>) isn't a Discogs one. Choose it below.</div>
+{% endif %}
+<form method="post" class="form-horizontal" action="{{ url_for('DiscogsListingModelView.from_unit', pk=unit.id) }}">
+  {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="release_id">Release ID</label>
+    <div class="col-sm-4"><input class="form-control" id="release_id" name="release_id" value="{{ values.release_id or '' }}">
+      <p class="help-block"><a href="https://www.discogs.com/release/{{ values.release_id }}" target="_blank" rel="noopener">Release on Discogs</a></p></div>
+  </div>
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="condition">Media Condition</label>
+    <div class="col-sm-4"><select class="form-control" id="condition" name="condition">{{ options(media_conditions, values.condition) }}</select></div>
+  </div>
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="sleeve_condition">Sleeve Condition</label>
+    <div class="col-sm-4"><select class="form-control" id="sleeve_condition" name="sleeve_condition">{{ options(sleeve_conditions, values.sleeve_condition) }}</select>
+      {% if not values.sleeve_condition %}<p class="help-block">The Unit's grading has no sleeve grade.</p>{% endif %}</div>
+  </div>
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="price">Price ($)</label>
+    <div class="col-sm-2"><input class="form-control" id="price" name="price" value="{{ values.price or '' }}"></div>
+  </div>
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="comments">Comments</label>
+    <div class="col-sm-6"><textarea class="form-control" id="comments" name="comments" rows="3">{{ values.comments or '' }}</textarea>
+      <p class="help-block">Shown to buyers. Filled in from the Unit's Notes.</p></div>
+  </div>
+  <div class="form-group">
+    <div class="col-sm-offset-2 col-sm-6"><label><input type="checkbox" name="allow_offers" value="1" {{ 'checked' if values.allow_offers }}> Allow offers</label></div>
+  </div>
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="weight">Weight (grams)</label>
+    <div class="col-sm-2"><input class="form-control" id="weight" name="weight" value="{{ values.weight or '' }}"></div>
+    <div class="col-sm-6"><p class="help-block">Discogs works out shipping from it. Started from eBay Drafts' package weight, in ounces times 28.35.</p></div>
+  </div>
+  <div class="form-group">
+    <label class="col-sm-2 control-label">External ID</label>
+    <div class="col-sm-6"><p class="form-control-static"><code>{{ values.external_id }}</code> (set by fbc, so the sync finds the Unit)</p></div>
+  </div>
+  <div class="form-group">
+    <label class="col-sm-2 control-label" for="location">Location</label>
+    <div class="col-sm-4"><input class="form-control" id="location" name="location" value="{{ values.location or '' }}">
+      <p class="help-block">The Unit's Storage Box.</p></div>
+  </div>
+  <div class="form-group"><div class="col-sm-offset-2 col-sm-6">
+    <button class="btn btn-primary" {% if blocked %}disabled{% endif %}>Post to Discogs as a Draft</button>
+    <a class="btn btn-default" href="{{ url_for('UnitModelView.list') }}">Back</a>
+  </div></div>
+</form>
+{% endblock %}
