@@ -1,84 +1,41 @@
-import datetime
 import json
+
+import pytest
+from fake_discogs import FakeDiscogs, collection_item
 
 from fbc import db
 from fbc.models.discogs import Artist, DiscogsRelease, Genre, Style
 from fbc.util import add_discogs_release
 
 
-class FakeArtist:
-    def __init__(self, id, name):
-        self.id = id
-        self.name = name
+@pytest.fixture
+def discogs(monkeypatch):
+    """Discogs's own record of each release (country, released) and master."""
+    fake = FakeDiscogs()
+
+    class Records(dict):
+        def __missing__(self, key):
+            return {"id": key, "country": "US", "released": "2020-01-01"}
+
+    fake.releases = Records()
+    fake.masters = {99: {"id": 99, "year": 2001}}
+    return fake.install(monkeypatch)
 
 
-class FakeLabel:
-    def __init__(self, name, catno):
-        self.name = name
-        self.catno = catno
-
-
-class FakeMaster:
-    def __init__(self, id, year):
-        self.id = id
-        self.year = year
-
-
-class FakeRelease:
-    def __init__(
-        self,
-        id,
-        title,
-        year,
-        artists=None,
-        genres=None,
-        styles=None,
-        master=None,
-        formats=None,
-        released="2020-01-01",
-        labels=None,
-        country="US",
-    ):
-        self.id = id
-        self.title = title
-        self.year = year
-        self.artists = artists or []
-        self.genres = genres or []
-        self.styles = styles or []
-        self.master = master
-        self.formats = formats or [{"name": "Vinyl", "qty": "1"}]
-        self._released = released
-        self.labels = labels or []
-        self.country = country
-
-    def fetch(self, key):
-        assert key == "released"
-        return self._released
-
-
-class FakeCollectionItem:
-    def __init__(
-        self, release, folder_id=1, instance_id=1000, notes=None, date_added=None
-    ):
-        self.id = release.id
-        self.instance_id = instance_id
-        self.release = release
-        self.folder_id = folder_id
-        self.notes = notes if notes is not None else []
-        self.date_added = date_added or datetime.date(2024, 1, 1)
-
-
-def test_add_discogs_release_creates_new_release_with_artists_genres_styles(app):
-    release = FakeRelease(
-        id=1,
+def test_add_discogs_release_creates_new_release_with_artists_genres_styles(
+    app, discogs
+):
+    item = collection_item(
+        1,
+        555,
+        folder_id=5,
         title="Discovery",
         year=2001,
-        artists=[FakeArtist(id=10, name="Daft Punk")],
+        artists=[(10, "Daft Punk")],
         genres=["Electronic"],
         styles=["House"],
-        master=FakeMaster(id=99, year=2001),
+        master_id=99,
     )
-    item = FakeCollectionItem(release, folder_id=5, instance_id=555)
 
     add_discogs_release(item)
 
@@ -100,61 +57,53 @@ def test_add_discogs_release_creates_new_release_with_artists_genres_styles(app)
     assert db.session.query(Style).count() == 1
 
 
-def test_add_discogs_release_strips_and_sorts_the_prefixed_artist_names(app):
-    release = FakeRelease(
-        id=2,
-        title="Abbey Road",
-        year=1969,
-        artists=[FakeArtist(id=20, name="The Beatles")],
-    )
-    item = FakeCollectionItem(release)
+def test_the_master_year_wins_over_the_release_year(app, discogs):
+    discogs.masters[99] = {"id": 99, "year": 1969}
 
-    add_discogs_release(item)
+    add_discogs_release(collection_item(1, 1, year=1990, master_id=99))
+
+    dr = db.session.query(DiscogsRelease).filter_by(release_id=1).first()
+    assert (dr.year, dr.master_year) == (1990, 1969)
+
+
+def test_add_discogs_release_strips_and_sorts_the_prefixed_artist_names(app, discogs):
+    add_discogs_release(
+        collection_item(2, 1, title="Abbey Road", artists=[(20, "The Beatles")])
+    )
 
     artist = db.session.query(Artist).filter_by(artist_id=20).first()
     assert artist.name == "The Beatles"
     assert artist.sort_name == "Beatles, The"
 
 
-def test_add_discogs_release_reuses_existing_artist_genre_style_rows(app):
+def test_add_discogs_release_reuses_existing_artist_genre_style_rows(app, discogs):
     db.session.add(Artist(artist_id=10, name="Daft Punk", sort_name=""))
     db.session.add(Genre(name="Electronic"))
     db.session.commit()
 
-    release = FakeRelease(
-        id=1,
-        title="Discovery",
-        year=2001,
-        artists=[FakeArtist(id=10, name="Daft Punk")],
-        genres=["Electronic"],
+    add_discogs_release(
+        collection_item(
+            1, 1, artists=[(10, "Daft Punk")], genres=["Electronic"], styles=[]
+        )
     )
-    item = FakeCollectionItem(release)
-
-    add_discogs_release(item)
 
     assert db.session.query(Artist).count() == 1
     assert db.session.query(Genre).count() == 1
 
 
-def test_add_discogs_release_without_master_uses_release_year_and_zero_id(app):
-    release = FakeRelease(id=3, title="No Master", year=2015, master=None)
-    item = FakeCollectionItem(release)
-
-    add_discogs_release(item)
+def test_add_discogs_release_without_master_uses_release_year_and_zero_id(app, discogs):
+    add_discogs_release(collection_item(3, 1, year=2015, master_id=0))
 
     dr = db.session.query(DiscogsRelease).filter_by(release_id=3).first()
     assert dr.master_id == 0
     assert dr.master_year == 2015
+    assert "master" not in discogs.names()  # nothing to look up
 
 
-def test_add_discogs_release_updates_existing_release(app):
-    release = FakeRelease(id=4, title="Original Title", year=2000)
-    item = FakeCollectionItem(release, instance_id=100)
-    add_discogs_release(item)
+def test_add_discogs_release_updates_existing_release(app, discogs):
+    add_discogs_release(collection_item(4, 100, title="Original Title", year=2000))
 
-    updated_release = FakeRelease(id=4, title="Updated Title", year=2001)
-    updated_item = FakeCollectionItem(updated_release, instance_id=100)
-    add_discogs_release(updated_item)
+    add_discogs_release(collection_item(4, 100, title="Updated Title", year=2001))
 
     assert db.session.query(DiscogsRelease).filter_by(release_id=4).count() == 1
     dr = db.session.query(DiscogsRelease).filter_by(release_id=4).first()
@@ -162,22 +111,18 @@ def test_add_discogs_release_updates_existing_release(app):
     assert dr.year == 2001
 
 
-def test_add_discogs_release_appends_new_instance_to_existing_release(app):
-    release = FakeRelease(id=5, title="Multi Copy", year=2010)
-    item1 = FakeCollectionItem(release, instance_id=1)
-    add_discogs_release(item1)
+def test_add_discogs_release_appends_new_instance_to_existing_release(app, discogs):
+    add_discogs_release(collection_item(5, 1, title="Multi Copy"))
 
-    item2 = FakeCollectionItem(release, instance_id=2)
-    add_discogs_release(item2)
+    add_discogs_release(collection_item(5, 2, title="Multi Copy"))
 
     dr = db.session.query(DiscogsRelease).filter_by(release_id=5).first()
     instance_ids = sorted(i.instance_id for i in dr.discogs_instances)
     assert instance_ids == [1, 2]
 
 
-def test_add_discogs_release_does_not_duplicate_existing_instance(app):
-    release = FakeRelease(id=6, title="Single Copy", year=2010)
-    item = FakeCollectionItem(release, instance_id=1)
+def test_add_discogs_release_does_not_duplicate_existing_instance(app, discogs):
+    item = collection_item(6, 1, title="Single Copy")
     add_discogs_release(item)
     add_discogs_release(item)
 
@@ -185,14 +130,14 @@ def test_add_discogs_release_does_not_duplicate_existing_instance(app):
     assert [i.instance_id for i in dr.discogs_instances] == [1]
 
 
-def test_add_discogs_release_serializes_formats_and_notes_as_json(app):
-    release = FakeRelease(
-        id=7,
+def test_add_discogs_release_serializes_formats_and_notes_as_json(app, discogs):
+    item = collection_item(
+        7,
+        1,
         title="With Notes",
-        year=2022,
         formats=[{"name": "Vinyl", "qty": "2"}],
+        notes=[{"field_id": 1, "value": "Mint (M)"}],
     )
-    item = FakeCollectionItem(release, notes=[{"field_id": 1, "value": "Mint (M)"}])
 
     add_discogs_release(item)
 
@@ -201,16 +146,26 @@ def test_add_discogs_release_serializes_formats_and_notes_as_json(app):
     assert json.loads(dr.notes) == [{"field_id": 1, "value": "Mint (M)"}]
 
 
-def test_add_discogs_release_stores_labels_and_country(app):
-    release = FakeRelease(
-        id=8,
-        title="Carnaval",
-        year=1980,
-        labels=[FakeLabel("MCA Records", "MCA-5149")],
-        country="US",
+def test_add_discogs_release_stores_labels_country_and_release_date(app, discogs):
+    discogs.releases[8] = {"id": 8, "country": "UK", "released": "1980-05-02"}
+
+    add_discogs_release(
+        collection_item(
+            8,
+            1,
+            labels=[{"name": "MCA Records", "catno": "MCA-5149"}],
+            title="Carnaval",
+        )
     )
-    add_discogs_release(FakeCollectionItem(release))
 
     dr = db.session.query(DiscogsRelease).filter_by(release_id=8).first()
     assert json.loads(dr.labels) == [{"name": "MCA Records", "catno": "MCA-5149"}]
-    assert dr.country == "US"
+    assert dr.country == "UK"
+    assert dr.released == "1980-05-02"
+
+
+def test_the_date_added_is_the_date_discogs_gave(app, discogs):
+    add_discogs_release(collection_item(9, 1, date_added="2024-03-05T10:00:00-08:00"))
+
+    dr = db.session.query(DiscogsRelease).filter_by(release_id=9).first()
+    assert str(dr.date_added)[:10] == "2024-03-05"

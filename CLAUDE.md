@@ -27,8 +27,9 @@ file is what they don't say.
 - `fbc/models/`: one module per area (inventory, discogs, ebay, sales,
   supplies). `fbc/views/` matches it.
 - `fbc/listing.py` (eBay drafts and listings), `fbc/shipping.py` (Ship This),
-  `fbc/discogs.py`, `fbc/sync.py` (syncs run in a thread, their state in
-  files, since gunicorn workers don't share memory), `fbc/devmode.py`.
+  `fbc/discogs.py` (every call to Discogs, and the only module that imports its
+  library), `fbc/sync.py` (syncs run in a thread, their state in files, since
+  gunicorn workers don't share memory), `fbc/devmode.py`.
 - `migrations/`: Alembic, through Flask-Migrate. `flask setup-db` builds a new
   database from the models and stamps it, or migrates an existing one.
 - `scripts/`: one-off and admin scripts. `scripts/deprecated_*` is history;
@@ -48,6 +49,9 @@ file is what they don't say.
   Discogs keys and refuses every request to their hosts. Anything new that
   reaches eBay or Discogs has to go through the guarded functions in
   `fbc/devmode.py`'s docstring, or check `devmode` itself.
+- Tests of anything that uses Discogs fake `fbc.discogs` (`tests/fake_discogs.py`),
+  not the library; only `tests/test_discogs_seam.py` fakes the library. New
+  Discogs calls go in `fbc/discogs.py` (see `docs/development.md`).
 - Custom form fields and list widgets live in `fbc/widgets.py`. Menu entries
   for a filtered list ("Units w/out Listings") are links built in
   `fbc/__init__.py` from filter dicts the views export, not cloned views.

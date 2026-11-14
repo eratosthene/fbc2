@@ -4,6 +4,7 @@ import logging
 from types import SimpleNamespace
 
 import pytest
+from fake_discogs import FakeAccount, FakeDiscogs
 
 from fbc import sync, syncjobs
 from fbc.discogs import DiscogsAuthError
@@ -30,10 +31,8 @@ def dev_mode(app, monkeypatch):
 
 
 def _empty_discogs(monkeypatch):
-    me = SimpleNamespace(collection_folders=[SimpleNamespace(id=0, releases=[])])
-    monkeypatch.setattr(
-        syncjobs.discogs, "client", lambda: SimpleNamespace(identity=lambda: me)
-    )
+    account = FakeAccount(folders=[{"id": 0, "name": "All"}])
+    FakeDiscogs(account=account).install(monkeypatch)
 
 
 def test_discogs_prints_its_log_and_records_that_it_finished(run, monkeypatch):
@@ -51,7 +50,7 @@ def test_a_failed_sync_exits_non_zero_and_records_nothing(run, monkeypatch):
     def no_discogs():
         raise DiscogsAuthError("Connect fbc to Discogs first.")
 
-    monkeypatch.setattr(syncjobs.discogs, "client", no_discogs)
+    monkeypatch.setattr(syncjobs.discogs, "account", no_discogs)
 
     result = run("discogs")
 

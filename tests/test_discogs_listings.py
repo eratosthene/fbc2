@@ -4,12 +4,11 @@ import datetime
 import importlib.util
 import logging
 from pathlib import Path
-from types import SimpleNamespace
-
 import pytest
 import sqlalchemy as sa
+from fake_discogs import FakeAccount, FakeDiscogs, failing
 
-from fbc import db, sync, syncjobs
+from fbc import db, discogs, sync, syncjobs
 from fbc.models.discogs import DiscogsListing
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.util import save_discogs_listing
@@ -56,48 +55,22 @@ def _item(listing_id=1, **changes):
     return item
 
 
-class FakeInventory:
-    """What `me.inventory` is: filter(), per_page, len(), pages and page(n)."""
-
-    def __init__(self, items, per_page=2, lie_about_total=None):
-        self.items = items
-        self.per_page = per_page
-        self.filters = {}
-        self.total = len(items) if lie_about_total is None else lie_about_total
-
-    def filter(self, **kwargs):
-        self.filters = kwargs
-        return self
-
-    def __len__(self):
-        return self.total
-
-    @property
-    def pages(self):
-        return -(-len(self.items) // self.per_page)
-
-    def page(self, n):
-        chunk = self.items[(n - 1) * self.per_page : n * self.per_page]
-        return [SimpleNamespace(data=item) for item in chunk]
-
-
 @pytest.fixture
 def inventory(monkeypatch):
-    """Set what Discogs's inventory holds; returns the FakeInventory."""
+    """Set what Discogs's inventory holds; returns the FakeAccount."""
 
-    def hold(items, **kwargs):
-        fake = FakeInventory(items, **kwargs)
-        me = SimpleNamespace(inventory=fake)
-        monkeypatch.setattr(
-            syncjobs.discogs, "client", lambda: SimpleNamespace(identity=lambda: me)
+    def hold(items, fail=None):
+        return (
+            FakeDiscogs(account=FakeAccount(inventory=items, fail=fail))
+            .install(monkeypatch)
+            .account
         )
-        return fake
 
     return hold
 
 
 def test_a_listing_is_read_with_every_field(app, inventory):
-    fake = inventory([_item(7, external_id="fbc-3", location="Box 4")])
+    account = inventory([_item(7, external_id="fbc-3", location="Box 4")])
 
     syncjobs.sync_discogs_listings()
 
@@ -110,9 +83,7 @@ def test_a_listing_is_read_with_every_field(app, inventory):
     assert (row.external_id, row.location) == ("fbc-3", "Box 4")
     assert row.ended is False and row.last_seen is not None
     assert row.is_for_sale()
-    # Discogs shows only For Sale items unless asked for All.
-    assert fake.filters == {"status": "All"}
-    assert fake.per_page == 100
+    assert account.names() == ["inventory"]
 
 
 def test_a_listing_links_to_its_unit_by_external_id(app, inventory):
@@ -229,9 +200,12 @@ def test_a_short_read_marks_nothing_ended_and_records_nothing(app, inventory):
     inventory([_item(1), _item(2)])
     syncjobs.sync_discogs_listings()
     sync.record_finished(syncjobs.DISCOGS_LISTINGS_SYNC, datetime.datetime(2020, 1, 1))
-    inventory([_item(1)], lie_about_total=2)
+    inventory(
+        [_item(1)],
+        fail=failing("inventory", discogs.IncompleteRead("2 items but 1 came back")),
+    )
 
-    with pytest.raises(syncjobs.DiscogsInventoryError):
+    with pytest.raises(discogs.IncompleteRead):
         syncjobs.sync_discogs_listings()
 
     assert not db.session.get(DiscogsListing, 2).ended
@@ -283,7 +257,7 @@ def test_in_dev_mode_it_says_syncing_is_off_and_reaches_nothing(
     def never():
         raise AssertionError("reached Discogs")
 
-    monkeypatch.setattr(syncjobs.discogs, "client", never)
+    monkeypatch.setattr(syncjobs.discogs, "account", never)
 
     result = app.test_cli_runner().invoke(args=["sync", "discogs-listings"])
 
@@ -293,11 +267,11 @@ def test_in_dev_mode_it_says_syncing_is_off_and_reaches_nothing(
 
 
 def test_the_sync_only_reads_from_discogs(app, inventory):
-    # The fake has no way to write: add_listing, save() and delete() don't
-    # exist on it, so any attempt would fail the sync.
-    inventory([_item(1)])
+    account = inventory([_item(1)])
 
     syncjobs.sync_discogs_listings()
+
+    assert account.names() == ["inventory"]
 
     assert db.session.get(DiscogsListing, 1) is not None
 

@@ -4,36 +4,14 @@ from types import SimpleNamespace
 
 import pytest
 import requests
+from fake_discogs import FakeDiscogs, api_error, failing
 
 import fbc
 from fbc import discogs, listing, pricing
 
 
 def price(value, currency="USD"):
-    return SimpleNamespace(value=value, currency=currency)
-
-
-def fake_release(
-    suggestions=None,
-    lowest=price(25.0),
-    num=4,
-    have=900,
-    want=300,
-    genres=("Jazz",),
-    styles=("Fusion", "Latin Jazz"),
-    master=None,
-):
-    stats = SimpleNamespace(lowest_price=lowest, num_for_sale=num)
-    return SimpleNamespace(
-        price_suggestions=suggestions,
-        genres=list(genres),
-        styles=list(styles),
-        master=master,
-        marketplace_stats=stats,
-        community=SimpleNamespace(
-            have=have, want=want, rating=SimpleNamespace(average=4.5, count=10)
-        ),
-    )
+    return {"value": value, "currency": currency}
 
 
 @pytest.fixture(autouse=True)
@@ -50,22 +28,49 @@ def dev_mode(monkeypatch):
 
 @pytest.fixture
 def discogs_calls(monkeypatch):
-    calls = []
+    """Make Discogs answer for release 123 (and master 5, if given one)."""
 
-    def make_client(release):
-        def client():
-            calls.append("client")
-            return SimpleNamespace(release=lambda rid: release)
+    def make(
+        suggestions=None,
+        lowest=price(25.0),
+        num=4,
+        have=900,
+        want=300,
+        genres=("Jazz",),
+        styles=("Fusion", "Latin Jazz"),
+        master=None,
+        fail=None,
+    ):
+        release = {
+            "id": 123,
+            "genres": list(genres),
+            "styles": list(styles),
+            "community": {
+                "have": have,
+                "want": want,
+                "rating": {"average": 4.5, "count": 10},
+            },
+        }
+        if master is not None:
+            release["master_id"] = 5
 
-        monkeypatch.setattr(discogs, "client", client)
-        return calls
+        class AnyRelease(dict):
+            def __missing__(self, key):
+                return release
 
-    return make_client
+        return FakeDiscogs(
+            releases=AnyRelease(),
+            masters={5: master},
+            suggestions=suggestions,
+            stats={"lowest_price": lowest, "num_for_sale": num},
+            fail=fail,
+        ).install(monkeypatch)
+
+    return make
 
 
 def test_discogs_gives_suggestions_stats_and_community(discogs_calls):
-    release = fake_release(suggestions=SimpleNamespace(mint=price(40), good=price(10)))
-    discogs_calls(release)
+    discogs_calls(suggestions={"Mint (M)": price(40), "Good (G)": price(10)})
 
     r = pricing.discogs_research(123)
 
@@ -79,8 +84,7 @@ def test_discogs_gives_suggestions_stats_and_community(discogs_calls):
 
 
 def test_discogs_gives_the_masters_genres_and_styles(discogs_calls):
-    master = SimpleNamespace(genres=["Jazz", "Latin"], styles=["Bossa Nova"])
-    discogs_calls(fake_release(master=master))
+    discogs_calls(master={"genres": ["Jazz", "Latin"], "styles": ["Bossa Nova"]})
 
     r = pricing.discogs_research(123)
 
@@ -89,21 +93,16 @@ def test_discogs_gives_the_masters_genres_and_styles(discogs_calls):
 
 
 def test_discogs_without_a_master_has_no_master_genres(discogs_calls):
-    discogs_calls(fake_release())
+    fake = discogs_calls()
 
     r = pricing.discogs_research(123)
 
     assert r["master_genres"] == [] and r["master_styles"] == []
+    assert "master" not in fake.names()
 
 
 def test_discogs_master_failing_keeps_the_release_answer(discogs_calls):
-    from discogs_client.exceptions import HTTPError
-
-    class Refusing:
-        def __getattr__(self, name):
-            raise HTTPError("Not found", 404)
-
-    discogs_calls(fake_release(master=Refusing()))
+    discogs_calls(master={}, fail=failing("master", api_error(404, "Not found")))
 
     r = pricing.discogs_research(123)
 
@@ -111,7 +110,7 @@ def test_discogs_master_failing_keeps_the_release_answer(discogs_calls):
 
 
 def test_discogs_release_without_genres_or_styles(discogs_calls):
-    discogs_calls(fake_release(genres=(), styles=()))
+    discogs_calls(genres=(), styles=())
 
     r = pricing.discogs_research(123)
 
@@ -119,13 +118,12 @@ def test_discogs_release_without_genres_or_styles(discogs_calls):
 
 
 def test_discogs_without_seller_settings_still_gives_the_rest(discogs_calls):
-    from discogs_client.exceptions import HTTPError
-
-    class Refusing:
-        def __getattr__(self, name):
-            raise HTTPError("You must fill out your seller settings first.", 403)
-
-    discogs_calls(fake_release(suggestions=Refusing()))
+    discogs_calls(
+        fail=failing(
+            "price_suggestions",
+            api_error(403, "You must fill out your seller settings first."),
+        )
+    )
 
     r = pricing.discogs_research(123)
 
@@ -135,19 +133,19 @@ def test_discogs_without_seller_settings_still_gives_the_rest(discogs_calls):
 
 
 def test_discogs_answers_are_cached(discogs_calls):
-    calls = discogs_calls(fake_release(suggestions=SimpleNamespace(mint=price(40))))
+    fake = discogs_calls(suggestions={"Mint (M)": price(40)})
 
     pricing.discogs_research(123)
     pricing.discogs_research(123)
 
-    assert calls == ["client"]
+    assert fake.names().count("release") == 1
 
 
 def test_discogs_errors_are_shown_not_raised_or_cached(monkeypatch):
-    def refuse():
+    def refuse(release_id):
         raise discogs.DiscogsAuthError("Connect fbc to Discogs first.")
 
-    monkeypatch.setattr(discogs, "client", refuse)
+    monkeypatch.setattr(discogs, "release", refuse)
 
     assert pricing.discogs_research(123) == {
         "ok": False,
@@ -156,11 +154,19 @@ def test_discogs_errors_are_shown_not_raised_or_cached(monkeypatch):
     assert not pricing._cache
 
 
+def test_discogs_refusing_the_release_is_shown(discogs_calls):
+    discogs_calls(fail=failing("release", api_error(404, "Release not found.")))
+
+    r = pricing.discogs_research(123)
+
+    assert r == {"ok": False, "error": "Discogs said no: Release not found."}
+
+
 def test_discogs_network_failure_is_shown(monkeypatch):
-    def boom():
+    def boom(release_id):
         raise requests.ConnectionError("down")
 
-    monkeypatch.setattr(discogs, "client", boom)
+    monkeypatch.setattr(discogs, "release", boom)
 
     r = pricing.discogs_research(123)
 
@@ -258,7 +264,7 @@ def test_dev_mode_reaches_nothing(dev_mode, monkeypatch):
     def reached(*args, **kwargs):
         raise AssertionError("reached out in dev mode")
 
-    monkeypatch.setattr(discogs, "client", reached)
+    monkeypatch.setattr(discogs, "release", reached)
     monkeypatch.setattr(listing, "oauth_token", reached)
     monkeypatch.setattr(requests, "get", reached)
 
@@ -302,7 +308,7 @@ def test_pricing_view_says_not_available_in_dev_mode(client, dev_mode):
 
 
 def test_pricing_view_labels_and_offers_prices(client, discogs_calls, ebay):
-    discogs_calls(fake_release(suggestions=SimpleNamespace(near_mint=price(35))))
+    discogs_calls(suggestions={"Near Mint (NM or M-)": price(35)})
 
     html = client.get("/unitmodelview/pricing?release=1&name=Carnaval").get_data(
         as_text=True
@@ -320,7 +326,7 @@ def test_pricing_view_survives_both_sites_failing(client, monkeypatch):
     def down(*args, **kwargs):
         raise requests.ConnectionError("down")
 
-    monkeypatch.setattr(discogs, "client", down)
+    monkeypatch.setattr(discogs, "release", down)
     monkeypatch.setattr(listing, "oauth_token", lambda scope=None: "tok")
     monkeypatch.setattr(requests, "get", down)
 

@@ -3,10 +3,11 @@ import re
 from types import SimpleNamespace
 
 import pytest
-from discogs_client.exceptions import HTTPError
+from fake_discogs import FakeAccount, FakeDiscogs, api_error, collection_item, failing
 
 import fbc
 from fbc import db
+from fbc import discogs as discogs_calls
 from fbc import listing
 from fbc import shipping
 from fbc.discogs import DiscogsAuthError
@@ -96,43 +97,23 @@ def finances(monkeypatch):
     return state
 
 
-class FakeDiscogs:
-    """A Discogs collection holding `instances` of each release id."""
+class Collection(FakeAccount):
+    """A Discogs collection; `deleted` is each (folder, release, instance) deleted."""
 
-    def __init__(self, instances, error=None):
-        self.instances = instances
-        self.error = error
-        self.deleted = []
-
-    def identity(self):
-        return self
-
-    def fetch(self, key):
-        assert key == "resource_url"
-        return "https://api.discogs.com/users/me"
-
-    def collection_items(self, release_id):
-        if self.error:
-            raise self.error
-        if release_id not in self.instances:
-            raise HTTPError("The requested resource was not found.", 404)
-        return self.instances[release_id]
-
-    def _delete(self, url):
-        self.deleted.append(url)
+    @property
+    def deleted(self):
+        return self.calls_to("delete_collection_instance")
 
 
 @pytest.fixture
 def discogs(monkeypatch):
-    fake = FakeDiscogs(
-        {
-            1: [
-                SimpleNamespace(id=1, instance_id=1001, folder_id=1),
-                SimpleNamespace(id=1, instance_id=1002, folder_id=7),
-            ]
-        }
+    fake = Collection(
+        items=[
+            collection_item(1, 1001, folder_id=1),
+            collection_item(1, 1002, folder_id=7),
+        ]
     )
-    monkeypatch.setattr(shipping, "_discogs", lambda: fake)
+    FakeDiscogs(account=fake).install(monkeypatch)
     return fake
 
 
@@ -281,9 +262,7 @@ def test_remove_from_discogs_deletes_only_the_units_instance(app, discogs):
     message, category = shipping.remove_from_discogs(unit)
 
     assert category == "success"
-    assert discogs.deleted == [
-        "https://api.discogs.com/users/me/collection/folders/7/releases/1/instances/1002"
-    ]
+    assert discogs.deleted == [(7, 1, 1002)]
     db.session.expire_all()
     release = db.session.get(DiscogsRelease, 1)
     assert [i.instance_id for i in release.discogs_instances] == [1001]
@@ -294,7 +273,7 @@ def test_remove_from_discogs_deletes_only_the_units_instance(app, discogs):
 
 def test_remove_from_discogs_cleans_up_an_instance_already_gone(app, discogs):
     order, unit = _order()
-    discogs.instances = {}
+    discogs.items = []
 
     message, category = shipping.remove_from_discogs(unit)
 
@@ -306,7 +285,7 @@ def test_remove_from_discogs_cleans_up_an_instance_already_gone(app, discogs):
 
 def test_remove_from_discogs_keeps_fbc_as_is_when_discogs_fails(app, discogs):
     order, unit = _order()
-    discogs.error = HTTPError("Server error", 500)
+    discogs.fail = failing("collection_items", api_error(500, "Server error"))
 
     message, category = shipping.remove_from_discogs(unit)
 
@@ -315,13 +294,18 @@ def test_remove_from_discogs_keeps_fbc_as_is_when_discogs_fails(app, discogs):
     assert db.session.get(DiscogsInstance, 1002) is not None
 
 
-def _not_connected():
-    raise DiscogsAuthError("Connect fbc to Discogs first (Discogs > Connect Discogs).")
+def _not_connected(monkeypatch):
+    def account():
+        raise DiscogsAuthError(
+            "Connect fbc to Discogs first (Discogs > Connect Discogs)."
+        )
+
+    monkeypatch.setattr(discogs_calls, "account", account)
 
 
 def test_remove_from_discogs_says_so_when_discogs_isnt_connected(app, monkeypatch):
     order, unit = _order()
-    monkeypatch.setattr(shipping, "_discogs", _not_connected)
+    _not_connected(monkeypatch)
 
     message, category = shipping.remove_from_discogs(unit)
 
@@ -408,7 +392,7 @@ def test_shipping_without_discogs_connected_still_records_the_receipt(
     client, monkeypatch
 ):
     order, unit = _order()
-    monkeypatch.setattr(shipping, "_discogs", _not_connected)
+    _not_connected(monkeypatch)
 
     page = client.post(
         "/ebayordermodelview/ship/" + order.order_id,
