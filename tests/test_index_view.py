@@ -1,5 +1,6 @@
 import datetime
 
+from auth import signed_in_client
 import pytest
 
 from fbc import db
@@ -49,12 +50,18 @@ def _unit(lot, box=None, sold=False, sales_receipt=None, name="Unit"):
     return unit
 
 
+def _index_page(view):
+    """What the home page view renders, without its sign-in check (the view is
+    called directly here, with no one signed in)."""
+    return view.index.__wrapped__(view)
+
+
 def test_index_renders_successfully_with_data(app):
     lot = _lot()
     _unit(lot, sold=False, name="Unsold")
     _unit(lot, sold=True, name="Sold", sales_receipt=_receipt(50.0, 45.0))
 
-    with app.test_client() as client:
+    with signed_in_client(app) as client:
         response = client.get("/")
         assert response.status_code == 200
 
@@ -74,7 +81,7 @@ def test_index_counts_stock_and_unit_totals(app):
     with app.test_request_context("/"):
         view = CapturingIndexView()
         view.appbuilder = app.extensions["appbuilder"]
-        view.index()
+        _index_page(view)
 
     assert captured["stock_total"] == 1
     assert captured["unit_total"] == 2
@@ -101,7 +108,7 @@ def test_index_aggregates_totals_across_lots_and_boxes(app):
     with app.test_request_context("/"):
         view = CapturingIndexView()
         view.appbuilder = app.extensions["appbuilder"]
-        view.index()
+        _index_page(view)
 
     assert captured["stock_total"] == 1
     assert captured["unit_total"] == 2
@@ -150,7 +157,7 @@ def test_index_handles_units_without_storage_box(app):
     with app.test_request_context("/"):
         view = CapturingIndexView()
         view.appbuilder = app.extensions["appbuilder"]
-        view.index()
+        _index_page(view)
 
     assert captured["box_totals"][0]["name"] == "No Box Assigned"
     assert captured["box_totals"][0]["gross"] == 30.0
@@ -175,7 +182,7 @@ def test_index_handles_units_without_purchase_lot(app):
     with app.test_request_context("/"):
         view = CapturingIndexView()
         view.appbuilder = app.extensions["appbuilder"]
-        view.index()
+        _index_page(view)
 
     # Only the unit in Lot C adds capital; the lot-less units add none.
     assert captured["box_totals"][box.id]["capital"] == 40.0
@@ -186,7 +193,7 @@ def test_index_handles_units_without_purchase_lot(app):
     assert captured["lot_totals"][lot.id]["gross"] == 0
     assert captured["unit_total"] == 3
 
-    with app.test_client() as client:
+    with signed_in_client(app) as client:
         assert client.get("/").status_code == 200
 
 
@@ -209,7 +216,7 @@ def test_index_splits_a_multi_unit_receipt_across_its_units(app):
     with app.test_request_context("/"):
         view = CapturingIndexView()
         view.appbuilder = app.extensions["appbuilder"]
-        view.index()
+        _index_page(view)
 
     assert captured["lot_totals"][lot_a.id]["gross"] == 60.0
     assert captured["lot_totals"][lot_b.id]["gross"] == 30.0
@@ -234,7 +241,7 @@ def test_index_query_count_does_not_grow_with_inventory(app):
                 view = MyIndexView()
                 view.appbuilder = app.extensions["appbuilder"]
                 view.render_template = lambda template, **kwargs: "ok"
-                view.index()
+                _index_page(view)
         finally:
             event.remove(db.engine, "before_cursor_execute", count)
         return len(statements)
@@ -256,7 +263,7 @@ def test_index_query_count_does_not_grow_with_inventory(app):
 
 
 def test_index_renders_with_empty_inventory(app):
-    with app.test_client() as client:
+    with signed_in_client(app) as client:
         response = client.get("/")
         assert response.status_code == 200
 
@@ -265,7 +272,7 @@ def test_index_renders_with_no_sales(app):
     lot = _lot()
     _unit(lot, sold=False, name="Unsold")
 
-    with app.test_client() as client:
+    with signed_in_client(app) as client:
         response = client.get("/")
         assert response.status_code == 200
 
@@ -280,7 +287,7 @@ def test_ebay_sync_without_connect_ebay_says_what_to_do(
 
     monkeypatch.setitem(app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "")
     monkeypatch.setattr(listing, "_oauth", {})
-    client = app.test_client()
+    client = signed_in_client(app)
 
     response = client.get(path, headers={"Accept": "application/json"})
 
@@ -300,7 +307,7 @@ def test_index_asks_to_reorder_supplies_running_low(app):
     )
     db.session.commit()
 
-    with app.test_client() as client:
+    with signed_in_client(app) as client:
         html = client.get("/").get_data(as_text=True)
 
     assert "Time to reorder" in html
@@ -313,7 +320,7 @@ def test_index_has_no_reorder_banner_when_supplies_are_stocked(app):
     db.session.add(Supply(name="LP Mailers", quantity=30, min_quantity=5))
     db.session.commit()
 
-    with app.test_client() as client:
+    with signed_in_client(app) as client:
         html = client.get("/").get_data(as_text=True)
 
     assert "Time to reorder" not in html
@@ -338,7 +345,7 @@ def test_index_takes_expenses_off_the_net_profit_by_category(app):
     with app.test_request_context("/"):
         view = CapturingIndexView()
         view.appbuilder = app.extensions["appbuilder"]
-        view.index()
+        _index_page(view)
 
     assert captured["expenses"] == [
         ("Advertising (line 8)", 10.0),
@@ -348,7 +355,7 @@ def test_index_takes_expenses_off_the_net_profit_by_category(app):
     # 180.0 net sold - 100.0 lot - 16.5 expenses
     assert captured["total_net_profit"] == 63.5
 
-    with app.test_client() as client:
+    with signed_in_client(app) as client:
         html = client.get("/").get_data(as_text=True)
     assert "Other expenses: <strong>$16.50</strong>" in html
     assert "Advertising (line 8)" in html
@@ -377,7 +384,7 @@ def test_index_counts_expenses_on_a_purchase_order_as_expenses_not_supplies(app)
     with app.test_request_context("/"):
         view = CapturingIndexView()
         view.appbuilder = app.extensions["appbuilder"]
-        view.index()
+        _index_page(view)
 
     assert captured["supply_total"] == 60.0
     assert captured["expense_total"] == 40.0
@@ -391,7 +398,7 @@ def test_index_shows_units_sold_and_stock_beside_each_lot_and_box(app):
     _unit(lot, box=box, sold=False, name="Unsold")
     _unit(lot, box=box, sold=True, sales_receipt=_receipt(50.0, 45.0), name="Sold")
 
-    with app.test_client() as client:
+    with signed_in_client(app) as client:
         page = client.get("/").get_data(as_text=True)
 
     assert "<th>Units Sold</th>" in page
@@ -408,7 +415,7 @@ def test_index_groups_its_alerts_above_the_listings(app):
     db.session.commit()
     _unit(lot)
 
-    with app.test_client() as client:
+    with signed_in_client(app) as client:
         page = client.get("/").get_data(as_text=True)
 
     assert page.index("Time to reorder") < page.index("<h2>Listings</h2>")

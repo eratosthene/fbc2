@@ -181,6 +181,18 @@ Drafts to List (eBay) and Drafts to List (Discogs) are filter links on the eBay 
 what each one means. A new kind of task is a new function there, a view or
 filter link, and a count for the banner.
 
+## Signing in
+
+Every page needs signing in, the home page and the Sync buttons' routes
+included (`MyIndexView` in `fbc/index.py`, whose routes use `has_access`;
+Flask-AppBuilder's own home page is public). Signed out, they redirect to the
+login page and start nothing. Each route is a permission on `MyIndexView`
+(`can_index`, `can_syncdiscogs`, `can_syncdiscogslistings`,
+`can_syncebaylistings`, `can_syncebayorders`, `can_syncebayordersdeep`,
+`can_syncjob`, `can_calibrateinsertions`). Admin gets them on the next start;
+give them to any other role that needs the home page or the buttons. In tests,
+`tests/auth.py`'s `signed_in_client()` is an Admin's client.
+
 ## Calling Discogs
 
 `fbc/discogs_client.py` is the only module that imports `python3-discogs-client`, and

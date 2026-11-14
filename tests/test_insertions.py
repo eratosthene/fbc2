@@ -1,6 +1,7 @@
 import datetime
 import json
 
+from auth import signed_in_client
 import pytest
 
 import fbc
@@ -273,7 +274,7 @@ def test_the_sync_marks_ended_and_records_when_it_finished(
     gone = _listing("1")
     monkeypatch.setattr("fbc.syncjobs.fetch_active_items", lambda: [_active_item("2")])
 
-    job = _sync(app.test_client())
+    job = _sync(signed_in_client(app))
 
     assert job["status"] == "done"
     db.session.expire_all()
@@ -292,7 +293,7 @@ def test_a_failed_sync_marks_nothing_and_records_nothing(app, inline_sync, monke
 
     monkeypatch.setattr("fbc.syncjobs.fetch_active_items", fail)
 
-    job = _sync(app.test_client())
+    job = _sync(signed_in_client(app))
 
     assert job["status"] == "failed"
     db.session.expire_all()
@@ -308,7 +309,7 @@ def test_the_second_sync_ends_a_listing_from_the_first_syncs_time(
     row = _listing("1")
     monkeypatch.setattr("fbc.syncjobs.fetch_active_items", lambda: [])
 
-    _sync(app.test_client())
+    _sync(signed_in_client(app))
 
     db.session.expire_all()
     assert row.end_time == first
@@ -318,7 +319,7 @@ def test_the_second_sync_ends_a_listing_from_the_first_syncs_time(
 
 
 def test_the_home_page_asks_for_a_sync_before_the_first_one(app):
-    html = app.test_client().get("/").get_data(as_text=True)
+    html = signed_in_client(app).get("/").get_data(as_text=True)
     assert "Run" in html and "the eBay listings sync" in html
     assert "Free insertions this month" not in html
 
@@ -328,7 +329,7 @@ def test_the_home_page_shows_listings_and_insertions(app):
     _listing("1", start=sync.utcnow())
     _listing("2", start=sync.utcnow(), ended=True, end_time=sync.utcnow())
 
-    html = app.test_client().get("/").get_data(as_text=True)
+    html = signed_in_client(app).get("/").get_data(as_text=True)
 
     assert "<strong>1</strong> active on eBay" in html
     assert "<strong>2</strong> free insertions used this month" in html
@@ -341,7 +342,7 @@ def test_the_home_page_says_when_the_listings_last_synced(app):
     # uses: 2026-11-13 01:45 UTC is 2026-11-12 7:45 PM in CST.
     sync.record_finished(sync.LISTINGS_SYNC, D(2026, 11, 13, 1, 45))
 
-    html = " ".join(app.test_client().get("/").get_data(as_text=True).split())
+    html = " ".join(signed_in_client(app).get("/").get_data(as_text=True).split())
 
     assert "Last synced 2026-11-12 7:45 PM." in html
 
@@ -354,7 +355,7 @@ def test_the_home_page_never_shows_fewer_than_none_left(app, monkeypatch):
     _listing("1", start=sync.utcnow())
     _listing("2", start=sync.utcnow())
 
-    html = app.test_client().get("/").get_data(as_text=True)
+    html = signed_in_client(app).get("/").get_data(as_text=True)
 
     assert "<strong>0</strong> of 1 left" in html
 
@@ -366,7 +367,7 @@ def test_the_home_page_warns_when_close_to_the_limit(app, monkeypatch):
     sync.record_finished(sync.LISTINGS_SYNC, sync.utcnow())
     _listing("1", start=sync.utcnow())
 
-    html = app.test_client().get("/").get_data(as_text=True)
+    html = signed_in_client(app).get("/").get_data(as_text=True)
 
     assert "alert-warning" in html and "Only 1" in html
 
@@ -518,7 +519,7 @@ def test_calibration_does_not_carry_into_the_next_month(app):
 
 def test_calibrate_route_saves_the_number_and_the_home_page_uses_it(app):
     _synced_month(3)
-    client = app.test_client()
+    client = signed_in_client(app)
 
     response = client.post("/calibrateinsertions", data={"remaining": "181"})
     html = client.get("/").get_data(as_text=True)
@@ -531,7 +532,7 @@ def test_calibrate_route_saves_the_number_and_the_home_page_uses_it(app):
 @pytest.mark.parametrize("value", ["", "abc", "-1", "251"])
 def test_calibrate_route_rejects_a_bad_number(app, value):
     _synced_month(3)
-    client = app.test_client()
+    client = signed_in_client(app)
 
     client.post("/calibrateinsertions", data={"remaining": value})
 
@@ -596,7 +597,7 @@ def test_the_sync_saves_when_each_listing_renews(app, inline_sync, monkeypatch):
     item = dict(_active_item("2"), TimeLeft="P10D")
     monkeypatch.setattr("fbc.syncjobs.fetch_active_items", lambda: [item])
 
-    _sync(app.test_client())
+    _sync(signed_in_client(app))
 
     db.session.expire_all()
     renews = db.session.get(EbayListing, "2").renews_at
