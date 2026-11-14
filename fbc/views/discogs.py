@@ -1,4 +1,5 @@
 import logging
+from fbc import localtime
 from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.sqla.filters import (
@@ -143,6 +144,7 @@ class DiscogsListingModelView(CustomModelView):
     datamodel = SQLAInterface(DiscogsListing)
     base_permissions = ["can_list", "can_show"]
     base_order = ("posted", "desc")
+    formatters_columns = localtime.formatters("posted", "last_seen")
     list_widget = DiscogsListingListWidget
     list_columns = [
         "listing_id",

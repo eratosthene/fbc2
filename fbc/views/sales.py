@@ -4,7 +4,7 @@ from flask_appbuilder.actions import action
 from markupsafe import Markup
 from wtforms.validators import Optional
 
-from fbc import mystery
+from fbc import localtime, mystery
 from fbc.archive import ArchivableViewMixin
 from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
@@ -26,7 +26,7 @@ from fbc.shipping import (
     supply_counts,
 )
 from fbc.widgets import (
-    DateTimeLocalField,
+    LocalDateTimeField,
     EbayListingListWidget,
     EbayOrderListWidget,
 )
@@ -206,6 +206,7 @@ class EbayListingModelView(ArchivableViewMixin, CustomModelView):
     datamodel = SQLAInterface(EbayListing)
     base_order = ("start_time", "desc")
     list_widget = EbayListingListWidget
+    formatters_columns = localtime.formatters("start_time")
     list_columns = ["item_id", "title", "start_time", "ended", "fmt_price", "fmt_url"]
     search_columns = ["item_id", "price", "title", "ended", "archived"]
     label_columns = {
@@ -250,7 +251,7 @@ class EbayListingModelView(ArchivableViewMixin, CustomModelView):
         "pick_count",
     ]
     add_form_extra_fields = {
-        "start_time": DateTimeLocalField("Start Time", validators=[Optional()])
+        "start_time": LocalDateTimeField("Start Time", validators=[Optional()])
     }
     edit_form_extra_fields = add_form_extra_fields
 
@@ -271,6 +272,7 @@ class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
     datamodel = SQLAInterface(EbayOrder)
     base_order = ("created_time", "desc")
     list_widget = EbayOrderListWidget
+    formatters_columns = localtime.formatters("created_time")
     list_columns = [
         "created_time",
         "fmt_url",
@@ -315,7 +317,7 @@ class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
     ]
     edit_columns = ["created_time", "buyer", "price", "title", "ebay_listing"]
     add_form_extra_fields = {
-        "created_time": DateTimeLocalField("Created Time", validators=[Optional()])
+        "created_time": LocalDateTimeField("Created Time", validators=[Optional()])
     }
     edit_form_extra_fields = add_form_extra_fields
 

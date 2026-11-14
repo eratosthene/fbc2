@@ -29,6 +29,21 @@ insertions close to or over the limit), then three sections:
 
 Every page has the shop's name in small type at the bottom.
 
+### Dates and times
+
+Times show in your timezone (the `TIMEZONE` setting, Central by default), as
+`2026-11-13 5:45 PM`; a date taken from a time is `2026-11-13`. That covers
+the eBay Listings and Orders lists, Discogs Listings, Supply Use, the Ship This
+page, the Connect eBay and Connect Discogs pages, the home page's last sync
+and the log lines. The Start Time and Created Time on the eBay Listing and
+eBay Order forms are in your timezone too. Dates you type, such as a Sales
+Receipt's, an Expense's or a Purchase Lot's, show as typed. Searching a time
+column still compares against UTC, which is how the times are stored.
+
+A Sales Receipt made by Ship This takes its date from the order's UTC date, so
+an order placed at 8 PM Central on the 13th gets the 14th. It is left that way
+because the monthly reports count by that date.
+
 ### Tasks
 
 The shop keeps the Discogs and eBay syncs up to date by itself, every few
@@ -269,7 +284,7 @@ Run it again.
 The home page shows one line: the active listings as of that sync, and this
 month's free insertions used so far, how many of the limit are left, the
 renewals still due before the month ends, the projected total, and when the
-sync last finished (Pacific time, like the month's count). The limit is 250
+sync last finished (in your timezone, not Pacific like the month's count). The limit is 250
 unless `EBAY_SETTINGS['LISTING']['FREE_INSERTIONS']` in `config.py` says
 otherwise; a Store subscription raises it. The page warns when the projected total
 is within 10 of the limit. Nothing shows until the first listings sync, as

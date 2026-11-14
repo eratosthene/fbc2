@@ -17,6 +17,10 @@ credentials. Copy `config.py.tpl` to start one, and fill in:
   and the listing defaults. The comments there say where each one comes from.
   Once the app is running, Sales > Connect eBay and Discogs > Connect Discogs
   sign in to each site, and keep the tokens in the database.
+- `TIMEZONE`: the timezone to show times in, as an IANA name such as
+  `America/Chicago` (the default). Use the name, not "CST": it follows daylight
+  saving. fbc stores UTC and only converts what it shows. The image carries
+  the timezone database (`tzdata`), so no other setup is needed.
 - `MILEAGE_RATE`: the IRS standard mileage rate for the year, for expenses
   entered as miles. Without it, each one needs its rate typed in.
 

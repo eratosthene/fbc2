@@ -48,7 +48,7 @@ def _fails(*args, **kwargs):
 
 
 def _saved_tokens():
-    now = datetime.datetime(2026, 10, 1)
+    now = datetime.datetime(2026, 10, 1, 12)  # noon UTC: the same day in Central
     db.session.add(EbayOAuthToken(refresh_token="live-refresh", created=now))
     db.session.add(
         DiscogsOAuthToken(token="live", secret="secret", username="me", created=now)

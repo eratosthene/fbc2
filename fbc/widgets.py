@@ -1,4 +1,5 @@
 from flask_appbuilder.widgets import ListWidget
+from fbc import localtime
 from markupsafe import Markup
 from wtforms.fields import DateTimeLocalField as WTFDateTimeLocalField
 from wtforms.fields import Field
@@ -31,6 +32,21 @@ class DateTimeLocalField(WTFDateTimeLocalField):
         if valuelist and not valuelist[0].strip():
             valuelist = []
         super().process_formdata(valuelist)
+
+
+class LocalDateTimeField(DateTimeLocalField):
+    """
+    A DateTimeLocalField for a naive UTC column: it shows and takes the owner's
+    local time (see fbc/localtime.py), and saves UTC. `data` stays the local
+    time, so a form shown again after an error keeps what was typed.
+    """
+
+    def process_data(self, value):
+        super().process_data(None if value is None else localtime.local_naive(value))
+
+    def populate_obj(self, obj, name):
+        value = self.data
+        setattr(obj, name, None if value is None else localtime.to_utc(value))
 
 
 class TallTextAreaWidget(TextArea):

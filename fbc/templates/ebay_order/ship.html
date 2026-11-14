@@ -10,7 +10,7 @@ come from eBay and only take the label off once it's bought.</p>
   {% for o in orders %}
   <tr>
     <td>{{ o.fmt_url() }}</td>
-    <td>{{ o.created_time.date() }}</td>
+    <td>{{ o.created_time | localtime }}</td>
     <td>{% for item in o.items %}{% if not loop.first %}<br>{% endif %}{{ item.title }}{% if item.quantity > 1 %} &times;{{ item.quantity }}{% endif %}{% else %}{{ o.title }}{% endfor %}</td>
     <td class="text-right">{{ o.fmt_price() }}</td>
     <td class="text-right">{% if o.shipping is not none %}{{ money(o.shipping) }}{% endif %}</td>
@@ -29,7 +29,7 @@ come from eBay and only take the label off once it's bought.</p>
   <div class="checkbox">
     <label>
       <input type="checkbox" name="combine" value="{{ o.order_id }}" {% if o in orders %}checked{% endif %}>
-      {{ o.order_id }}, {{ o.created_time.date() }}: {{ o.title }} {{ o.fmt_price() }}
+      {{ o.order_id }}, {{ o.created_time | localtime }}: {{ o.title }} {{ o.fmt_price() }}
     </label>
   </div>
   {% endfor %}

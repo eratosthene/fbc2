@@ -225,13 +225,11 @@ def listing_summary(now=None):
     )
     summary["active"] = db.session.query(EbayListing).filter_by(ended=False).count()
     summary["synced"] = synced
-    summary["synced_pacific"] = to_pacific(synced) if synced else None
     summary["calibration"] = None
     if calibration:
         summary["calibration"] = {
             "adjustment": calibration.adjustment,
             "remaining": calibration.remaining,
-            "entered_pacific": to_pacific(calibration.entered),
         }
     return summary
 
