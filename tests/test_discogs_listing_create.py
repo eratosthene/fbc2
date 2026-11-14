@@ -41,7 +41,7 @@ def _unit(**kwargs):
     unit = _carnaval(
         storage_box=StorageBox(name="Box 4"),
         discogs_instance=DiscogsInstance(instance_id=99),
-        notes="Light ring wear",
+        description="Light ring wear",
         **kwargs,
     )
     return unit
@@ -109,6 +109,19 @@ def test_form_starts_filled_in_from_the_unit(app):
         "external_id": f"fbc-{unit.id}",
         "location": "Box 4",
     }
+
+
+def test_comments_come_from_the_description_not_the_notes(app):
+    unit = _unit(notes="Bought at the Smith estate sale")
+
+    assert discogs_listing.defaults(unit)["comments"] == "Light ring wear"
+
+
+def test_a_unit_without_a_description_starts_with_no_comments(app):
+    unit = _unit(notes="Private note")
+    unit.description = None
+
+    assert discogs_listing.defaults(unit)["comments"] == ""
 
 
 def test_allow_offers_follows_the_setting(app, monkeypatch):
