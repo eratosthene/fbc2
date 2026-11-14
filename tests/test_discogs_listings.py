@@ -304,6 +304,72 @@ def test_the_migration_builds_the_table_the_model_describes(db):
     assert indexed == {(c.name,) for c in table.columns if c.index}
 
 
+@pytest.fixture
+def admin_client(app):
+    import fbc
+
+    sm = fbc.appbuilder.sm
+    sm.create_db()
+    fbc.appbuilder.add_permissions(update_perms=True)
+    sm.add_user("admin", "A", "Dmin", "admin@example.com", sm.find_role("Admin"), "pw")
+    client = fbc.app.test_client()
+    client.post("/login/", data={"username": "admin", "password": "pw"})
+    return client
+
+
+def _saved(listing_id, **changes):
+    row = save_discogs_listing(
+        _item(listing_id, **changes), datetime.datetime(2026, 11, 1)
+    )
+    db.session.commit()
+    return row
+
+
+def test_an_ended_listing_can_be_deleted_from_fbc(admin_client):
+    _saved(5, status="Deleted")
+    _saved(6)
+    assert db.session.get(DiscogsListing, 5).ended
+
+    response = admin_client.post("/discogslistingmodelview/delete/5")
+
+    assert response.status_code == 302
+    assert db.session.get(DiscogsListing, 5) is None
+    assert db.session.get(DiscogsListing, 6) is not None  # only that row
+
+
+def test_a_listing_that_is_still_live_cant_be_deleted(admin_client):
+    _saved(5, status="For Sale")
+    _saved(6, status="Draft")
+
+    for pk in (5, 6):
+        response = admin_client.post(
+            f"/discogslistingmodelview/delete/{pk}", follow_redirects=True
+        )
+        assert "Only an ended listing can be deleted here" in response.get_data(
+            as_text=True
+        )
+        assert db.session.get(DiscogsListing, pk) is not None
+
+
+def test_deleting_a_row_in_fbc_leaves_discogs_alone(admin_client, monkeypatch):
+    _saved(5, status="Sold")
+    fake = FakeDiscogs().install(monkeypatch)
+
+    admin_client.post("/discogslistingmodelview/delete/5")
+
+    assert fake.names() == [] and fake.account.calls == []
+
+
+def test_only_ended_rows_get_a_delete_button_in_the_list(admin_client):
+    _saved(5, status="Deleted")
+    _saved(6, status="For Sale")
+
+    html = admin_client.get("/discogslistingmodelview/list/").get_data(as_text=True)
+
+    assert "/discogslistingmodelview/delete/5" in html
+    assert "/discogslistingmodelview/delete/6" not in html
+
+
 def test_the_list_and_show_pages_work_and_are_read_only(app):
     import fbc
 
