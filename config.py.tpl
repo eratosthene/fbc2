@@ -240,5 +240,8 @@ DISCOGS_SETTINGS = {
     # A personal access token, used only until Connect Discogs is done.
     'USER_TOKEN': '',
     'USER_AGENT': 'discogs_exporter/1.0',
+    # Whether List on Discogs starts with Allow offers ticked (it can be
+    # changed on each listing). On if left out, as eBay's BEST_OFFER is.
+    'ALLOW_OFFERS': True,
 }
 

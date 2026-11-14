@@ -240,10 +240,43 @@ as a `DiscogsListing` (`util.save_discogs_listing`), links it to its Unit by
 `external_id` if the Unit exists, and then marks every listing not in that read
 as ended (`util.mark_ended_discogs_listings`). A listing whose status is Sold,
 Deleted, Violation or Suspended is ended too (`util.DISCOGS_ENDED_STATUSES`):
-Discogs lets only For Sale, Draft and Expired listings be edited. It only reads; there is no
-write to Discogs in it, and it goes through `discogs.client()`, so dev mode
-stops it. The `sync_record` name is `discogs-listings`. There's no Task for it:
-a Task needs a way to list a Unit on Discogs first.
+Discogs lets only For Sale, Draft and Expired listings be edited. It only reads, and it goes through `discogs.client()`, so dev mode
+stops it. The `sync_record` name is `discogs-listings`. There's no Task for it
+yet.
+
+**Listing a Unit.** `fbc/discogs_listing.py` holds the only writes to Discogs's
+Marketplace, and `DiscogsListingModelView` (`from_unit`, `make_for_sale`) has
+the pages. `discogs_client` 2.10 has no call to create a listing, so
+`create_listing` uses `client._post(<base>/marketplace/listings, ...)` as
+`identify.collect` does for the collection. The POST fields are `release_id`,
+`condition`, `sleeve_condition`, `price`, `comments`, `allow_offers`, `status`,
+`external_id`, `location` and `weight` (grams), and it answers `listing_id`.
+Like the rest of the notes above, this comes from the spec, and wasn't run
+against Discogs, so check it on the first real Draft. Notes:
+
+- A Draft first, then `make_for_sale`, which reads the listing, checks it's
+  still a Draft and POSTs `release_id`, `condition`, `price` and
+  `status: For Sale` to `/marketplace/listings/{id}` (the edit call wants the
+  first three again).
+- Every write goes through `discogs.client()`, which raises in dev mode, and
+  the views check `devmode.on()` first as well.
+- After a create, the row is saved from what was posted
+  (`util.save_discogs_listing`, the same function the sync uses), so a later
+  sync updates it by `listing_id`. `external_id` is `listing.sku(unit.id)` and
+  is read back with `listing.unit_id_from_sku`, as for eBay.
+- A 4xx from Discogs (not 429) is a refusal: nothing is saved. A timeout, a
+  dropped connection, a 5xx or an answer with no `listing_id` raises
+  `PostUncertain`. The create always reads the newest `RECENT_ITEMS` items of
+  the inventory first (`find_existing`), so a retry adopts a listing a
+  timed-out post made. An older listing is found through the database
+  (`open_listing`) instead.
+- A Unit needs a collection instance (`discogs_instance_id`) to be listed.
+- `Unit.grading` maps to Discogs's condition names in
+  `CONDITION_FOR_GRADE`; EX isn't mapped, because Discogs has no EX.
+- `DISCOGS_SETTINGS["ALLOW_OFFERS"]` (default on) sets the form's start.
+- The two new permissions (`can_from_unit`, `can_make_for_sale`) go to Admin
+  on the next start; give them to any other role that needs them.
+- The Discogs account's currency is assumed to be USD.
 
 ## Shipment tracking
 

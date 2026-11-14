@@ -282,6 +282,7 @@ class Unit(Model):
                 + url_for("EbayDraftModelView.from_unit", pk=self.id)
                 + '">List&nbsp;on&nbsp;eBay</a><br/>'
             )
+        ret = ret + self._discogs_listing_link()
         if self.sales_receipt:
             ret = (
                 ret
@@ -294,6 +295,32 @@ class Unit(Model):
             if self.sales_receipt.ebay_orders:
                 ret = ret + self.sales_receipt.fmt_ebay_order(False)
         return Markup(ret)
+
+    def _discogs_listing_link(self):
+        """
+        A link to the Unit's open Discogs listing, or to List on Discogs
+        when it can be listed (see fbc/discogs_listing.py problem_with).
+        """
+        from fbc import discogs_listing
+
+        if not self.id or self.sold:
+            return ""
+        listing = discogs_listing.open_listing(self)
+        if listing:
+            return (
+                '<a href="'
+                + url_for("DiscogsListingModelView.show", pk=listing.listing_id)
+                + '">Discogs:'
+                + str(listing.status).replace(" ", "&nbsp;")
+                + "</a><br/>"
+            )
+        if self.discogs_instance_id and self.discogs_release_id:
+            return (
+                '<a href="'
+                + url_for("DiscogsListingModelView.from_unit", pk=self.id)
+                + '">List&nbsp;on&nbsp;Discogs</a><br/>'
+            )
+        return ""
 
     def discogs_genre_column(self):
         ret = ""

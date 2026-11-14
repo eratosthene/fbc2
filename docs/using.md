@@ -254,6 +254,7 @@ it every 30 minutes.
 
 The sync only reads from Discogs. It never lists, changes or deletes
 anything there, so a listing is changed on Discogs and the next sync shows it.
+(Listing a Unit, below, is the only thing fbc writes to Discogs.)
 It reads every status, not just For Sale, so Drafts and Expired items show
 too. A listing made by hand on the Discogs site shows up as well.
 
@@ -273,7 +274,59 @@ too. A listing made by hand on the Discogs site shows up as well.
   (Add Photos on the listing). See "The Discogs Marketplace" in
   `docs/development.md`.
 
-Nothing here lists a Unit on Discogs yet.
+### List on Discogs
+
+A Unit that is in your Discogs collection and not sold has a **List on
+Discogs** link in its Links column (Units list and Unit page), next to List on
+eBay. Nothing is posted until you press the button, and posting makes a
+**Draft**, which buyers can't see. In order:
+
+1. Press List on Discogs. A form opens, filled in from the Unit. Check it:
+   - **Media and Sleeve Condition** come from the Unit's grading, which is
+     "media/sleeve", like `NM/VG+`. M is Mint (M); NM, M- and NM or M- are
+     Near Mint (NM or M-); VG+, VG, G+, G, F and P are the same words in full
+     (Very Good Plus (VG+) and so on). A grading Discogs has no word for, such
+     as EX, or a Unit with no sleeve grade, leaves that box on "(choose)".
+   - **Price** is the Unit's retail price.
+   - **Comments** are the Unit's Notes, shown to buyers.
+   - **Allow offers** starts ticked. Set `'ALLOW_OFFERS': False` in
+     `DISCOGS_SETTINGS` in `config.py` to start it unticked.
+   - **Weight (grams)** is eBay Drafts' package weight (by record size and
+     number of discs), which is in ounces, times 28.35. Discogs works out
+     shipping from it.
+   - **External ID** is `fbc-<Unit ID>` and **Location** is the Unit's Storage
+     Box. fbc sets External ID so the sync can find the Unit.
+2. Press **Post to Discogs as a Draft**. fbc saves the listing at once, so it
+   shows in Discogs Listings without a sync, and opens it.
+3. On the listing page, press **Open on Discogs** and **add pictures there**.
+   Discogs's API can't take pictures, so this has to be done by hand.
+4. Back on the listing page, press **Make it For Sale (goes live)**. That is
+   the only step that makes it live, and fbc never does it for you. Only a
+   Draft that is still a Draft on Discogs is changed.
+
+If a Unit has an eBay listing that is active, or an eBay Draft that hasn't
+been published, the form and listing page say so with a link. You can go on,
+but nothing stops the Unit selling on both, so end one by hand when it sells.
+
+fbc won't list a Unit that:
+
+- already has a Draft or For Sale listing on Discogs (it opens that listing
+  instead);
+- is sold; or
+- isn't in your Discogs collection. A Unit made with "Just add the Unit" has no
+  collection copy, so it has nothing to list. The collection stays a record
+  of what you have. Add it to the collection on Discogs first and run Sync
+  Discogs, or use "Add to Discogs" in Identify Record.
+
+If Discogs refuses the Draft, its message is shown and nothing is saved in
+fbc. If Discogs doesn't answer, the Draft may or may not have been made. Press
+the button again: fbc first reads the newest 100 items in your Discogs
+inventory for one with this Unit's External ID, and saves that one instead of
+posting a second. A later sync of the same listing updates fbc's row rather
+than adding another.
+
+In Dev Mode the button shows "Dev Mode is turned on, listing on Discogs
+disabled." and nothing is posted.
 
 ### Active listings and free insertions
 
