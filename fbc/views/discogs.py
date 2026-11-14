@@ -1,5 +1,6 @@
 import logging
 from fbc import localtime
+from fbc.syncnote import DISCOGS, DISCOGS_LISTINGS, SyncedViewMixin
 from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.sqla.filters import (
@@ -49,7 +50,8 @@ def get_unit_releases():
 
 # See UnitModelBaseView for why the Releases views share a base class rather
 # than subclassing DiscogsReleaseModelView.
-class DiscogsReleaseModelBaseView(CustomModelView):
+class DiscogsReleaseModelBaseView(SyncedViewMixin, CustomModelView):
+    synced_by = [DISCOGS]
     datamodel = SQLAInterface(DiscogsRelease)
     base_order = ("date_added", "desc")
     list_widget = DiscogsReleaseListWidget
@@ -103,7 +105,8 @@ class DiscogsReleaseModelNoUnitView(DiscogsReleaseModelBaseView):
     base_filters = [["release_id", FilterNotInFunction, get_unit_releases]]
 
 
-class ArtistModelView(CustomModelView):
+class ArtistModelView(SyncedViewMixin, CustomModelView):
+    synced_by = [DISCOGS]
     datamodel = SQLAInterface(Artist)
     related_views = [DiscogsReleaseModelView]
     list_columns = [
@@ -115,19 +118,22 @@ class ArtistModelView(CustomModelView):
     related_views = [DiscogsReleaseModelView]
 
 
-class GenreModelView(CustomModelView):
+class GenreModelView(SyncedViewMixin, CustomModelView):
+    synced_by = [DISCOGS]
     datamodel = SQLAInterface(Genre)
     base_order = ("name", "desc")
     related_views = [DiscogsReleaseModelView]
 
 
-class StyleModelView(CustomModelView):
+class StyleModelView(SyncedViewMixin, CustomModelView):
+    synced_by = [DISCOGS]
     datamodel = SQLAInterface(Style)
     base_order = ("name", "desc")
     related_views = [DiscogsReleaseModelView]
 
 
-class FolderModelView(CustomModelView):
+class FolderModelView(SyncedViewMixin, CustomModelView):
+    synced_by = [DISCOGS]
     datamodel = SQLAInterface(Folder)
     list_columns = ["name", "folder_id"]
     base_order = ("name", "desc")
@@ -135,13 +141,14 @@ class FolderModelView(CustomModelView):
     related_views = [DiscogsReleaseModelView]
 
 
-class DiscogsListingModelView(CustomModelView):
+class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
     """
     The Discogs Marketplace inventory as the last sync read it. Read only:
     listings are changed on Discogs and the sync picks the change up.
     """
 
     datamodel = SQLAInterface(DiscogsListing)
+    synced_by = [DISCOGS_LISTINGS]
     base_permissions = ["can_list", "can_show"]
     base_order = ("posted", "desc")
     formatters_columns = localtime.formatters("posted", "last_seen")
