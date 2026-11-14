@@ -1,7 +1,7 @@
 import logging
 
 from flask import flash, jsonify, redirect, request, url_for
-from flask_appbuilder import IndexView
+from flask_appbuilder import IndexView, has_access
 from flask_appbuilder.views import expose
 
 from fbc import insertions, sync, syncjobs, tasks
@@ -177,9 +177,16 @@ def home_totals():
 
 
 class MyIndexView(IndexView):
+    """
+    The home page and the Sync buttons' routes. Every route needs signing in
+    (has_access), because they show the shop's totals and start syncs; Flask-
+    AppBuilder's own home page is public.
+    """
+
     index_template = "index.html"
 
     @expose("/")
+    @has_access
     def index(self):
         self.update_redirect()
         return self.render_template(
@@ -187,6 +194,7 @@ class MyIndexView(IndexView):
         )
 
     @expose("/calibrateinsertions", methods=["POST"])
+    @has_access
     def calibrateinsertions(self):
         """Save the free listings left that the eBay app shows."""
         limit = insertions.free_insertions_limit()
@@ -233,6 +241,7 @@ class MyIndexView(IndexView):
         )
 
     @expose("/syncjob/<job_id>")
+    @has_access
     def syncjob(self, job_id):
         job = sync.read(job_id, request.args.get("offset", 0, type=int))
         if job is None:
@@ -240,24 +249,28 @@ class MyIndexView(IndexView):
         return jsonify(job)
 
     @expose("/syncdiscogs")
+    @has_access
     def syncdiscogs(self):
         return self._start_sync(
             syncjobs.discogs_job(), "/discogsreleasemodelview/list/"
         )
 
     @expose("/syncdiscogslistings")
+    @has_access
     def syncdiscogslistings(self):
         return self._start_sync(
             syncjobs.discogs_listings_job(), "/discogslistingmodelview/list/"
         )
 
     @expose("/syncebaylistings")
+    @has_access
     def syncebaylistings(self):
         return self._start_sync(
             syncjobs.ebay_listings_job(), "/ebaylistingmodelview/list/"
         )
 
     @expose("/syncebayorders")
+    @has_access
     def syncebayorders(self):
         update = request.args.get("doupdate") == "True"
         return self._start_sync(
@@ -265,6 +278,7 @@ class MyIndexView(IndexView):
         )
 
     @expose("/syncebayordersdeep")
+    @has_access
     def syncebayordersdeep(self):
         return self._start_sync(
             syncjobs.ebay_orders_job(deep=True), "/ebayordermodelview/list/"

@@ -3,6 +3,7 @@ import io
 import json
 import logging
 
+from auth import signed_in_client
 import pytest
 import requests
 from flask import Flask
@@ -259,7 +260,7 @@ def test_syncs_do_nothing_and_succeed_in_dev_mode(
 
     caplog.set_level(logging.INFO)
     monkeypatch.setattr(syncjobs, sync, _fails)
-    client = app.test_client()
+    client = signed_in_client(app)
 
     response = client.get(path, headers={"Accept": "application/json"})
 

@@ -4,6 +4,7 @@ import os
 import threading
 import time
 
+from auth import signed_in_client
 import pytest
 
 from fbc import sync
@@ -182,7 +183,7 @@ def test_sync_link_from_the_page_script_gets_the_job_as_json(
         raise DiscogsAuthError("Connect fbc to Discogs first.")
 
     monkeypatch.setattr(syncjobs.discogs_client, "client", no_discogs)
-    client = app.test_client()
+    client = signed_in_client(app)
 
     response = client.get(
         "/syncdiscogs",
@@ -205,7 +206,7 @@ def test_sync_link_opened_as_a_page_shows_the_job(app, monkeypatch, inline_sync)
     from fbc import syncjobs
 
     monkeypatch.setattr(syncjobs, "sync_discogs", lambda: None)
-    client = app.test_client()
+    client = signed_in_client(app)
 
     response = client.get("/syncdiscogs", headers={"Accept": "text/html"})
 
@@ -221,7 +222,7 @@ def test_sync_link_opened_as_a_page_shows_the_job(app, monkeypatch, inline_sync)
 
 
 def test_unknown_job_is_a_404(app):
-    response = app.test_client().get("/syncjob/" + "0" * 32)
+    response = signed_in_client(app).get("/syncjob/" + "0" * 32)
 
     assert response.status_code == 404
 
