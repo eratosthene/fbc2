@@ -40,6 +40,10 @@ eBay Order forms are in your timezone too. Dates you type, such as a Sales
 Receipt's, an Expense's or a Purchase Lot's, show as typed. Searching a time
 column still compares against UTC, which is how the times are stored.
 
+Every list of synced data (Releases, Folders, eBay Listings, eBay Orders, the
+Tasks lists and the like) has a small line above it saying when each sync
+behind it last finished, or "Never synced". Click the name to run that sync.
+
 A Sales Receipt made by Ship This takes its date from the order's UTC date, so
 an order placed at 8 PM Central on the 13th gets the 14th. It is left that way
 because the monthly reports count by that date.

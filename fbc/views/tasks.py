@@ -10,6 +10,7 @@ from flask_appbuilder.models.filters import BaseFilter
 from flask_appbuilder.models.sqla.filters import get_field_setup_query
 
 from fbc import tasks
+from fbc.syncnote import EBAY_LISTINGS, SyncedViewMixin
 from fbc.views.discogs import DiscogsReleaseModelBaseView
 from fbc.views.inventory import UnitModelBaseView
 from fbc.views.sales import EbayOrderModelView
@@ -36,7 +37,10 @@ class ReleasesNeedingUnitsView(DiscogsReleaseModelBaseView):
     base_filters = [["release_id", FilterInSelect, tasks.ids_releases_needing_units]]
 
 
-class UnitsNeedingDraftsView(UnitModelBaseView):
+class UnitsNeedingDraftsView(SyncedViewMixin, UnitModelBaseView):
     """Unsold Units over $2 with no eBay Listing and no eBay Draft."""
+
+    # Whether a Unit has a listing is what the listings sync links up.
+    synced_by = [EBAY_LISTINGS]
 
     base_filters = [["id", FilterInSelect, tasks.ids_units_needing_drafts]]

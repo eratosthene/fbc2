@@ -246,9 +246,12 @@ yet.
 
 **Listing a Unit.** `fbc/discogs_listing.py` holds the only writes to Discogs's
 Marketplace, and `DiscogsListingModelView` (`from_unit`, `make_for_sale`) has
-the pages. `discogs_client` 2.10 has no call to create a listing, so
-`create_listing` uses `client._post(<base>/marketplace/listings, ...)` as
-`identify.collect` does for the collection. The POST fields are `release_id`,
+the pages. `discogs_client` 2.10 does have `identity().inventory.add_listing(...)`, but it
+throws away Discogs's answer, so the new listing's ID is lost. fbc needs the
+ID to save the row, so `create_listing` uses
+`client._post(<base>/marketplace/listings, ...)`, which returns it, as
+`identify.collect` does for the collection. Use `add_listing` if the library
+ever returns the ID. The POST fields are `release_id`,
 `condition`, `sleeve_condition`, `price`, `comments`, `allow_offers`, `status`,
 `external_id`, `location` and `weight` (grams), and it answers `listing_id`.
 Like the rest of the notes above, this comes from the spec, and wasn't run

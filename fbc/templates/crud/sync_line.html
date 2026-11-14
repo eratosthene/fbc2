@@ -1,0 +1,9 @@
+{# When the data on this list was last synced. See fbc/syncnote.py. #}
+{% if sync_lines %}
+    <p class="text-muted small">
+        {% for source, finished in sync_lines %}
+            <a href="{{ source.url }}" class="text-muted">{{ source.label }}</a>{% if finished %} last synced {{ finished | localtime }}.{% else %}: Never synced.{% endif %}
+
+        {% endfor %}
+    </p>
+{% endif %}
