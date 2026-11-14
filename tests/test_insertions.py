@@ -337,12 +337,13 @@ def test_the_home_page_shows_listings_and_insertions(app):
 
 
 def test_the_home_page_says_when_the_listings_last_synced(app):
-    # 2026-11-13 01:45 UTC is 2026-11-12 5:45 PM in Pacific (PST).
+    # Shown in the TIMEZONE setting (Central), not the Pacific time the count
+    # uses: 2026-11-13 01:45 UTC is 2026-11-12 7:45 PM in CST.
     sync.record_finished(sync.LISTINGS_SYNC, D(2026, 11, 13, 1, 45))
 
     html = " ".join(app.test_client().get("/").get_data(as_text=True).split())
 
-    assert "Last synced 2026-11-12 5:45 PM." in html
+    assert "Last synced 2026-11-12 7:45 PM." in html
 
 
 def test_the_home_page_never_shows_fewer_than_none_left(app, monkeypatch):

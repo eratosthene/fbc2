@@ -49,9 +49,7 @@
     <strong>{{ [listings.limit - listings.used, 0] | max }}</strong> of {{ listings.limit }} left,
     {{ listings.due }} more renewal{{ "" if listings.due == 1 else "s" }}
     due before the month ends, {{ listings.projected }} projected.
-    {# The same Pacific clock the month's count uses. #}
-    Last synced {{ listings.synced_pacific.strftime("%Y-%m-%d") }}
-    {{ listings.synced_pacific.strftime("%I:%M %p").lstrip("0") }}.
+    Last synced {{ listings.synced | localtime }}.
   </p>
   {% call lib.accordion_tag("calibrateinsertions","Calibrate with the eBay app", False) %}
   <form method="post" action="{{ url_for('MyIndexView.calibrateinsertions') }}" class="form-inline">

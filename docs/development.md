@@ -271,8 +271,26 @@ finished in the `sync_record` table, by name; the listings sync's is
 assumptions in the docstring (Pacific calendar month, a renewal each month on the start's Pacific day and time, with
 `EbayListing.renews_at` (the listings sync sets it from eBay's `TimeLeft`) winning when it falls in the month, ended
 listings counted up to `end_time`). Change them there and in
-`tests/test_insertions.py`. Pacific time is worked out by hand, because the
-Alpine image has no tzdata for `zoneinfo`.
+`tests/test_insertions.py`. Pacific time is worked out by hand there, on
+purpose: it must not change with the `TIMEZONE` setting.
+
+## Times
+
+fbc stores naive UTC. `fbc/localtime.py` turns that into the `TIMEZONE`
+setting's zone (`America/Chicago` by default) for display, in one format:
+`2026-11-13 5:45 PM`, or `2026-11-13` for a date. Use it for anything new that
+shows a time:
+
+- templates: `{{ value | localtime }}` and `{{ value | localdate }}`;
+- a view's DateTime columns: `formatters_columns = localtime.formatters("col")`;
+- a form field on a UTC column: `fbc.widgets.LocalDateTimeField`, which shows
+  local time and saves UTC;
+- code: `localtime.fmt_datetime` and `localtime.fmt_date`.
+
+Don't use it for a `Date` column the owner types. It also sets the log
+timestamps. The image has `tzdata` (`apk add`, in `docker/Dockerfile`), as
+Alpine has none; tests call `localtime.set_zone("America/Chicago")` so they
+don't depend on the machine's zone.
 
 `insertions.calibrate` stores the eBay app's number as an adjustment in
 `insertion_calibration`, one row per month keyed by the month's start, so a

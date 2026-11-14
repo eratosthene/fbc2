@@ -2,6 +2,7 @@ import json
 import logging
 
 from flask_appbuilder import Model
+from fbc import localtime
 from markupsafe import Markup
 from flask import url_for
 from sqlalchemy import (
@@ -129,7 +130,7 @@ class EbayOrder(Model):
         return self.__repr__()
 
     def __repr__(self):
-        ret = str(self.created_time.date()) + " " + self.order_id
+        ret = localtime.fmt_date(self.created_time) + " " + self.order_id
         if self.title:
             ret = ret + " [" + self.title[:45] + "]"
         return ret + ": " + self.buyer + " $" + f"{self.price:.2f}"

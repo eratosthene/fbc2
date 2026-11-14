@@ -1,4 +1,5 @@
 from flask_appbuilder import Model
+from fbc import localtime
 from flask_appbuilder.models.decorators import renders
 import datetime
 import math
@@ -396,4 +397,4 @@ class SupplyUse(Model):
 
     def __repr__(self):
         name = self.supply.name if self.supply else "?"
-        return str(self.date) + ": " + str(self.count) + " " + name
+        return localtime.fmt_datetime(self.date) + ": " + str(self.count) + " " + name

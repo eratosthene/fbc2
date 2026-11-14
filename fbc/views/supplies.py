@@ -1,3 +1,4 @@
+from fbc import localtime
 from fbc.util import CustomModelView
 from flask import flash, redirect, request, url_for
 from flask_appbuilder import BaseView, expose, has_access
@@ -82,6 +83,7 @@ class SupplyUseModelView(CustomModelView):
     show_title = "Supply Use"
     base_permissions = ["can_list", "can_show"]
     base_order = ("date", "desc")
+    formatters_columns = localtime.formatters("date")
     list_columns = [
         "date",
         "fmt_supply",

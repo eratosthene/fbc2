@@ -12,7 +12,7 @@ Applications on Discogs.</p>
 {% endif %}
 {% if saved %}
 <div class="alert alert-success">
-  Connected{% if saved.username %} as {{ saved.username }}{% endif %} {{ saved.created.strftime("%Y-%m-%d") if saved.created }}.
+  Connected{% if saved.username %} as {{ saved.username }}{% endif %} {{ saved.created | localdate }}.
 </div>
 {% else %}
 <div class="alert alert-info">Not connected yet; fbc is using the personal

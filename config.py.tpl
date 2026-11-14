@@ -51,6 +51,12 @@ CSRF_ENABLED = True
 # Uncomment to setup Your App name
 APP_NAME = "FBC"
 
+# The timezone times are shown in, as an IANA name (not "CST": a name follows
+# daylight saving). fbc stores UTC; this only changes what pages and logs
+# show. Typed dates, such as a Sales Receipt's, are not converted. Defaults to
+# America/Chicago.
+TIMEZONE = "America/Chicago"
+
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"
 

@@ -300,8 +300,10 @@ def test_connect_page_says_when_connected(client, exchanged):
     db.session.add(
         EbayOAuthToken(
             refresh_token="r",
-            created=datetime.datetime(2026, 10, 29),
-            expires=datetime.datetime(2028, 4, 28),
+            created=datetime.datetime(
+                2026, 10, 29, 12
+            ),  # noon UTC, the same day in Central
+            expires=datetime.datetime(2028, 4, 28, 12),
         )
     )
     db.session.commit()

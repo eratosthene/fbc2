@@ -12,7 +12,7 @@ config.py, connect again so syncing and listing keep working.</p>
 {% endif %}
 {% if saved %}
 <div class="alert alert-success">
-  Connected {{ saved.created.strftime("%Y-%m-%d") if saved.created }}{% if saved.expires %}; sign in again before {{ saved.expires.strftime("%Y-%m-%d") }}{% endif %}.
+  Connected {{ saved.created | localdate }}{% if saved.expires %}; sign in again before {{ saved.expires | localdate }}{% endif %}.
 </div>
 {% else %}
 <div class="alert alert-info">Not connected yet.</div>
