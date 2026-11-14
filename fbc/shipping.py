@@ -472,8 +472,8 @@ def remove_from_discogs(unit):
     so other copies of the same release are left alone. In dev mode it's
     only removed from fbc.
     """
-    from fbc import discogs
-    from fbc.discogs import ApiError, DiscogsAuthError
+    from fbc import discogs_client
+    from fbc.discogs_client import ApiError, DiscogsAuthError
     from fbc.util import forget_discogs_instance
 
     instance, problem = discogs_plan(unit)
@@ -494,7 +494,7 @@ def remove_from_discogs(unit):
             "warning",
         )
     try:
-        account = discogs.account()
+        account = discogs_client.account()
         found = [
             i
             for i in account.collection_items(release_id)

@@ -8,7 +8,7 @@ off. In dev mode:
 
 - the eBay and Discogs keys in config.py are treated as empty;
 - the functions every eBay and Discogs call goes through (listing.oauth_token,
-  listing._token_request, discogs.client, discogs._app_client) refuse to run,
+  listing._token_request, discogs_client.client, discogs_client._app_client) refuse to run,
   so the OAuth tokens Connect eBay and Connect Discogs saved in the database
   are never used;
 - as a backstop, any request to an eBay or Discogs host is refused;

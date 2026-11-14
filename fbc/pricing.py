@@ -15,7 +15,7 @@ python3-discogs-client source; nothing here is a sold price from them):
   shut down in February 2025. The Browse API shows active listings, so those
   are asking prices. eBay's own sold-items search is offered as a link.
 
-Everything that reaches Discogs or eBay goes through fbc.discogs and
+Everything that reaches Discogs or eBay goes through fbc.discogs_client and
 listing.oauth_token(), which refuse to run in dev mode; research() also checks
 devmode itself, so the page can say so plainly. Answers are kept for a few
 minutes so reloading the page doesn't repeat the calls.
@@ -96,7 +96,7 @@ def discogs_research(release_id):
     own, for the release and for its master if it has one, to help choose a
     Storage Box.
     """
-    from fbc import discogs
+    from fbc import discogs_client
 
     if devmode.on():
         return _failure("Not available in Dev Mode.")
@@ -105,7 +105,7 @@ def discogs_research(release_id):
 
     def fetch():
         try:
-            release = discogs.release(int(release_id))
+            release = discogs_client.release(int(release_id))
             out = {
                 "ok": True,
                 "suggestions": [],
@@ -121,7 +121,7 @@ def discogs_research(release_id):
                 "master_styles": [],
             }
             try:
-                suggestions = discogs.price_suggestions(int(release_id))
+                suggestions = discogs_client.price_suggestions(int(release_id))
                 for condition in DISCOGS_CONDITIONS:
                     price = _price(suggestions.get(condition))
                     if price:
@@ -130,7 +130,7 @@ def discogs_research(release_id):
                     out["suggestions_note"] = (
                         "Discogs gave no price suggestions for this release."
                     )
-            except discogs.ApiError as e:
+            except discogs_client.ApiError as e:
                 # Needs seller settings on the Discogs account; the rest still works.
                 out["suggestions_note"] = (
                     "Discogs wouldn't give price suggestions (" + str(e) + "). They"
@@ -140,13 +140,13 @@ def discogs_research(release_id):
             out["styles"] = [str(g) for g in release.get("styles") or []]
             try:
                 if release.get("master_id"):
-                    master = discogs.master(release["master_id"])
+                    master = discogs_client.master(release["master_id"])
                     out["master_genres"] = [str(g) for g in master.get("genres") or []]
                     out["master_styles"] = [str(g) for g in master.get("styles") or []]
-            except discogs.ApiError:
+            except discogs_client.ApiError:
                 # The master is extra; the release's own answer still shows.
                 pass
-            stats = discogs.marketplace_stats(int(release_id))
+            stats = discogs_client.marketplace_stats(int(release_id))
             out["lowest"] = _price(stats.get("lowest_price"))
             out["num_for_sale"] = stats.get("num_for_sale")
             community = release.get("community")
@@ -157,9 +157,9 @@ def discogs_research(release_id):
                 if rating and rating.get("count"):
                     out["rating"] = (rating.get("average"), rating["count"])
             return out
-        except discogs.DiscogsAuthError as e:
+        except discogs_client.DiscogsAuthError as e:
             return _failure(str(e))
-        except discogs.ApiError as e:
+        except discogs_client.ApiError as e:
             return _failure("Discogs said no: " + str(e))
         except Exception as e:
             logger.exception("Discogs price research failed")

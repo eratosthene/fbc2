@@ -7,7 +7,7 @@ import requests
 from fake_discogs import FakeDiscogs, api_error, failing
 
 import fbc
-from fbc import db, devmode, discogs, discogs_listing, syncjobs
+from fbc import db, devmode, discogs_client, discogs_listing, syncjobs
 from fbc.models.discogs import DiscogsInstance, DiscogsListing
 from fbc.models.ebay import EbayDraft, EbayListing
 from fbc.models.inventory import StorageBox
@@ -476,8 +476,8 @@ def test_the_write_functions_refuse_in_dev_mode_even_if_called_directly(
     unit = _unit()
     row = DiscogsListing(listing_id=1, status="Draft", unit_id=unit.id)
 
-    with pytest.raises(discogs.DiscogsAuthError):
+    with pytest.raises(discogs_client.DiscogsAuthError):
         discogs_listing.create_listing(unit, {})
-    with pytest.raises(discogs.DiscogsAuthError):
+    with pytest.raises(discogs_client.DiscogsAuthError):
         discogs_listing.make_for_sale(row)
     assert devmode.on()

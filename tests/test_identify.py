@@ -10,7 +10,7 @@ import pytest
 from fake_discogs import FakeAccount, FakeDiscogs, api_error, collection_item
 
 import fbc
-from fbc import discogs, identify
+from fbc import discogs_client, identify
 from fbc.models.discogs import DiscogsRelease
 from fbc.models.inventory import PurchaseLot
 
@@ -58,7 +58,7 @@ def record(rid, country="US", matrices=(), year=1978):
 
 
 def _path(name, args, kwargs):
-    """The request a call to fbc.discogs stands for, to read tests by."""
+    """The request a call to fbc.discogs_client stands for, to read tests by."""
     if name == "search":
         return "/database/search?" + urlencode(kwargs)
     if name == "release":
@@ -273,7 +273,7 @@ def test_a_matrix_match_outweighs_a_matching_country():
 
 def test_dev_mode_never_reaches_discogs(dev_mode, monkeypatch):
     monkeypatch.setattr(
-        discogs, "client", lambda: pytest.fail("reached Discogs in dev mode")
+        discogs_client, "client", lambda: pytest.fail("reached Discogs in dev mode")
     )
     r = identify.search(artist="Band")
     assert not r["ok"] and r["dev_mode"] and "dev mode" in r["error"]
@@ -301,9 +301,9 @@ def test_rate_limit_on_the_search_is_a_message_not_an_error(monkeypatch):
 
 def test_no_discogs_connection_is_a_message(monkeypatch):
     def client():
-        raise discogs.DiscogsAuthError("Connect fbc to Discogs first")
+        raise discogs_client.DiscogsAuthError("Connect fbc to Discogs first")
 
-    monkeypatch.setattr(discogs, "client", client)
+    monkeypatch.setattr(discogs_client, "client", client)
     assert identify.search(artist="x")["error"].startswith("Connect fbc")
 
 
@@ -480,7 +480,9 @@ def test_collect_refuses_a_folder_that_isnt_the_accounts(monkeypatch):
 
 
 def test_collect_never_reaches_discogs_in_dev_mode(dev_mode, monkeypatch):
-    monkeypatch.setattr(discogs, "client", lambda: pytest.fail("reached Discogs"))
+    monkeypatch.setattr(
+        discogs_client, "client", lambda: pytest.fail("reached Discogs")
+    )
     assert identify.collect(9, 1, {})[3]
     assert not identify.collection_form()["ok"]
 
@@ -655,7 +657,9 @@ def test_a_bad_or_missing_release_id_is_a_message(monkeypatch):
 
 
 def test_a_release_id_in_dev_mode_never_reaches_discogs(dev_mode, monkeypatch):
-    monkeypatch.setattr(discogs, "client", lambda: pytest.fail("reached Discogs"))
+    monkeypatch.setattr(
+        discogs_client, "client", lambda: pytest.fail("reached Discogs")
+    )
     assert identify.search(release_id="7")["dev_mode"]
 
 
@@ -803,7 +807,9 @@ def test_finding_a_master_from_artist_and_title(monkeypatch):
 
 
 def test_master_features_never_reach_discogs_in_dev_mode(dev_mode, monkeypatch):
-    monkeypatch.setattr(discogs, "client", lambda: pytest.fail("reached Discogs"))
+    monkeypatch.setattr(
+        discogs_client, "client", lambda: pytest.fail("reached Discogs")
+    )
     assert identify.search(master="1")["dev_mode"]
     assert identify.find_masters("a")["dev_mode"]
 

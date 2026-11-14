@@ -13,7 +13,7 @@ from collections import namedtuple
 
 from ebaysdk.exception import ConnectionError
 
-from fbc import devmode, discogs, sync
+from fbc import devmode, discogs_client, sync
 from fbc.listing import OAuthError, fetch_active_items, trading
 from fbc.util import (
     add_discogs_release,
@@ -81,7 +81,7 @@ def sync_discogs():
 
     started = sync.utcnow()
     logger.info("Updating discogs...")
-    account = discogs.account()
+    account = discogs_client.account()
     for folder in account.collection_folders():
         if folder["id"] > 0:
             res = db.session.query(Folder).filter_by(folder_id=folder["id"]).all()
@@ -130,7 +130,7 @@ def sync_discogs_listings():
     logger.info("Updating Discogs listings...")
     # Read in full or not at all (IncompleteRead fails the sync), so nothing
     # is marked ended on a short read.
-    items = discogs.account().inventory()
+    items = discogs_client.account().inventory()
     logger.info("Total Discogs listings: " + str(len(items)))
     seen = set()
     unlinked = 0

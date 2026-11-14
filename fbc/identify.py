@@ -18,7 +18,7 @@ What Discogs's API gives (checked against its docs and python3-discogs-client
 - A release is added to the collection by POST to
   /users/{name}/collection/folders/{folder}/releases/{id}. Discogs answers
   with the new copy's instance_id (the library's add_release throws it away,
-  so fbc.discogs posts itself). The copy's condition, notes and other custom fields
+  so fbc.discogs_client posts itself). The copy's condition, notes and other custom fields
   are then set one at a time, by POST to .../instances/{instance}/fields/{field}.
   Field ids are the account's own, so they're looked up by name.
 
@@ -27,7 +27,7 @@ through its own "Add to my Discogs collection" button and form; nothing else
 here writes. "Just add the Unit" saves the release in fbc as a Release with no
 collection copy.
 
-Everything that reaches Discogs goes through fbc.discogs, which refuses to
+Everything that reaches Discogs goes through fbc.discogs_client, which refuses to
 run in dev mode; search() also checks devmode itself, so the page can say
 so plainly. Searches and release fetches are kept for a few minutes.
 
@@ -53,7 +53,7 @@ from difflib import SequenceMatcher
 
 from markupsafe import Markup, escape
 
-from fbc import devmode, discogs
+from fbc import devmode, discogs_client
 
 logger = logging.getLogger()
 
@@ -271,7 +271,7 @@ def _call(fn, *args, **kwargs):
     """fn(*args, **kwargs), with Discogs's 429 raised as RateLimited."""
     try:
         return fn(*args, **kwargs)
-    except discogs.ApiError as e:
+    except discogs_client.ApiError as e:
         if e.rate_limited:
             raise RateLimited() from e
         raise
@@ -419,7 +419,7 @@ def search(
         def run(query):
             nonlocal calls
             calls += 1
-            return _call(discogs.search, **query)
+            return _call(discogs_client.search, **query)
 
         try:
             hits = []
@@ -432,13 +432,13 @@ def search(
             if has_fields:
                 seen = {h.get("id") for h in hits}
                 hits += [h for h in run(params) if h.get("id") not in seen]
-        except discogs.DiscogsAuthError as e:
+        except discogs_client.DiscogsAuthError as e:
             return _failure(str(e))
         except RateLimited:
             return _failure(
                 "Discogs says too many requests; wait a minute and try again."
             )
-        except discogs.ApiError as e:
+        except discogs_client.ApiError as e:
             return _failure("Discogs said no: " + str(e))
         except Exception as e:
             logger.exception("Discogs search failed")
@@ -504,12 +504,12 @@ def find_masters(artist="", title=""):
 
     def fetch():
         try:
-            hits = _call(discogs.search, **params)
-        except discogs.DiscogsAuthError as e:
+            hits = _call(discogs_client.search, **params)
+        except discogs_client.DiscogsAuthError as e:
             return _failure(str(e))
         except RateLimited:
             return _failure("Discogs says too many requests; try in a minute.")
-        except discogs.ApiError as e:
+        except discogs_client.ApiError as e:
             return _failure("Discogs said no: " + str(e))
         except Exception as e:
             logger.exception("Discogs master search failed")
@@ -550,7 +550,7 @@ def _master_versions(master_id, country, type_word, reissue, need):
     while page < pages and page < MAX_VERSION_PAGES and len(hits) < need:
         page += 1
         calls += 1
-        body = _call(discogs.master_versions, master_id, page, **params)
+        body = _call(discogs_client.master_versions, master_id, page, **params)
         pages = ((body or {}).get("pagination") or {}).get("pages") or 1
         for v in (body or {}).get("versions") or []:
             formats = list(v.get("major_formats") or []) + [
@@ -596,11 +596,11 @@ def _master_search(master, country, matrix, color, type_word, reissue, offset):
             hits, calls, truncated = _master_versions(
                 master_id, country, type_word, reissue, offset + reach + 1
             )
-        except discogs.DiscogsAuthError as e:
+        except discogs_client.DiscogsAuthError as e:
             return _failure(str(e))
         except RateLimited:
             return _failure("Discogs says too many requests; try in a minute.")
-        except discogs.ApiError as e:
+        except discogs_client.ApiError as e:
             if e.status_code == 404:
                 return _failure("Discogs has no master %d." % master_id)
             return _failure("Discogs said no: " + str(e))
@@ -670,11 +670,11 @@ def _one_release(text, country, matrix, color):
         )
     try:
         record = _release_record(rid)
-    except discogs.DiscogsAuthError as e:
+    except discogs_client.DiscogsAuthError as e:
         return _failure(str(e))
     except RateLimited:
         return _failure("Discogs says too many requests; wait a minute and try again.")
-    except discogs.ApiError as e:
+    except discogs_client.ApiError as e:
         if e.status_code == 404:
             return _failure("Discogs has no release " + str(rid) + ".")
         return _failure("Discogs said no: " + str(e))
@@ -694,7 +694,7 @@ def _release_record(release_id):
     """One release's full record, kept for a few minutes."""
     return _cached(
         ("release", int(release_id)),
-        lambda: _call(discogs.release, release_id),
+        lambda: _call(discogs_client.release, release_id),
     )
 
 
@@ -718,11 +718,11 @@ def save_release(release_id):
         return existing, None
     try:
         record = _release_record(release_id)
-    except discogs.DiscogsAuthError as e:
+    except discogs_client.DiscogsAuthError as e:
         return None, str(e)
     except RateLimited:
         return None, "Discogs says too many requests; wait a minute and try again."
-    except discogs.ApiError as e:
+    except discogs_client.ApiError as e:
         return None, "Discogs said no: " + str(e)
     except Exception as e:
         logger.exception("Couldn't fetch release %s", release_id)
@@ -738,7 +738,7 @@ def _master_year(record):
     try:
         master = _cached(
             ("master", int(master_id)),
-            lambda: _call(discogs.master, master_id),
+            lambda: _call(discogs_client.master, master_id),
         )
         return master.get("year") or None
     except Exception as e:
@@ -905,12 +905,12 @@ def collection_form():
 
     def fetch():
         try:
-            account = discogs.account()
+            account = discogs_client.account()
             folders = account.collection_folders()
             fields = account.collection_fields()
-        except discogs.DiscogsAuthError as e:
+        except discogs_client.DiscogsAuthError as e:
             return _failure(str(e))
-        except discogs.ApiError as e:
+        except discogs_client.ApiError as e:
             return _failure("Discogs said no: " + str(e))
         except Exception as e:
             logger.exception("Couldn't read the collection's folders and fields")
@@ -963,11 +963,11 @@ def collect(release_id, folder_id, values):
         return None, None, [], "That isn't one of your Discogs folders."
     release_id = int(release_id)
     try:
-        account = discogs.account()
+        account = discogs_client.account()
         instance_id = account.add_to_collection(folder_id, release_id)
-    except discogs.DiscogsAuthError as e:
+    except discogs_client.DiscogsAuthError as e:
         return None, None, [], str(e)
-    except discogs.ApiError as e:
+    except discogs_client.ApiError as e:
         if e.rate_limited:
             return None, None, [], "Discogs says too many requests; try in a minute."
         return None, None, [], "Discogs said no: " + str(e)

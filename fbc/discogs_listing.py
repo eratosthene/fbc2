@@ -7,14 +7,14 @@ Discogs's seller inventory. Two writes, each started by its own button:
   Discogs's site.
 - make_for_sale changes a Draft to For Sale, which makes it live.
 
-Both go through fbc.discogs, so dev mode refuses them (the views also check
+Both go through fbc.discogs_client, so dev mode refuses them (the views also check
 devmode.on() first, so nothing is tried).
 """
 
 import datetime
 import logging
 
-from fbc import devmode, discogs
+from fbc import devmode, discogs_client
 from fbc.listing import (
     build_item_specifics,
     default_weight,
@@ -302,12 +302,12 @@ def create_listing(unit, payload):
     """
     from fbc import db
 
-    devmode.check(discogs.DiscogsAuthError, "Discogs")
+    devmode.check(discogs_client.DiscogsAuthError, "Discogs")
     if unit.sold or not unit.discogs_release_id:
         raise ListingError(problem_with(unit))
     payload = dict(payload, external_id=sku(unit.id), status=DRAFT)
     try:
-        account = discogs.account()
+        account = discogs_client.account()
         found = find_existing(account, unit)
         if found:
             logger.info(
@@ -315,9 +315,9 @@ def create_listing(unit, payload):
             )
             return save_posted(found), True
         created = account.create_listing(payload)
-    except discogs.DiscogsAuthError as e:
+    except discogs_client.DiscogsAuthError as e:
         raise ListingError(str(e))
-    except discogs.ApiError as e:
+    except discogs_client.ApiError as e:
         if e.refused:
             raise ListingError("Discogs said no: " + str(e))
         if e.rate_limited:
@@ -352,11 +352,11 @@ def make_for_sale(row):
     a Draft there. Returns the updated DiscogsListing; raises ListingError
     with a message for the owner otherwise.
     """
-    devmode.check(discogs.DiscogsAuthError, "Discogs")
+    devmode.check(discogs_client.DiscogsAuthError, "Discogs")
     if row.ended or row.status != DRAFT:
         raise ListingError("Only a Draft can be made For Sale.")
     try:
-        account = discogs.account()
+        account = discogs_client.account()
         current = account.listing(row.listing_id)
         if current.get("status") != DRAFT:
             save_posted(current)
@@ -379,9 +379,9 @@ def make_for_sale(row):
         return save_posted(current)
     except ListingError:
         raise
-    except discogs.DiscogsAuthError as e:
+    except discogs_client.DiscogsAuthError as e:
         raise ListingError(str(e))
-    except discogs.ApiError as e:
+    except discogs_client.ApiError as e:
         raise ListingError("Discogs said no: " + str(e))
     except Exception as e:
         logger.exception(

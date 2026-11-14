@@ -732,10 +732,10 @@ def ensure_release_details(release):
     if not release or release.labels is not None:
         return
     from fbc import db
-    from fbc import discogs
+    from fbc import discogs_client
 
     try:
-        r = discogs.release(release.release_id)
+        r = discogs_client.release(release.release_id)
         release.labels = json.dumps(
             [
                 {"name": label.get("name"), "catno": label.get("catno")}

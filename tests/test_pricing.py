@@ -7,7 +7,7 @@ import requests
 from fake_discogs import FakeDiscogs, api_error, failing
 
 import fbc
-from fbc import discogs, listing, pricing
+from fbc import discogs_client, listing, pricing
 
 
 def price(value, currency="USD"):
@@ -143,9 +143,9 @@ def test_discogs_answers_are_cached(discogs_calls):
 
 def test_discogs_errors_are_shown_not_raised_or_cached(monkeypatch):
     def refuse(release_id):
-        raise discogs.DiscogsAuthError("Connect fbc to Discogs first.")
+        raise discogs_client.DiscogsAuthError("Connect fbc to Discogs first.")
 
-    monkeypatch.setattr(discogs, "release", refuse)
+    monkeypatch.setattr(discogs_client, "release", refuse)
 
     assert pricing.discogs_research(123) == {
         "ok": False,
@@ -166,7 +166,7 @@ def test_discogs_network_failure_is_shown(monkeypatch):
     def boom(release_id):
         raise requests.ConnectionError("down")
 
-    monkeypatch.setattr(discogs, "release", boom)
+    monkeypatch.setattr(discogs_client, "release", boom)
 
     r = pricing.discogs_research(123)
 
@@ -264,7 +264,7 @@ def test_dev_mode_reaches_nothing(dev_mode, monkeypatch):
     def reached(*args, **kwargs):
         raise AssertionError("reached out in dev mode")
 
-    monkeypatch.setattr(discogs, "release", reached)
+    monkeypatch.setattr(discogs_client, "release", reached)
     monkeypatch.setattr(listing, "oauth_token", reached)
     monkeypatch.setattr(requests, "get", reached)
 
@@ -326,7 +326,7 @@ def test_pricing_view_survives_both_sites_failing(client, monkeypatch):
     def down(*args, **kwargs):
         raise requests.ConnectionError("down")
 
-    monkeypatch.setattr(discogs, "release", down)
+    monkeypatch.setattr(discogs_client, "release", down)
     monkeypatch.setattr(listing, "oauth_token", lambda scope=None: "tok")
     monkeypatch.setattr(requests, "get", down)
 

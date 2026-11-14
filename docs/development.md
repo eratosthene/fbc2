@@ -183,7 +183,7 @@ filter link, and a count for the banner.
 
 ## Calling Discogs
 
-`fbc/discogs.py` is the only module that imports `python3-discogs-client`, and
+`fbc/discogs_client.py` is the only module that imports `python3-discogs-client`, and
 every call fbc makes to Discogs is a function or an `Account` method in it:
 `release()`, `master()`, `search()`, `account().collection_items()`,
 `account().create_listing()` and so on. They take plain values and return the
@@ -195,7 +195,7 @@ passed on as it is.
 
 To call Discogs from new code, add a function there, with a test in
 `tests/test_discogs_seam.py`, which fakes the library and checks what is sent.
-Every other test fakes `fbc.discogs` itself with `tests/fake_discogs.py`
+Every other test fakes `fbc.discogs_client` itself with `tests/fake_discogs.py`
 (`FakeDiscogs` and `FakeAccount`), so a test never knows which library is
 behind it. That also makes it a single place to change if fbc ever moves to
 another library.
@@ -219,7 +219,7 @@ no API behind it. Pictures for a Discogs listing are added by hand on the
 site, so a local copy of a Unit's pictures (#140) can't be pushed to Discogs.
 
 **Inventory.** `GET /users/{username}/inventory`, which is
-`Account.inventory()` in `fbc/discogs.py`. It returns `pagination` and `listings`.
+`Account.inventory()` in `fbc/discogs_client.py`. It returns `pagination` and `listings`.
 The `status` filter defaults to **For Sale**, so Drafts and Expired items don't
 come back unless it's asked for. Its values are For Sale, All, Draft, Expired,
 Sold, Violation, Suspended and Deleted. (The sync asks for All.) It pages from
@@ -259,7 +259,7 @@ as a `DiscogsListing` (`util.save_discogs_listing`), links it to its Unit by
 as ended (`util.mark_ended_discogs_listings`). A listing whose status is Sold,
 Deleted, Violation or Suspended is ended too (`util.DISCOGS_ENDED_STATUSES`):
 Discogs lets only For Sale, Draft and Expired listings be edited. It only
-reads, and it goes through `fbc/discogs.py`, so dev mode stops it. The `sync_record` name is `discogs-listings`. There's no Task for it
+reads, and it goes through `fbc/discogs_client.py`, so dev mode stops it. The `sync_record` name is `discogs-listings`. There's no Task for it
 yet.
 
 **Listing a Unit.** `fbc/discogs_listing.py` holds the only writes to Discogs's
@@ -268,7 +268,7 @@ the pages. `discogs_client` 2.10 does have `identity().inventory.add_listing(...
 throws away Discogs's answer, so the new listing's ID is lost. fbc needs the
 ID to save the row, so `Account.create_listing` posts to
 `/marketplace/listings` with the library's private `_post`, which returns it,
-as `Account.add_to_collection` does for the collection. Only `fbc/discogs.py`
+as `Account.add_to_collection` does for the collection. Only `fbc/discogs_client.py`
 does that, so a library that returns the ID would be a change there. The POST
 fields are `release_id`,
 `condition`, `sleeve_condition`, `price`, `comments`, `allow_offers`, `status`,
@@ -280,7 +280,7 @@ against Discogs, so check it on the first real Draft. Notes:
   still a Draft and POSTs `release_id`, `condition`, `price` and
   `status: For Sale` to `/marketplace/listings/{id}` (the edit call wants the
   first three again).
-- Every write goes through `fbc/discogs.py`, which raises in dev mode, and
+- Every write goes through `fbc/discogs_client.py`, which raises in dev mode, and
   the views check `devmode.on()` first as well.
 - After a create, the row is saved from what was posted
   (`util.save_discogs_listing`, the same function the sync uses), so a later

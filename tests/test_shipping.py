@@ -7,10 +7,10 @@ from fake_discogs import FakeAccount, FakeDiscogs, api_error, collection_item, f
 
 import fbc
 from fbc import db
-from fbc import discogs as discogs_calls
+from fbc import discogs_client as discogs_calls
 from fbc import listing
 from fbc import shipping
-from fbc.discogs import DiscogsAuthError
+from fbc.discogs_client import DiscogsAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsRelease
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit

@@ -1,11 +1,11 @@
 from types import SimpleNamespace
 
-import discogs_client
+import discogs_client as library  # the library, not fbc's module
 import pytest
 from discogs_client.exceptions import HTTPError
 
 import fbc
-from fbc import db, discogs
+from fbc import db, discogs_client
 from fbc.models.discogs import DiscogsOAuthToken
 
 
@@ -38,7 +38,7 @@ class FakeClient:
 @pytest.fixture
 def fake_client(monkeypatch):
     FakeClient.made = []
-    monkeypatch.setattr(discogs_client, "Client", FakeClient)
+    monkeypatch.setattr(library, "Client", FakeClient)
     return FakeClient
 
 
@@ -55,7 +55,7 @@ def _save_token():
 
 
 def test_client_uses_the_personal_token_until_connected(fake_client, app_keys):
-    discogs.client()
+    discogs_client.client()
 
     assert fake_client.made[0].kwargs == {"user_token": "test-discogs-token"}
 
@@ -63,7 +63,7 @@ def test_client_uses_the_personal_token_until_connected(fake_client, app_keys):
 def test_client_uses_the_saved_oauth_token(fake_client, app_keys):
     _save_token()
 
-    discogs.client()
+    discogs_client.client()
 
     assert fake_client.made[0].kwargs == {
         "consumer_key": "ckey",
@@ -76,31 +76,31 @@ def test_client_uses_the_saved_oauth_token(fake_client, app_keys):
 def test_client_without_any_token_says_to_connect(fake_client, monkeypatch):
     monkeypatch.setitem(fbc.app.config["DISCOGS_SETTINGS"], "USER_TOKEN", "")
 
-    with pytest.raises(discogs.DiscogsAuthError, match="Connect Discogs"):
-        discogs.client()
+    with pytest.raises(discogs_client.DiscogsAuthError, match="Connect Discogs"):
+        discogs_client.client()
 
 
 def test_saved_token_without_app_keys_says_to_set_them(fake_client):
     _save_token()
 
-    with pytest.raises(discogs.DiscogsAuthError, match="CONSUMER_KEY"):
-        discogs.client()
+    with pytest.raises(discogs_client.DiscogsAuthError, match="CONSUMER_KEY"):
+        discogs_client.client()
 
 
 def test_verifier_from_reads_an_address_a_query_or_a_bare_verifier():
-    assert discogs.verifier_from(
+    assert discogs_client.verifier_from(
         "http://fbc/connectdiscogs/?oauth_token=abc&oauth_verifier=xyz"
     ) == ("abc", "xyz")
-    assert discogs.verifier_from("oauth_token=abc&oauth_verifier=xyz") == (
+    assert discogs_client.verifier_from("oauth_token=abc&oauth_verifier=xyz") == (
         "abc",
         "xyz",
     )
-    assert discogs.verifier_from(" xyz ") == (None, "xyz")
-    assert discogs.verifier_from("") == (None, None)
+    assert discogs_client.verifier_from(" xyz ") == (None, "xyz")
+    assert discogs_client.verifier_from("") == (None, None)
 
 
 def test_exchange_verifier_saves_the_access_token(fake_client, app_keys):
-    saved = discogs.exchange_verifier("req-token", "req-secret", "good")
+    saved = discogs_client.exchange_verifier("req-token", "req-secret", "good")
 
     assert fake_client.made[0].kwargs["token"] == "req-token"
     assert fake_client.made[0].kwargs["secret"] == "req-secret"
@@ -109,13 +109,13 @@ def test_exchange_verifier_saves_the_access_token(fake_client, app_keys):
         "access-secret",
         "crate-digger",
     )
-    assert discogs.saved_oauth_token() == saved
+    assert discogs_client.saved_oauth_token() == saved
 
 
 def test_exchange_verifier_refused(fake_client, app_keys):
-    with pytest.raises(discogs.DiscogsAuthError, match="didn't accept"):
-        discogs.exchange_verifier("req-token", "req-secret", "bad")
-    assert discogs.saved_oauth_token() is None
+    with pytest.raises(discogs_client.DiscogsAuthError, match="didn't accept"):
+        discogs_client.exchange_verifier("req-token", "req-secret", "bad")
+    assert discogs_client.saved_oauth_token() is None
 
 
 @pytest.fixture
@@ -152,7 +152,7 @@ def test_discogs_redirecting_back_connects(client):
 
     client.get("/connectdiscogs/?oauth_token=req-token&oauth_verifier=good")
 
-    assert discogs.saved_oauth_token().username == "crate-digger"
+    assert discogs_client.saved_oauth_token().username == "crate-digger"
     html = client.get("/connectdiscogs/").get_data(as_text=True)
     assert "Connected as crate-digger" in html
 
@@ -165,7 +165,7 @@ def test_pasted_address_connects(client):
         data={"address": "http://elsewhere/?oauth_token=req-token&oauth_verifier=good"},
     )
 
-    assert discogs.saved_oauth_token() is not None
+    assert discogs_client.saved_oauth_token() is not None
 
 
 def test_a_different_sign_in_is_refused(client):
@@ -173,7 +173,7 @@ def test_a_different_sign_in_is_refused(client):
 
     client.get("/connectdiscogs/?oauth_token=other&oauth_verifier=good")
 
-    assert discogs.saved_oauth_token() is None
+    assert discogs_client.saved_oauth_token() is None
 
 
 def test_cancelled_sign_in_forgets_the_request(client):

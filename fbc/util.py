@@ -220,7 +220,7 @@ def save_discogs_listing(data, seen):
     Returns the DiscogsListing.
     """
     from fbc import db
-    from fbc.discogs import parse_timestamp
+    from fbc.discogs_client import parse_timestamp
     from fbc.listing import unit_id_from_sku
     from fbc.models.discogs import DiscogsListing
     from fbc.models.inventory import Unit
@@ -394,13 +394,13 @@ def add_discogs_release(item):
         Genre,
         Style,
     )
-    from fbc import db, discogs
+    from fbc import db, discogs_client
 
     logger.debug("add_discogs_release: " + str(item))
     info = item["basic_information"]
     instance_id = item["instance_id"]
     release_id = info["id"]
-    full = discogs.release(release_id)
+    full = discogs_client.release(release_id)
     artists = []
     genres = []
     styles = []
@@ -441,8 +441,8 @@ def add_discogs_release(item):
     master_year = info.get("year")
     if info.get("master_id"):
         master_id = info["master_id"]
-        master_year = discogs.master(master_id).get("year")
-    date_added = discogs.parse_timestamp(item["date_added"])
+        master_year = discogs_client.master(master_id).get("year")
+    date_added = discogs_client.parse_timestamp(item["date_added"])
     labels = json.dumps(
         [
             {"name": label["name"], "catno": label.get("catno")}

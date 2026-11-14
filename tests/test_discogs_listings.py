@@ -8,7 +8,7 @@ import pytest
 import sqlalchemy as sa
 from fake_discogs import FakeAccount, FakeDiscogs, failing
 
-from fbc import db, discogs, sync, syncjobs
+from fbc import db, discogs_client, sync, syncjobs
 from fbc.models.discogs import DiscogsListing
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.util import save_discogs_listing
@@ -202,10 +202,12 @@ def test_a_short_read_marks_nothing_ended_and_records_nothing(app, inventory):
     sync.record_finished(syncjobs.DISCOGS_LISTINGS_SYNC, datetime.datetime(2020, 1, 1))
     inventory(
         [_item(1)],
-        fail=failing("inventory", discogs.IncompleteRead("2 items but 1 came back")),
+        fail=failing(
+            "inventory", discogs_client.IncompleteRead("2 items but 1 came back")
+        ),
     )
 
-    with pytest.raises(discogs.IncompleteRead):
+    with pytest.raises(discogs_client.IncompleteRead):
         syncjobs.sync_discogs_listings()
 
     assert not db.session.get(DiscogsListing, 2).ended
@@ -257,7 +259,7 @@ def test_in_dev_mode_it_says_syncing_is_off_and_reaches_nothing(
     def never():
         raise AssertionError("reached Discogs")
 
-    monkeypatch.setattr(syncjobs.discogs, "account", never)
+    monkeypatch.setattr(syncjobs.discogs_client, "account", never)
 
     result = app.test_cli_runner().invoke(args=["sync", "discogs-listings"])
 

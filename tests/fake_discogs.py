@@ -1,7 +1,7 @@
 """
-A stand-in for fbc/discogs.py's calls, for the tests of everything that uses
+A stand-in for fbc/discogs_client.py's calls, for the tests of everything that uses
 Discogs. Nothing here reaches Discogs, and nothing here fakes the library:
-only tests/test_discogs_seam.py does that, to check what fbc.discogs sends.
+only tests/test_discogs_seam.py does that, to check what fbc.discogs_client sends.
 
     fake = FakeDiscogs(releases={9: record}).install(monkeypatch)
     fake.account.items = [collection_item(9, instance_id=5)]
@@ -11,11 +11,11 @@ give `fail` a function of (name, args, kwargs) that returns an exception to
 raise, or None.
 """
 
-from fbc import discogs
+from fbc import discogs_client
 
 
 def api_error(status_code, message="Discogs said no"):
-    return discogs.ApiError(message, status_code)
+    return discogs_client.ApiError(message, status_code)
 
 
 def failing(name, error):
@@ -81,7 +81,7 @@ class _Recording:
 
 
 class FakeAccount(_Recording):
-    """fbc.discogs.Account, with the account's contents as attributes."""
+    """fbc.discogs_client.Account, with the account's contents as attributes."""
 
     def __init__(
         self,
@@ -155,7 +155,7 @@ class FakeAccount(_Recording):
 
 
 class FakeDiscogs(_Recording):
-    """fbc.discogs's functions. `account` is what discogs.account() gives."""
+    """fbc.discogs_client's functions. `account` is what discogs_client.account() gives."""
 
     def __init__(
         self,
@@ -189,8 +189,8 @@ class FakeDiscogs(_Recording):
             "price_suggestions",
             "marketplace_stats",
         ):
-            monkeypatch.setattr(discogs, name, getattr(self, name))
-        monkeypatch.setattr(discogs, "account", lambda: self.account)
+            monkeypatch.setattr(discogs_client, name, getattr(self, name))
+        monkeypatch.setattr(discogs_client, "account", lambda: self.account)
         return self
 
     def release(self, release_id):

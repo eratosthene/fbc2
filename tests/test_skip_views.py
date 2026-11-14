@@ -23,7 +23,7 @@ CODE = textwrap.dedent(
 
     assert not hasattr(fbc, "appbuilder")
     assert not any("ModelView" in m for m in sys.modules if m.startswith("fbc.views"))
-    assert fbc.discogs.__name__ == "fbc.discogs"
+    assert fbc.discogs_client.__name__ == "fbc.discogs_client"
     with app.app_context():
         db.create_all()
         # Configures every mapper, so a model nobody imported would fail here.

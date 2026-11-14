@@ -8,8 +8,8 @@ import requests
 from flask import Flask
 
 import fbc
-from fbc import db, devmode, discogs, listing, shipping
-from fbc.discogs import DiscogsAuthError
+from fbc import db, devmode, discogs_client, listing, shipping
+from fbc.discogs_client import DiscogsAuthError
 from fbc.listing import OAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsOAuthToken
 from fbc.models.ebay import EbayDraft, EbayOAuthToken
@@ -205,21 +205,21 @@ def test_no_discogs_client_is_made_in_dev_mode(app, dev_mode):
     _saved_tokens()
 
     with pytest.raises(DiscogsAuthError, match="Dev Mode is turned on"):
-        discogs.client()
+        discogs_client.client()
     with pytest.raises(DiscogsAuthError, match="Dev Mode is turned on"):
-        discogs.authorize_url("http://localhost/connectdiscogs/")
+        discogs_client.authorize_url("http://localhost/connectdiscogs/")
 
 
 @pytest.mark.parametrize(
     "call",
     [
-        lambda: discogs.release(1),
-        lambda: discogs.master(1),
-        lambda: discogs.master_versions(1, 1),
-        lambda: discogs.search(artist="x"),
-        lambda: discogs.price_suggestions(1),
-        lambda: discogs.marketplace_stats(1),
-        lambda: discogs.account(),
+        lambda: discogs_client.release(1),
+        lambda: discogs_client.master(1),
+        lambda: discogs_client.master_versions(1, 1),
+        lambda: discogs_client.search(artist="x"),
+        lambda: discogs_client.price_suggestions(1),
+        lambda: discogs_client.marketplace_stats(1),
+        lambda: discogs_client.account(),
     ],
 )
 def test_every_discogs_call_is_refused_in_dev_mode(app, dev_mode, call):
@@ -402,7 +402,7 @@ def test_order_earnings_ask_for_net_sold_in_dev_mode(app, dev_mode):
 def test_remove_from_discogs_only_removes_it_from_fbc_in_dev_mode(
     app, dev_mode, monkeypatch
 ):
-    monkeypatch.setattr(discogs, "account", _fails)
+    monkeypatch.setattr(discogs_client, "account", _fails)
     _, unit = _order()
 
     message, category = shipping.remove_from_discogs(unit)
@@ -415,7 +415,7 @@ def test_remove_from_discogs_only_removes_it_from_fbc_in_dev_mode(
 
 
 def test_shipping_in_dev_mode_records_the_receipt(client, dev_mode, monkeypatch):
-    monkeypatch.setattr(discogs, "account", _fails)
+    monkeypatch.setattr(discogs_client, "account", _fails)
     order, unit = _order()
 
     page = client.get("/ebayordermodelview/ship/" + order.order_id)

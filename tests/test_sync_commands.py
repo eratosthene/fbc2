@@ -7,7 +7,7 @@ import pytest
 from fake_discogs import FakeAccount, FakeDiscogs
 
 from fbc import sync, syncjobs
-from fbc.discogs import DiscogsAuthError
+from fbc.discogs_client import DiscogsAuthError
 from fbc.listing import OAuthError
 
 
@@ -50,7 +50,7 @@ def test_a_failed_sync_exits_non_zero_and_records_nothing(run, monkeypatch):
     def no_discogs():
         raise DiscogsAuthError("Connect fbc to Discogs first.")
 
-    monkeypatch.setattr(syncjobs.discogs, "account", no_discogs)
+    monkeypatch.setattr(syncjobs.discogs_client, "account", no_discogs)
 
     result = run("discogs")
 
