@@ -177,7 +177,7 @@ setup; with `FBC_DEV_MODE=1` it does nothing.
 The Tasks menu and the home page's To do banner (`fbc/tasks.py`) have no table
 of their own: each task is a query that stops matching once the work is done.
 The lists are the existing ones with a filter (`fbc/views/tasks.py`), and eBay
-Drafts to List is a filter link on the eBay Drafts list. `fbc/tasks.py` says
+Drafts to List (eBay) and Drafts to List (Discogs) are filter links on the eBay Drafts and Discogs Listings lists. `fbc/tasks.py` says
 what each one means. A new kind of task is a new function there, a view or
 filter link, and a count for the banner.
 

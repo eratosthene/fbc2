@@ -13,7 +13,7 @@
     <a href="{{ url_for('ReconcileSuppliesView.reconcile') }}">Reconcile Supplies</a>.
   </div>
   {% endif %}
-  {% set task_total = tasks.orders + tasks.releases + tasks.units + tasks.drafts %}
+  {% set task_total = tasks.orders + tasks.releases + tasks.units + tasks.drafts + tasks.discogs_units + tasks.discogs_drafts %}
   {% if task_total %}
   <div class="alert alert-info">
     <strong>To do:</strong>
@@ -25,6 +25,10 @@
       Unit{{ "" if tasks.units == 1 else "s" }} that need an eBay Draft</a>{% endif %}
     {% if tasks.drafts %}<a href="{{ url_for('EbayDraftModelView.list', _flt_3_status='draft') }}">{{ tasks.drafts }}
       eBay Draft{{ "" if tasks.drafts == 1 else "s" }} to list</a>{% endif %}
+    {% if tasks.discogs_units %}<a href="{{ url_for('UnitsNeedingDiscogsDraftsView.list') }}">{{ tasks.discogs_units }}
+      Unit{{ "" if tasks.discogs_units == 1 else "s" }} that need a Discogs Draft</a>{% endif %}
+    {% if tasks.discogs_drafts %}<a href="{{ url_for('DiscogsListingModelView.list', _flt_3_status='Draft', _flt_1_ended='y') }}">{{ tasks.discogs_drafts }}
+      Discogs Draft{{ "" if tasks.discogs_drafts == 1 else "s" }} to list</a>{% endif %}
   </div>
   {% endif %}
   {% if listings.synced and listings.over %}

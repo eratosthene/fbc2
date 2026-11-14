@@ -334,9 +334,11 @@ def _register_views():
         SalesReceiptModelView,
     )
     from fbc.views.listing import EbayDraftModelView, DRAFTS_TO_LIST_FILTERS
+    from fbc.views.discogs import DISCOGS_DRAFTS_TO_LIST_FILTERS
     from fbc.views.tasks import (
         OrdersToShipView,
         ReleasesNeedingUnitsView,
+        UnitsNeedingDiscogsDraftsView,
         UnitsNeedingDraftsView,
     )
     from fbc.models.sync import SyncRecord  # noqa: F401  (so its table exists)
@@ -393,7 +395,7 @@ def _register_views():
         appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Discogs")
         appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
         appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
-        appbuilder.add_view(
+        discogs_listings = appbuilder.add_view(
             DiscogsListingModelView, "Discogs Listings", category="Sales"
         )
         appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
@@ -406,10 +408,24 @@ def _register_views():
         appbuilder.add_view(
             ReleasesNeedingUnitsView, "Releases to Make Units", category="Tasks"
         )
-        appbuilder.add_view(UnitsNeedingDraftsView, "Units to Draft", category="Tasks")
+        appbuilder.add_view(
+            UnitsNeedingDraftsView, "Units to Draft (eBay)", category="Tasks"
+        )
         appbuilder.add_link(
-            "Drafts to List",
+            "Drafts to List (eBay)",
             href=drafts.route_base + "/list/?" + urlencode(DRAFTS_TO_LIST_FILTERS),
+            category="Tasks",
+        )
+        appbuilder.add_view(
+            UnitsNeedingDiscogsDraftsView,
+            "Units to Draft (Discogs)",
+            category="Tasks",
+        )
+        appbuilder.add_link(
+            "Drafts to List (Discogs)",
+            href=discogs_listings.route_base
+            + "/list/?"
+            + urlencode(DISCOGS_DRAFTS_TO_LIST_FILTERS),
             category="Tasks",
         )
         appbuilder.add_view(SupplyModelView, "Supply List", category="Supplies")

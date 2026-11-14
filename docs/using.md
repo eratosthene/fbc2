@@ -54,7 +54,7 @@ The shop keeps the Discogs and eBay syncs up to date by itself, every few
 minutes to a couple of hours (see "Scheduled syncs" in
 [Running fbc in production](production.md)). What they bring in becomes a task.
 The To do banner on the home page counts each kind and links to its list, and
-the Tasks menu has the same four lists. A task leaves its list as soon as the
+the Tasks menu has the same lists. A task leaves its list as soon as the
 work is done, so there is nothing to tick off:
 
 - **Orders to Ship**: eBay Orders that have no Sales Receipt yet. Use Ship This
@@ -62,11 +62,18 @@ work is done, so there is nothing to tick off:
 - **Releases to Make Units**: Discogs Releases with more copies in your Discogs
   collection than unsold Units. Add a Unit for the new copy and price it. A
   copy that sold leaves the collection, so its sold Unit doesn't count.
-- **Units to Draft**: unsold Units priced over $2, with no eBay Listing and no
-  eBay Draft. (Cheaper Units go in the discount boxes.) Make an eBay Draft
-  from the Unit.
-- **Drafts to List**: eBay Drafts that aren't published yet. Take the pictures
-  and publish.
+- **Units to Draft (eBay)**: unsold Units priced over $2, with no eBay Listing
+  and no eBay Draft. (Cheaper Units go in the discount boxes.) Make an eBay
+  Draft from the Unit.
+- **Drafts to List (eBay)**: eBay Drafts that aren't published yet. Take the
+  pictures and publish.
+- **Units to Draft (Discogs)**: unsold Units priced over $2 that are in your
+  Discogs collection and have no Discogs Draft or For Sale listing. Press List
+  on Discogs on the Unit. A Unit that is on eBay shows here too, since it can
+  be sold in both places; List on Discogs warns you about it.
+- **Drafts to List (Discogs)**: Discogs listings that are still a Draft. Add
+  the pictures on Discogs, then press Make it For Sale. It leaves the list
+  once Sync Discogs Listings sees it is For Sale.
 
 ## Inventory
 
