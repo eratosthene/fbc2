@@ -245,6 +245,12 @@ class MyIndexView(IndexView):
             syncjobs.discogs_job(), "/discogsreleasemodelview/list/"
         )
 
+    @expose("/syncdiscogslistings")
+    def syncdiscogslistings(self):
+        return self._start_sync(
+            syncjobs.discogs_listings_job(), "/discogslistingmodelview/list/"
+        )
+
     @expose("/syncebaylistings")
     def syncebaylistings(self):
         return self._start_sync(

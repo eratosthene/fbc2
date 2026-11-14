@@ -21,8 +21,10 @@ from fbc.util import (
     add_ebay_order,
     find_relisted_listing,
     forget_discogs_instance,
+    mark_ended_discogs_listings,
     mark_ended_listings,
     relist_ebay_listing,
+    save_discogs_listing,
     save_renewals,
 )
 
@@ -32,6 +34,7 @@ logger = logging.getLogger()
 # with the same kind never run together.
 DISCOGS_SYNC = "discogs"
 ORDERS_SYNC = "ebay-orders"
+DISCOGS_LISTINGS_SYNC = "discogs-listings"
 
 # A Job is what sync.start and sync.run take: the kind, a title, the function.
 Job = namedtuple("Job", "kind title fn")
@@ -44,6 +47,10 @@ def _job(kind, title, fn):
 
 def discogs_job():
     return _job(DISCOGS_SYNC, "Discogs sync", sync_discogs)
+
+
+def discogs_listings_job():
+    return _job(DISCOGS_LISTINGS_SYNC, "Discogs listings sync", sync_discogs_listings)
 
 
 def ebay_listings_job():
@@ -111,6 +118,62 @@ def sync_discogs():
             forget_discogs_instance(item)
     sync.record_finished(DISCOGS_SYNC, started)
     logger.info("Discogs sync finished.")
+
+
+class DiscogsInventoryError(Exception):
+    """The seller inventory wasn't read in full, so nothing may be marked ended."""
+
+
+def read_discogs_inventory(me):
+    """
+    Every item of the seller's inventory, whatever its status, as the JSON
+    Discogs sent. (Discogs's inventory shows only For Sale items unless asked
+    for another status, so this asks for All: Drafts and Expired items are
+    still ours.) Raises DiscogsInventoryError if fewer came back than Discogs
+    says there are.
+    """
+    inventory = me.inventory
+    inventory.per_page = 100
+    inventory.filter(status="All")
+    total = len(inventory)
+    items = []
+    for page in range(1, inventory.pages + 1):
+        # The library's list objects keep their JSON in .data.
+        items.extend(listing.data for listing in inventory.page(page))
+        logger.info("Read Discogs inventory page " + str(page) + ".")
+    if len(items) != total:
+        raise DiscogsInventoryError(
+            "Discogs says the inventory has "
+            + str(total)
+            + " items but "
+            + str(len(items))
+            + " came back."
+        )
+    return items
+
+
+def sync_discogs_listings():
+    """
+    Read the Discogs Marketplace inventory into DiscogsListings. It only reads
+    from Discogs. A listing that's no longer in the inventory is marked ended.
+    """
+    started = sync.utcnow()
+    logger.info("Updating Discogs listings...")
+    me = discogs.client().identity()
+    items = read_discogs_inventory(me)
+    logger.info("Total Discogs listings: " + str(len(items)))
+    seen = set()
+    unlinked = 0
+    for data in items:
+        row = save_discogs_listing(data, started)
+        seen.add(row.listing_id)
+        if row.unit_id is None:
+            unlinked += 1
+    ended = mark_ended_discogs_listings(seen)
+    logger.info("Marked " + str(ended) + " listings as ended.")
+    logger.info(str(unlinked) + " listings aren't linked to a Unit.")
+    sync.record_finished(DISCOGS_LISTINGS_SYNC, started)
+    logger.info("Discogs listings sync finished.")
 
 
 def sync_ebay_listings():

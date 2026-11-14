@@ -39,11 +39,13 @@ DEFAULT_INTERVALS = {
     syncjobs.ORDERS_SYNC: 15,
     sync.LISTINGS_SYNC: 30,
     syncjobs.DISCOGS_SYNC: 120,
+    syncjobs.DISCOGS_LISTINGS_SYNC: 30,
 }
 INTERVAL_SETTINGS = {
     syncjobs.ORDERS_SYNC: "SCHEDULER_EBAY_ORDERS_MINUTES",
     sync.LISTINGS_SYNC: "SCHEDULER_EBAY_LISTINGS_MINUTES",
     syncjobs.DISCOGS_SYNC: "SCHEDULER_DISCOGS_MINUTES",
+    syncjobs.DISCOGS_LISTINGS_SYNC: "SCHEDULER_DISCOGS_LISTINGS_MINUTES",
 }
 DEFAULT_RETRY_MINUTES = 10
 
@@ -53,6 +55,7 @@ JOBS = {
     syncjobs.ORDERS_SYNC: syncjobs.ebay_orders_job,
     sync.LISTINGS_SYNC: syncjobs.ebay_listings_job,
     syncjobs.DISCOGS_SYNC: syncjobs.discogs_job,
+    syncjobs.DISCOGS_LISTINGS_SYNC: syncjobs.discogs_listings_job,
 }
 
 Schedule = namedtuple("Schedule", "intervals retry")

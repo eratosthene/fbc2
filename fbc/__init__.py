@@ -226,6 +226,14 @@ def sync_discogs_command():
     _run_sync(syncjobs.discogs_job())
 
 
+@sync_group.command("discogs-listings")
+def sync_discogs_listings_command():
+    """Sync the Discogs Marketplace listings (read only)."""
+    from fbc import syncjobs
+
+    _run_sync(syncjobs.discogs_listings_job())
+
+
 @sync_group.command("ebay-listings")
 def sync_ebay_listings_command():
     """Sync eBay's active listings."""
@@ -315,6 +323,7 @@ def _register_views():
         GenreModelView,
         StyleModelView,
         FolderModelView,
+        DiscogsListingModelView,
     )
     from fbc.views.sales import (
         EbayOrderModelView,
@@ -379,6 +388,9 @@ def _register_views():
         appbuilder.add_view(GenreModelView, "Genres", category="Discogs")
         appbuilder.add_view(StyleModelView, "Styles", category="Discogs")
         appbuilder.add_view(FolderModelView, "Folders", category="Discogs")
+        appbuilder.add_view(
+            DiscogsListingModelView, "Discogs Listings", category="Discogs"
+        )
         appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Discogs")
         appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
         appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
