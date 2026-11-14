@@ -6,7 +6,7 @@ import pytest
 
 import fbc
 from fbc import db, tasks
-from fbc.models.discogs import DiscogsInstance, DiscogsRelease
+from fbc.models.discogs import DiscogsInstance, DiscogsListing, DiscogsRelease
 from fbc.models.ebay import EbayDraft, EbayOrder
 from fbc.models.inventory import Unit
 from fbc.models.sales import SalesReceipt
@@ -74,6 +74,29 @@ def _draft(unit, **fields):
     return draft
 
 
+def _on_discogs(unit, status="Draft", listing_id=None, **fields):
+    listing = DiscogsListing(
+        listing_id=listing_id or 1000 + unit.id,
+        unit_id=unit.id,
+        status=status,
+        **fields,
+    )
+    db.session.add(listing)
+    db.session.commit()
+    return listing
+
+
+def _in_collection(name="Collectable", **fields):
+    """A Unit that List on Discogs can list: a release and a collection copy."""
+    release = _release(len(name) * 7 + db.session.query(Unit).count(), copies=1)
+    return _unit(
+        name,
+        discogs_release_id=release.release_id,
+        discogs_instance_id=release.discogs_instances[0].instance_id,
+        **fields,
+    )
+
+
 def _ids(select):
     return sorted(db.session.scalars(select))
 
@@ -132,12 +155,69 @@ def test_a_draft_is_a_task_until_it_is_published():
     assert _ids(tasks.ids_drafts_to_list()) == [waiting.id]
 
 
+def test_a_unit_needs_a_discogs_draft_when_it_can_be_listed_and_isnt():
+    needs = _in_collection("needs")
+    _in_collection("cheap", retail_price=1.0)
+    _in_collection("sold", sold=True)
+    _in_collection("archived", archived=True)
+    _unit("not in the collection")
+    drafted = _in_collection("drafted")
+    _on_discogs(drafted, "Draft")
+    on_sale = _in_collection("on sale")
+    _on_discogs(on_sale, "For Sale")
+
+    assert _ids(tasks.ids_units_needing_discogs_drafts()) == [needs.id]
+
+
+def test_a_unit_whose_discogs_listing_is_over_needs_a_new_draft():
+    sold = _in_collection("sold on discogs")
+    _on_discogs(sold, "Sold", ended=True)
+    gone = _in_collection("deleted")
+    _on_discogs(gone, "For Sale", ended=True)
+    expired = _in_collection("expired")
+    _on_discogs(expired, "Expired")
+
+    assert _ids(tasks.ids_units_needing_discogs_drafts()) == sorted(
+        [sold.id, gone.id, expired.id]
+    )
+
+
+def test_a_listing_on_discogs_that_has_no_unit_doesnt_hide_the_others():
+    needs = _in_collection("needs")
+    db.session.add(DiscogsListing(listing_id=5, unit_id=None, status="Draft"))
+    db.session.commit()
+
+    assert _ids(tasks.ids_units_needing_discogs_drafts()) == [needs.id]
+
+
+def test_a_unit_on_ebay_still_needs_a_discogs_draft():
+    on_ebay = _in_collection("on ebay")
+    _draft(on_ebay)
+
+    assert _ids(tasks.ids_units_needing_discogs_drafts()) == [on_ebay.id]
+
+
+def test_a_discogs_listing_is_a_task_while_it_is_a_draft():
+    waiting = _on_discogs(_unit("a"), "Draft")
+    _on_discogs(_unit("b"), "For Sale")
+    _on_discogs(_unit("c"), "Draft", ended=True)
+
+    assert _ids(tasks.ids_discogs_drafts_to_list()) == [waiting.listing_id]
+
+
 def test_counts_count_each_task():
     _order("A")
     _release(1, copies=1)
     _draft(_unit("a"))
 
-    assert tasks.counts() == {"orders": 1, "releases": 1, "units": 0, "drafts": 1}
+    assert tasks.counts() == {
+        "orders": 1,
+        "releases": 1,
+        "units": 0,
+        "drafts": 1,
+        "discogs_units": 0,
+        "discogs_drafts": 0,
+    }
 
 
 def test_the_home_page_banner_links_to_the_tasks(client):
@@ -153,6 +233,32 @@ def test_the_home_page_banner_links_to_the_tasks(client):
     assert "/releasesneedingunitsview/list/" in html
     assert "/unitsneedingdraftsview/list/" in html
     assert "_flt_3_status=draft" in html
+
+
+def test_the_home_page_banner_counts_the_discogs_tasks(client):
+    _on_discogs(_unit("drafted"), "Draft")
+    _in_collection("needs")
+
+    html = client.get("/").get_data(as_text=True)
+
+    text = " ".join(html.split())
+    assert "1 Unit that need a Discogs Draft" in text
+    assert "1 Discogs Draft to list" in text
+    assert "/unitsneedingdiscogsdraftsview/list/" in html
+    assert "_flt_3_status=Draft" in html and "_flt_1_ended=y" in html
+
+
+def test_the_tasks_menu_names_the_ebay_and_discogs_lists(client):
+    html = client.get("/").get_data(as_text=True)
+
+    for name in (
+        "Units to Draft (eBay)",
+        "Drafts to List (eBay)",
+        "Units to Draft (Discogs)",
+        "Drafts to List (Discogs)",
+    ):
+        assert name in html
+    assert ">Units to Draft<" not in html and ">Drafts to List<" not in html
 
 
 def test_the_home_page_has_no_banner_when_there_is_nothing_to_do(client):
@@ -184,3 +290,23 @@ def test_each_task_list_shows_only_its_tasks(client):
         as_text=True
     )
     assert "Draft" in drafts
+
+
+def test_the_discogs_task_lists_show_only_their_tasks(client):
+    needs = _in_collection("Needs A Discogs Draft")
+    _on_discogs(_in_collection("Has A Discogs Draft"), "Draft", title="DRAFT-ROW")
+    _on_discogs(_in_collection("Is For Sale"), "For Sale", title="SALE-ROW")
+    _on_discogs(_in_collection("Is Over"), "Draft", title="ENDED-ROW", ended=True)
+    assert needs
+
+    units = client.get("/unitsneedingdiscogsdraftsview/list/").get_data(as_text=True)
+    assert "Needs A Discogs Draft" in units
+    assert "Has A Discogs Draft" not in units and "Is For Sale" not in units
+    # The link on the Tasks menu is the Discogs Listings list, filtered.
+    from fbc.views.discogs import DISCOGS_DRAFTS_TO_LIST_FILTERS
+    from urllib.parse import urlencode
+
+    link = "/discogslistingmodelview/list/?" + urlencode(DISCOGS_DRAFTS_TO_LIST_FILTERS)
+    drafts = client.get(link).get_data(as_text=True)
+    assert "DRAFT-ROW" in drafts
+    assert "SALE-ROW" not in drafts and "ENDED-ROW" not in drafts

@@ -1,16 +1,17 @@
 """
 The Tasks menu: lists of what needs doing next (see fbc/tasks.py for what each
 means). Each is an existing list with a filter on it, the way "Releases w/out
-Units" is, so a task leaves the list when it's done. A fourth, eBay Drafts that
-aren't published, is a filter link on the eBay Drafts list instead
-(DRAFTS_TO_LIST_FILTERS in fbc/views/listing.py).
+Units" is, so a task leaves the list when it's done. eBay Drafts and Discogs
+Drafts that aren't listed yet are filter links on those lists instead
+(DRAFTS_TO_LIST_FILTERS in fbc/views/listing.py, DISCOGS_DRAFTS_TO_LIST_FILTERS
+in fbc/views/discogs.py).
 """
 
 from flask_appbuilder.models.filters import BaseFilter
 from flask_appbuilder.models.sqla.filters import get_field_setup_query
 
 from fbc import tasks
-from fbc.syncnote import EBAY_LISTINGS, SyncedViewMixin
+from fbc.syncnote import DISCOGS_LISTINGS, EBAY_LISTINGS, SyncedViewMixin
 from fbc.views.discogs import DiscogsReleaseModelBaseView
 from fbc.views.inventory import UnitModelBaseView
 from fbc.views.sales import EbayOrderModelView
@@ -44,3 +45,12 @@ class UnitsNeedingDraftsView(SyncedViewMixin, UnitModelBaseView):
     synced_by = [EBAY_LISTINGS]
 
     base_filters = [["id", FilterInSelect, tasks.ids_units_needing_drafts]]
+
+
+class UnitsNeedingDiscogsDraftsView(SyncedViewMixin, UnitModelBaseView):
+    """Unsold Units over $2 in the Discogs collection, not yet on Discogs."""
+
+    # Whether a Unit has a listing is what the listings sync links up.
+    synced_by = [DISCOGS_LISTINGS]
+
+    base_filters = [["id", FilterInSelect, tasks.ids_units_needing_discogs_drafts]]
