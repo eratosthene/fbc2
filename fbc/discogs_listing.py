@@ -7,14 +7,14 @@ Discogs's seller inventory. Two writes, each started by its own button:
   Discogs's site.
 - make_for_sale changes a Draft to For Sale, which makes it live.
 
-Both go through discogs.client(), so dev mode refuses them (the views also
-check devmode.on() first, so nothing is tried).
+Both go through fbc.discogs_client, so dev mode refuses them (the views also check
+devmode.on() first, so nothing is tried).
 """
 
 import datetime
 import logging
 
-from fbc import devmode, discogs
+from fbc import devmode, discogs_client
 from fbc.listing import (
     build_item_specifics,
     default_weight,
@@ -248,7 +248,7 @@ def clean_form(form):
     return payload, errors
 
 
-def find_existing(client, unit):
+def find_existing(account, unit):
     """
     The newest Draft or For Sale item on Discogs whose external_id is the
     Unit's, from the first RECENT_ITEMS items of the inventory, newest first.
@@ -256,13 +256,8 @@ def find_existing(client, unit):
     yet; this finds it so a retry doesn't make a second one. Returns the
     item's JSON or None.
     """
-    me = client.identity()
-    inventory = me.inventory
-    inventory.per_page = RECENT_ITEMS
-    inventory.filter(status="All", sort="listed", sort_order="desc")
     wanted = sku(unit.id)
-    for listing in inventory.page(1):
-        data = listing.data
+    for data in account.newest_inventory(RECENT_ITEMS):
         if data.get("external_id") == wanted and data.get("status") in OPEN_STATUSES:
             return data
     return None
@@ -293,12 +288,6 @@ def _as_item(listing_id, payload, url=None):
     }
 
 
-def _is_refusal(error):
-    """Discogs answered no (a 4xx other than a rate limit), so nothing was made."""
-    status = getattr(error, "status_code", None)
-    return isinstance(status, int) and 400 <= status < 500 and status != 429
-
-
 def create_listing(unit, payload):
     """
     Post a Draft listing for `unit` and save it as a DiscogsListing linked to
@@ -311,30 +300,27 @@ def create_listing(unit, payload):
 
     The caller has checked problem_with(unit) and dev mode.
     """
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
-
     from fbc import db
 
-    devmode.check(discogs.DiscogsAuthError, "Discogs")
+    devmode.check(discogs_client.DiscogsAuthError, "Discogs")
     if unit.sold or not unit.discogs_release_id:
         raise ListingError(problem_with(unit))
     payload = dict(payload, external_id=sku(unit.id), status=DRAFT)
     try:
-        client = discogs.client()
-        found = find_existing(client, unit)
+        account = discogs_client.account()
+        found = find_existing(account, unit)
         if found:
             logger.info(
                 "Unit %s is already on Discogs as listing %s", unit.id, found["id"]
             )
             return save_posted(found), True
-        # The library has no call to create a listing.
-        created = client._post(client._base_url + "/marketplace/listings", payload)
-    except discogs.DiscogsAuthError as e:
+        created = account.create_listing(payload)
+    except discogs_client.DiscogsAuthError as e:
         raise ListingError(str(e))
-    except (DiscogsAPIError, HTTPError) as e:
-        if _is_refusal(e):
+    except discogs_client.ApiError as e:
+        if e.refused:
             raise ListingError("Discogs said no: " + str(e))
-        if getattr(e, "status_code", None) == 429:
+        if e.rate_limited:
             raise ListingError("Discogs says too many requests; try in a minute.")
         raise PostUncertain("Discogs answered with an error: " + str(e))
     except Exception as e:
@@ -366,15 +352,12 @@ def make_for_sale(row):
     a Draft there. Returns the updated DiscogsListing; raises ListingError
     with a message for the owner otherwise.
     """
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
-
-    devmode.check(discogs.DiscogsAuthError, "Discogs")
+    devmode.check(discogs_client.DiscogsAuthError, "Discogs")
     if row.ended or row.status != DRAFT:
         raise ListingError("Only a Draft can be made For Sale.")
     try:
-        client = discogs.client()
-        url = client._base_url + "/marketplace/listings/" + str(row.listing_id)
-        current = client._get(url)
+        account = discogs_client.account()
+        current = account.listing(row.listing_id)
         if current.get("status") != DRAFT:
             save_posted(current)
             raise ListingError(
@@ -383,8 +366,8 @@ def make_for_sale(row):
                 + ", not a Draft, so nothing was changed. fbc's copy is updated."
             )
         # Discogs's edit call wants the release, condition and price again.
-        client._post(
-            url,
+        account.update_listing(
+            row.listing_id,
             {
                 "release_id": current["release"]["id"],
                 "condition": current["condition"],
@@ -396,9 +379,9 @@ def make_for_sale(row):
         return save_posted(current)
     except ListingError:
         raise
-    except discogs.DiscogsAuthError as e:
+    except discogs_client.DiscogsAuthError as e:
         raise ListingError(str(e))
-    except (DiscogsAPIError, HTTPError) as e:
+    except discogs_client.ApiError as e:
         raise ListingError("Discogs said no: " + str(e))
     except Exception as e:
         logger.exception(

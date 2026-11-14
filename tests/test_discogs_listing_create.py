@@ -1,60 +1,23 @@
 """Listing a Unit on Discogs (fbc/discogs_listing.py and its views): Discogs is faked."""
 
 import json
-from types import SimpleNamespace
 
 import pytest
 import requests
-from discogs_client.exceptions import HTTPError
+from fake_discogs import FakeDiscogs, api_error, failing
 
 import fbc
-from fbc import db, devmode, discogs, discogs_listing, syncjobs
+from fbc import db, devmode, discogs_client, discogs_listing, syncjobs
 from fbc.models.discogs import DiscogsInstance, DiscogsListing
 from fbc.models.ebay import EbayDraft, EbayListing
 from fbc.models.inventory import StorageBox
-from test_discogs_listings import FakeInventory, _item
+from test_discogs_listings import _item
 from test_listing import SETTINGS, _carnaval
-
-
-class FakeDiscogs:
-    """Stands in for discogs_client.Client: records writes, serves an inventory."""
-
-    _base_url = "https://api.discogs.com"
-
-    def __init__(self, inventory=(), post_error=None):
-        self.items = list(inventory)
-        self.post_error = post_error
-        self.posts = []
-        self.remote = {}
-        self.next_id = 7000
-
-    def identity(self):
-        return SimpleNamespace(
-            username="seller",
-            inventory=FakeInventory(self.items, per_page=100),
-        )
-
-    def _post(self, url, data):
-        self.posts.append((url, data))
-        if self.post_error:
-            raise self.post_error
-        if url.endswith("/marketplace/listings"):
-            self.next_id += 1
-            return {
-                "listing_id": self.next_id,
-                "resource_url": f"{self._base_url}/marketplace/listings/{self.next_id}",
-            }
-        return None
-
-    def _get(self, url):
-        return self.remote[url]
 
 
 @pytest.fixture
 def fake(monkeypatch):
-    f = FakeDiscogs()
-    monkeypatch.setattr(discogs, "client", lambda: f)
-    return f
+    return FakeDiscogs().install(monkeypatch)
 
 
 @pytest.fixture
@@ -173,7 +136,9 @@ def test_the_form_page_shows_the_starting_values(client, fake):
     assert 'value="5.00"' in html and 'value="454"' in html
     assert "Light ring wear" in html and "Box 4" in html
     assert "<option selected>Very Good Plus (VG+)</option>" in html
-    assert fake.posts == []  # showing the form posts nothing
+    assert (
+        fake.account.calls_to("create_listing") == []
+    )  # showing the form posts nothing
 
 
 # --- Creating a Draft ---
@@ -184,8 +149,7 @@ def test_create_posts_a_draft_and_saves_it(client, fake):
 
     response = client.post(_url(unit), data=_form())
 
-    ((url, payload),) = fake.posts
-    assert url == "https://api.discogs.com/marketplace/listings"
+    ((payload,),) = fake.account.calls_to("create_listing")
     assert payload == {
         "release_id": 1,
         "condition": "Very Good Plus (VG+)",
@@ -223,7 +187,7 @@ def test_a_form_with_mistakes_posts_nothing(client, fake):
         _url(unit), data=_form(condition="", price="0", weight="x")
     ).get_data(as_text=True)
 
-    assert fake.posts == []
+    assert fake.account.calls_to("create_listing") == []
     assert "Choose a Media Condition." in html
     assert "Price has to be more than 0." in html
     assert "Weight has to be a whole number of grams." in html
@@ -231,7 +195,7 @@ def test_a_form_with_mistakes_posts_nothing(client, fake):
 
 
 def test_discogs_refusing_the_post_creates_nothing_locally(client, fake):
-    fake.post_error = HTTPError("Release not found.", 404)
+    fake.account.fail = failing("create_listing", api_error(404, "Release not found."))
     unit = _unit()
 
     html = client.post(_url(unit), data=_form()).get_data(as_text=True)
@@ -242,16 +206,18 @@ def test_discogs_refusing_the_post_creates_nothing_locally(client, fake):
 
 def test_a_timeout_then_a_retry_does_not_duplicate(client, fake):
     unit = _unit()
-    fake.post_error = requests.exceptions.ReadTimeout("slow")
+    fake.account.fail = failing(
+        "create_listing", requests.exceptions.ReadTimeout("slow")
+    )
 
     html = client.post(_url(unit), data=_form()).get_data(as_text=True)
 
     assert "may or may not have been made" in html
     assert db.session.query(DiscogsListing).count() == 0
     # It had gone through after all. The retry finds it and posts nothing.
-    fake.post_error = None
-    fake.posts.clear()
-    fake.items = [
+    fake.account.fail = None
+    fake.account.calls.clear()
+    fake.account.inventory_items = [
         _item(
             555,
             status="Draft",
@@ -262,14 +228,14 @@ def test_a_timeout_then_a_retry_does_not_duplicate(client, fake):
 
     response = client.post(_url(unit), data=_form())
 
-    assert fake.posts == []
+    assert fake.account.calls_to("create_listing") == []
     row = db.session.query(DiscogsListing).one()
     assert (row.listing_id, row.unit_id) == (555, unit.id)
     assert response.headers["Location"].endswith("/show/555")
 
 
 def test_a_server_error_is_treated_as_uncertain_too(client, fake):
-    fake.post_error = HTTPError("Bad gateway", 502)
+    fake.account.fail = failing("create_listing", api_error(502, "Bad gateway"))
 
     html = client.post(_url(_unit()), data=_form()).get_data(as_text=True)
 
@@ -278,11 +244,11 @@ def test_a_server_error_is_treated_as_uncertain_too(client, fake):
 
 def test_a_listing_for_another_unit_in_the_inventory_isnt_adopted(client, fake):
     unit = _unit()
-    fake.items = [_item(556, status="Draft", external_id="fbc-99999")]
+    fake.account.inventory_items = [_item(556, status="Draft", external_id="fbc-99999")]
 
     client.post(_url(unit), data=_form())
 
-    assert len(fake.posts) == 1
+    assert len(fake.account.calls_to("create_listing")) == 1
 
 
 def test_a_second_listing_is_refused_for_a_draft_and_a_for_sale_one(client, fake):
@@ -296,7 +262,7 @@ def test_a_second_listing_is_refused_for_a_draft_and_a_for_sale_one(client, fake
         response = client.post(_url(unit), data=_form())
         assert response.headers["Location"].endswith("/show/1")
 
-    assert fake.posts == []
+    assert fake.account.calls_to("create_listing") == []
 
 
 def test_an_ended_or_sold_listing_doesnt_block_a_new_one(client, fake):
@@ -308,7 +274,7 @@ def test_an_ended_or_sold_listing_doesnt_block_a_new_one(client, fake):
 
     client.post(_url(unit), data=_form())
 
-    assert len(fake.posts) == 1
+    assert len(fake.account.calls_to("create_listing")) == 1
 
 
 def test_a_unit_without_a_collection_copy_cant_be_listed(client, fake):
@@ -319,7 +285,7 @@ def test_a_unit_without_a_collection_copy_cant_be_listed(client, fake):
     html = client.post(_url(unit), data=_form()).get_data(as_text=True)
 
     assert "isn&#39;t in your Discogs collection" in html
-    assert fake.posts == []
+    assert fake.account.calls_to("create_listing") == []
 
 
 def test_a_sold_unit_cant_be_listed(client, fake):
@@ -327,7 +293,8 @@ def test_a_sold_unit_cant_be_listed(client, fake):
 
     html = client.post(_url(unit), data=_form()).get_data(as_text=True)
 
-    assert "This Unit is sold." in html and fake.posts == []
+    assert "This Unit is sold." in html
+    assert fake.account.calls_to("create_listing") == []
 
 
 def test_an_active_ebay_listing_warns_but_doesnt_block(client, fake):
@@ -342,7 +309,7 @@ def test_an_active_ebay_listing_warns_but_doesnt_block(client, fake):
 
     assert "active eBay listing (123)" in html
     assert "https://www.ebay.com/itm/123" in html
-    assert len(fake.posts) == 1
+    assert len(fake.account.calls_to("create_listing")) == 1
 
 
 def test_an_unpublished_ebay_draft_warns_with_a_link(client, fake):
@@ -376,7 +343,7 @@ def _draft_on_discogs(fake, unit, listing_id=7001, status="Draft"):
     )
     db.session.commit()
     item = _item(listing_id, status=status, external_id=f"fbc-{unit.id}")
-    fake.remote[f"https://api.discogs.com/marketplace/listings/{listing_id}"] = item
+    fake.account.listings[listing_id] = item
     return item
 
 
@@ -386,8 +353,8 @@ def test_make_for_sale_changes_the_status(client, fake):
 
     response = client.post("/discogslistingmodelview/makeforsale/7001")
 
-    ((url, payload),) = fake.posts
-    assert url == "https://api.discogs.com/marketplace/listings/7001"
+    ((listing_id, payload),) = fake.account.calls_to("update_listing")
+    assert listing_id == 7001
     assert payload == {
         "release_id": 555,
         "condition": "Near Mint (NM or M-)",
@@ -402,12 +369,11 @@ def test_make_for_sale_changes_the_status(client, fake):
 def test_make_for_sale_does_nothing_if_discogs_no_longer_has_a_draft(client, fake):
     unit = _unit()
     _draft_on_discogs(fake, unit)
-    url = "https://api.discogs.com/marketplace/listings/7001"
-    fake.remote[url]["status"] = "Sold"
+    fake.account.listings[7001]["status"] = "Sold"
 
     client.post("/discogslistingmodelview/makeforsale/7001")
 
-    assert fake.posts == []
+    assert fake.account.calls_to("update_listing") == []
     row = db.session.get(DiscogsListing, 7001)
     assert row.status == "Sold" and row.ended
 
@@ -418,13 +384,15 @@ def test_make_for_sale_refuses_what_isnt_a_draft(client, fake):
 
     client.post("/discogslistingmodelview/makeforsale/7001")
 
-    assert fake.posts == []
+    assert fake.account.calls_to("update_listing") == []
 
 
 def test_make_for_sale_shows_discogs_refusal_and_keeps_the_draft(client, fake):
     unit = _unit()
     _draft_on_discogs(fake, unit)
-    fake.post_error = HTTPError("You must add a picture.", 422)
+    fake.account.fail = failing(
+        "update_listing", api_error(422, "You must add a picture.")
+    )
 
     client.post("/discogslistingmodelview/makeforsale/7001")
 
@@ -440,22 +408,18 @@ def test_make_for_sale_only_answers_a_post(client, fake):
 # --- A re-sync reconciles rather than duplicates ---
 
 
-def test_a_resync_updates_the_saved_draft(client, fake, monkeypatch):
+def test_a_resync_updates_the_saved_draft(client, fake):
     unit = _unit()
     client.post(_url(unit), data=_form())
     assert db.session.query(DiscogsListing).count() == 1
-    monkeypatch.setattr(
-        syncjobs,
-        "read_discogs_inventory",
-        lambda me: [
-            _item(
-                7001,
-                status="For Sale",
-                external_id=f"fbc-{unit.id}",
-                price={"value": 12.5, "currency": "USD"},
-            )
-        ],
-    )
+    fake.account.inventory_items = [
+        _item(
+            7001,
+            status="For Sale",
+            external_id=f"fbc-{unit.id}",
+            price={"value": 12.5, "currency": "USD"},
+        )
+    ]
 
     syncjobs.sync_discogs_listings()
 
@@ -490,7 +454,6 @@ def test_unit_without_a_collection_copy_has_no_link(app):
 
 def test_dev_mode_posts_nothing(client, fake, monkeypatch):
     monkeypatch.setitem(fbc.app.config, "DEV_MODE", True)
-    monkeypatch.setattr(discogs, "client", lambda: pytest.fail("reached Discogs"))
     unit = _unit()
     db.session.add(DiscogsListing(listing_id=7001, status="Draft"))
     db.session.commit()
@@ -503,6 +466,7 @@ def test_dev_mode_posts_nothing(client, fake, monkeypatch):
     assert "Dev Mode is turned on" in posted
     assert sale.status_code == 302
     assert db.session.query(DiscogsListing).count() == 1  # only the one set up
+    assert fake.account.calls == []  # not even a look
 
 
 def test_the_write_functions_refuse_in_dev_mode_even_if_called_directly(
@@ -512,8 +476,8 @@ def test_the_write_functions_refuse_in_dev_mode_even_if_called_directly(
     unit = _unit()
     row = DiscogsListing(listing_id=1, status="Draft", unit_id=unit.id)
 
-    with pytest.raises(discogs.DiscogsAuthError):
+    with pytest.raises(discogs_client.DiscogsAuthError):
         discogs_listing.create_listing(unit, {})
-    with pytest.raises(discogs.DiscogsAuthError):
+    with pytest.raises(discogs_client.DiscogsAuthError):
         discogs_listing.make_for_sale(row)
     assert devmode.on()

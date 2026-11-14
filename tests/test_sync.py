@@ -7,7 +7,7 @@ import time
 import pytest
 
 from fbc import sync
-from fbc.discogs import DiscogsAuthError
+from fbc.discogs_client import DiscogsAuthError
 
 
 @pytest.fixture
@@ -181,7 +181,7 @@ def test_sync_link_from_the_page_script_gets_the_job_as_json(
     def no_discogs():
         raise DiscogsAuthError("Connect fbc to Discogs first.")
 
-    monkeypatch.setattr(syncjobs.discogs, "client", no_discogs)
+    monkeypatch.setattr(syncjobs.discogs_client, "client", no_discogs)
     client = app.test_client()
 
     response = client.get(

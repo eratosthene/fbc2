@@ -4,14 +4,14 @@ from flask import flash, redirect, request, session, url_for
 from flask_appbuilder import BaseView, expose, has_access
 
 from fbc import devmode
-from fbc.discogs import (
+from fbc.discogs_client import (
     DiscogsAuthError,
     authorize_url,
     exchange_verifier,
     has_app_keys,
     verifier_from,
 )
-from fbc.discogs import saved_oauth_token as saved_discogs_token
+from fbc.discogs_client import saved_oauth_token as saved_discogs_token
 from fbc.listing import (
     OAuthError,
     code_from,

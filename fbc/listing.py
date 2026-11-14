@@ -732,15 +732,17 @@ def ensure_release_details(release):
     if not release or release.labels is not None:
         return
     from fbc import db
-    from fbc import discogs
+    from fbc import discogs_client
 
     try:
-        d = discogs.client()
-        r = d.release(release.release_id)
+        r = discogs_client.release(release.release_id)
         release.labels = json.dumps(
-            [{"name": label.name, "catno": label.catno} for label in r.labels]
+            [
+                {"name": label.get("name"), "catno": label.get("catno")}
+                for label in r.get("labels") or []
+            ]
         )
-        release.country = r.country
+        release.country = r.get("country")
         db.session.commit()
     except Exception as e:
         logger.warning(

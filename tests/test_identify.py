@@ -2,18 +2,15 @@
 
 import datetime
 import json
+from urllib.parse import urlencode
+
 from types import SimpleNamespace
 
 import pytest
+from fake_discogs import FakeAccount, FakeDiscogs, api_error, collection_item
 
 import fbc
-from test_util_discogs_sync import (
-    FakeArtist,
-    FakeCollectionItem,
-    FakeMaster,
-    FakeRelease,
-)
-from fbc import discogs, identify
+from fbc import discogs_client, identify
 from fbc.models.discogs import DiscogsRelease
 from fbc.models.inventory import PurchaseLot
 
@@ -60,29 +57,44 @@ def record(rid, country="US", matrices=(), year=1978):
     }
 
 
-class FakeClient:
-    def __init__(self, hits, records, fail=None):
-        self.hits, self.records, self.fail, self.urls = hits, records, fail, []
+def _path(name, args, kwargs):
+    """The request a call to fbc.discogs_client stands for, to read tests by."""
+    if name == "search":
+        return "/database/search?" + urlencode(kwargs)
+    if name == "release":
+        return "/releases/%d" % args[0]
+    if name == "master":
+        return "/masters/%d" % args[0]
+    if name == "master_versions":
+        return "/masters/%d/versions?%s" % (
+            args[0],
+            urlencode(dict(kwargs, page=args[1])),
+        )
+    return name
 
-    def _get(self, url):
-        self.urls.append(url)
-        if self.fail and self.fail(url):
-            raise self.fail(url)
-        if "/database/search" in url:
-            return {
-                "results": [
-                    h
-                    if isinstance(h, dict)
-                    else {"id": h, "format": ["Vinyl", "LP", "Album"]}
-                    for h in self.hits
-                ]
-            }
-        return self.records[int(url.rsplit("/", 1)[1])]
+
+class FakeClient(FakeDiscogs):
+    """
+    Discogs's search hits and release records (masters too, by id). `urls` is
+    each call as the request it stands for; `fail` takes one of them and
+    returns an exception to raise, or None.
+    """
+
+    def __init__(self, hits, records, fail=None, **kwargs):
+        def failing(name, args, kw):
+            return fail and fail(_path(name, args, kw))
+
+        super().__init__(
+            hits=hits, releases=records, masters=records, fail=failing, **kwargs
+        )
+
+    @property
+    def urls(self):
+        return [_path(*call) for call in self.calls]
 
 
 def use(monkeypatch, fake):
-    monkeypatch.setattr(discogs, "client", lambda: fake)
-    return fake
+    return fake.install(monkeypatch)
 
 
 # --- matching ---
@@ -223,12 +235,10 @@ def test_a_matrix_alone_is_enough_and_is_searched_as_text(monkeypatch):
 
 def test_what_the_matrix_search_finds_is_checked_first_and_not_twice(monkeypatch):
     class Two(FakeClient):
-        def _get(self, url):
-            if "/database/search" in url:
-                self.urls.append(url)
-                ids = [9] if "q=" in url else [1, 2, 9]
-                return {"results": [{"id": i, "format": ["Vinyl", "LP"]} for i in ids]}
-            return super()._get(url)
+        def search(self, **params):
+            self._record("search", **params)
+            ids = [9] if "q" in params else [1, 2, 9]
+            return [{"id": i, "format": ["Vinyl", "LP"]} for i in ids]
 
     use(
         monkeypatch,
@@ -263,7 +273,7 @@ def test_a_matrix_match_outweighs_a_matching_country():
 
 def test_dev_mode_never_reaches_discogs(dev_mode, monkeypatch):
     monkeypatch.setattr(
-        discogs, "client", lambda: pytest.fail("reached Discogs in dev mode")
+        discogs_client, "client", lambda: pytest.fail("reached Discogs in dev mode")
     )
     r = identify.search(artist="Band")
     assert not r["ok"] and r["dev_mode"] and "dev mode" in r["error"]
@@ -271,9 +281,7 @@ def test_dev_mode_never_reaches_discogs(dev_mode, monkeypatch):
 
 
 def test_rate_limit_on_a_release_keeps_the_rest(monkeypatch):
-    from discogs_client.exceptions import HTTPError
-
-    err = HTTPError("slow down", 429)
+    err = api_error(429, "slow down")
     fake = FakeClient(
         [1, 2],
         {1: record(1, matrices=["A1"])},
@@ -286,18 +294,16 @@ def test_rate_limit_on_a_release_keeps_the_rest(monkeypatch):
 
 
 def test_rate_limit_on_the_search_is_a_message_not_an_error(monkeypatch):
-    from discogs_client.exceptions import HTTPError
-
-    use(monkeypatch, FakeClient([], {}, fail=lambda u: HTTPError("no", 429)))
+    use(monkeypatch, FakeClient([], {}, fail=lambda u: api_error(429, "no")))
     r = identify.search(artist="Band")
     assert not r["ok"] and "too many" in r["error"]
 
 
 def test_no_discogs_connection_is_a_message(monkeypatch):
     def client():
-        raise discogs.DiscogsAuthError("Connect fbc to Discogs first")
+        raise discogs_client.DiscogsAuthError("Connect fbc to Discogs first")
 
-    monkeypatch.setattr(discogs, "client", client)
+    monkeypatch.setattr(discogs_client, "client", client)
     assert identify.search(artist="x")["error"].startswith("Connect fbc")
 
 
@@ -362,78 +368,66 @@ def test_the_form_has_type_reissue_and_color(client):
 # --- adding to the Discogs collection ---
 
 
-class CollectClient:
-    """Enough of Discogs's collection API to add a copy and set its fields."""
-
-    def __init__(self, fail_field=None):
-        self.posts, self.fail_field = [], fail_field
-        self.base = "https://api.discogs.com/users/me"
-
-    def identity(self):
-        client = self
-        return SimpleNamespace(
-            fetch=lambda key: client.base,
-            collection_items=lambda rid: [
-                FakeCollectionItem(
-                    FakeRelease(
-                        rid,
-                        "Album",
-                        1978,
-                        artists=[FakeArtist(5, "Band")],
-                        master=FakeMaster(77, 1977),
-                    ),
-                    folder_id=2,
-                    instance_id=555,
-                )
-            ],
-        )
-
-    def _get(self, url):
-        if url.endswith("/collection/folders"):
-            return {
-                "folders": [
-                    {"id": 0, "name": "All"},
-                    {"id": 1, "name": "Uncategorized"},
-                    {"id": 2, "name": "Records"},
-                ]
-            }
-        assert url.endswith("/collection/fields")
-        return {
-            "fields": [
-                {
-                    "id": 1,
-                    "name": "Media Condition",
-                    "type": "dropdown",
-                    "options": ["Mint (M)", "Near Mint (NM or M-)"],
-                },
-                {
-                    "id": 2,
-                    "name": "Sleeve Condition",
-                    "type": "dropdown",
-                    "options": ["Very Good Plus (VG+)"],
-                },
-                {"id": 3, "name": "Notes", "type": "textarea"},
-                {
-                    "id": 4,
-                    "name": "Dust Jacket Condition",
-                    "type": "dropdown",
-                    "options": ["Good (G)"],
-                },
-                {"id": 9, "name": "Something Else", "type": "textarea"},
-            ]
-        }
-
-    def _post(self, url, data):
-        self.posts.append((url, data))
-        if self.fail_field and url.endswith("/fields/%d" % self.fail_field):
-            raise RuntimeError("nope")
-        return {"instance_id": 555} if "/instances/" not in url else None
+FOLDERS = [
+    {"id": 0, "name": "All"},
+    {"id": 1, "name": "Uncategorized"},
+    {"id": 2, "name": "Records"},
+]
+FIELDS = [
+    {
+        "id": 1,
+        "name": "Media Condition",
+        "type": "dropdown",
+        "options": ["Mint (M)", "Near Mint (NM or M-)"],
+    },
+    {
+        "id": 2,
+        "name": "Sleeve Condition",
+        "type": "dropdown",
+        "options": ["Very Good Plus (VG+)"],
+    },
+    {"id": 3, "name": "Notes", "type": "textarea"},
+    {
+        "id": 4,
+        "name": "Dust Jacket Condition",
+        "type": "dropdown",
+        "options": ["Good (G)"],
+    },
+    {"id": 9, "name": "Something Else", "type": "textarea"},
+]
 
 
-def use_collection(monkeypatch, **kw):
-    fake = CollectClient(**kw)
-    monkeypatch.setattr(discogs, "client", lambda: fake)
-    return fake
+def use_collection(monkeypatch, fail_field=None):
+    """An account that can add a copy of release 9 (instance 555) and set its fields."""
+
+    def fail(name, args, kwargs):
+        if name == "set_collection_field" and args[3] == fail_field:
+            return RuntimeError("nope")
+
+    account = FakeAccount(
+        folders=FOLDERS,
+        fields=FIELDS,
+        items=[
+            collection_item(
+                9, 555, folder_id=2, artists=[(5, "Band")], master_id=77, year=1978
+            )
+        ],
+        next_instance_id=555,
+        fail=fail,
+    )
+    FakeDiscogs(
+        releases={9: {"id": 9, "country": "US", "released": "1978-05-01"}},
+        masters={77: {"id": 77, "year": 1977}},
+        account=account,
+    ).install(monkeypatch)
+    return account
+
+
+def writes(account):
+    """What was written to the account: adds, then field values."""
+    return account.calls_to("add_to_collection") + account.calls_to(
+        "set_collection_field"
+    )
 
 
 def test_the_form_offers_the_account_folders_and_the_named_fields(monkeypatch):
@@ -462,16 +456,12 @@ def test_collect_adds_sets_fields_and_saves_the_instance(monkeypatch):
         },
     )
     assert problem is None and instance_id == 555
-    assert fake.posts[0] == (fake.base + "/collection/folders/2/releases/9", None)
-    assert (
-        fake.base + "/collection/folders/2/releases/9/instances/555/fields/1",
-        {"value": "Near Mint (NM or M-)"},
-    ) in fake.posts
-    assert (
-        fake.base + "/collection/folders/2/releases/9/instances/555/fields/3",
-        {"value": "ex-radio"},
-    ) in fake.posts
-    assert len(fake.posts) == 3  # blank and unoffered values aren't sent
+    assert fake.calls_to("add_to_collection") == [(2, 9)]
+    assert sorted(fake.calls_to("set_collection_field")) == [
+        (2, 9, 555, 1, "Near Mint (NM or M-)"),
+        (2, 9, 555, 3, "ex-radio"),
+    ]
+    assert len(writes(fake)) == 3  # blank and unoffered values aren't sent
     assert warnings == ["Dust Jacket Condition: Discogs has no choice 'Excellent (E)'"]
     assert [i.instance_id for i in release.discogs_instances] == [555]
 
@@ -486,11 +476,13 @@ def test_collect_refuses_a_folder_that_isnt_the_accounts(monkeypatch):
     fake = use_collection(monkeypatch)
     assert identify.collect(9, 0, {})[3]
     assert identify.collect(9, 77, {})[3]
-    assert fake.posts == []
+    assert writes(fake) == []
 
 
 def test_collect_never_reaches_discogs_in_dev_mode(dev_mode, monkeypatch):
-    monkeypatch.setattr(discogs, "client", lambda: pytest.fail("reached Discogs"))
+    monkeypatch.setattr(
+        discogs_client, "client", lambda: pytest.fail("reached Discogs")
+    )
     assert identify.collect(9, 1, {})[3]
     assert not identify.collection_form()["ok"]
 
@@ -514,7 +506,7 @@ def test_collect_page_posts_then_goes_to_add_unit(monkeypatch, client):
         as_text=True
     )
     assert "adds a copy to your Discogs account" in html and "Records" in html
-    assert "Extras Included" in html and fake.posts == []  # showing it writes nothing
+    assert "Extras Included" in html and writes(fake) == []  # showing it writes nothing
     r = client.post(
         "/identifyrecord/collect",
         data={
@@ -566,7 +558,7 @@ def test_collect_form_preselects_the_purchase_lots_folder(monkeypatch, client):
     )
     assert _selected(html)[:1] == ["2"]
     assert "Chosen from the Purchase Lot" in html
-    assert fake.posts == []  # choosing a default writes nothing
+    assert writes(fake) == []  # choosing a default writes nothing
 
 
 def test_collect_form_has_no_default_for_a_lot_without_a_folder(monkeypatch, client):
@@ -617,13 +609,14 @@ def test_the_unit_is_named_with_the_master_year(monkeypatch):
 
 
 def test_a_missing_master_falls_back_to_the_release_year(monkeypatch):
-    class NoMaster(FakeClient):
-        def _get(self, url):
-            if "/masters/" in url:
-                raise RuntimeError("gone")
-            return super()._get(url)
-
-    use(monkeypatch, NoMaster([], {9: record(9, year=1978)}))
+    use(
+        monkeypatch,
+        FakeClient(
+            [],
+            {9: record(9, year=1978)},
+            fail=lambda u: RuntimeError("gone") if "/masters/" in u else None,
+        ),
+    )
     release, _ = identify.save_release(9)
     assert release.master_year == 1978
 
@@ -652,21 +645,21 @@ def test_a_release_id_overrides_the_other_fields_and_gives_one_result(monkeypatc
         release_id="[r7]",
     )
     assert r["ok"] and [c["id"] for c in r["candidates"]] == [7]
-    assert fake.urls == ["https://api.discogs.com/releases/7"]  # no search made
+    assert fake.urls == ["/releases/7"]  # no search made
     assert r["candidates"][0]["status"] == identify.EXACT  # still ranked and shown
     assert not r["candidates"][0]["country_match"]
 
 
 def test_a_bad_or_missing_release_id_is_a_message(monkeypatch):
-    from discogs_client.exceptions import HTTPError
-
-    use(monkeypatch, FakeClient([], {}, fail=lambda u: HTTPError("nope", 404)))
+    use(monkeypatch, FakeClient([], {}, fail=lambda u: api_error(404, "nope")))
     assert "isn't a release id" in identify.search(release_id="master 5")["error"]
     assert identify.search(release_id="99")["error"] == "Discogs has no release 99."
 
 
 def test_a_release_id_in_dev_mode_never_reaches_discogs(dev_mode, monkeypatch):
-    monkeypatch.setattr(discogs, "client", lambda: pytest.fail("reached Discogs"))
+    monkeypatch.setattr(
+        discogs_client, "client", lambda: pytest.fail("reached Discogs")
+    )
     assert identify.search(release_id="7")["dev_mode"]
 
 
@@ -730,34 +723,11 @@ def test_the_results_carry_notes_identifiers_and_every_picture(monkeypatch, clie
 
 
 class MasterClient(FakeClient):
-    """A master's versions (paged, 2 per page) and a master search."""
+    """A master's versions (paged) and a master search."""
 
     def __init__(self, versions, records, masters=(), page_size=None):
-        super().__init__([], records)
-        self.versions, self.masters, self.page_size = versions, masters, page_size
-
-    def _get(self, url):
-        from urllib.parse import parse_qs, urlparse
-
-        if "/versions" in url:
-            self.urls.append(url)
-            query = parse_qs(urlparse(url).query)
-            page = int(query["page"][0])
-            per = self.page_size or int(query["per_page"][0])
-            # Discogs applies the country filter itself.
-            wanted = [
-                v
-                for v in self.versions
-                if "country" not in query or v["country"] == query["country"][0]
-            ]
-            return {
-                "pagination": {"pages": -(-len(wanted) // per) or 1},
-                "versions": wanted[(page - 1) * per : page * per],
-            }
-        if "type=master" in url:
-            self.urls.append(url)
-            return {"results": list(self.masters)}
-        return super()._get(url)
+        super().__init__([], records, versions=versions, masters_found=masters)
+        self.page_size = page_size or 100
 
 
 def version(rid, country="US", fmt="LP, Album", major=("Vinyl",)):
@@ -822,9 +792,7 @@ def test_a_big_master_is_checked_twenty_at_a_time(monkeypatch):
 
 
 def test_a_bad_or_unknown_master_is_a_message(monkeypatch):
-    from discogs_client.exceptions import HTTPError
-
-    use(monkeypatch, FakeClient([], {}, fail=lambda u: HTTPError("nope", 404)))
+    use(monkeypatch, FakeClient([], {}, fail=lambda u: api_error(404, "nope")))
     assert "isn't a master id" in identify.search(master="xyz")["error"]
     assert identify.search(master="5")["error"] == "Discogs has no master 5."
 
@@ -839,7 +807,9 @@ def test_finding_a_master_from_artist_and_title(monkeypatch):
 
 
 def test_master_features_never_reach_discogs_in_dev_mode(dev_mode, monkeypatch):
-    monkeypatch.setattr(discogs, "client", lambda: pytest.fail("reached Discogs"))
+    monkeypatch.setattr(
+        discogs_client, "client", lambda: pytest.fail("reached Discogs")
+    )
     assert identify.search(master="1")["dev_mode"]
     assert identify.find_masters("a")["dev_mode"]
 

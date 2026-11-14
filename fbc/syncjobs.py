@@ -13,7 +13,7 @@ from collections import namedtuple
 
 from ebaysdk.exception import ConnectionError
 
-from fbc import devmode, discogs, sync
+from fbc import devmode, discogs_client, sync
 from fbc.listing import OAuthError, fetch_active_items, trading
 from fbc.util import (
     add_discogs_release,
@@ -81,75 +81,44 @@ def sync_discogs():
 
     started = sync.utcnow()
     logger.info("Updating discogs...")
-    d = discogs.client()
-    me = d.identity()
-    folders = me.collection_folders
-    for folder in folders:
-        if folder.id > 0:
-            res = db.session.query(Folder).filter_by(folder_id=folder.id).all()
+    account = discogs_client.account()
+    for folder in account.collection_folders():
+        if folder["id"] > 0:
+            res = db.session.query(Folder).filter_by(folder_id=folder["id"]).all()
             if len(res) == 0:
-                fdoc = Folder(folder_id=folder.id, name=folder.name)
+                fdoc = Folder(folder_id=folder["id"], name=folder["name"])
                 db.session.add(fdoc)
                 db.session.commit()
                 db.session.refresh(fdoc)
                 logger.info("Added folder " + str(fdoc))
-    releases = me.collection_folders[0].releases
+    # Read in full or not at all: an instance missing from a short read would
+    # be forgotten below.
+    releases = account.collection_items()
     local_releases = db.session.query(DiscogsRelease).all()
     local_instances = db.session.query(DiscogsInstance).all()
 
     logger.info("Total releases: " + str(len(releases)))
     logger.info("Total local releases: " + str(len(local_releases)))
+    remote_instances = {item["instance_id"] for item in releases}
     for item in releases:
-        logger.info("Checking discogs: " + str(item))
+        logger.info("Checking discogs: " + str(item["instance_id"]))
         discogs_instance = (
             db.session.query(DiscogsInstance)
-            .filter_by(instance_id=item.instance_id)
+            .filter_by(instance_id=item["instance_id"])
             .first()
         )
         if not discogs_instance:
-            logger.info("Adding " + str(item))
+            logger.info("Adding " + str(item["instance_id"]))
             add_discogs_release(item)
 
     for item in local_instances:
-        if not any(x.instance_id == item.instance_id for x in releases):
+        if item.instance_id not in remote_instances:
             logger.info(
                 "Local instance " + str(item.instance_id) + " should be removed"
             )
             forget_discogs_instance(item)
     sync.record_finished(DISCOGS_SYNC, started)
     logger.info("Discogs sync finished.")
-
-
-class DiscogsInventoryError(Exception):
-    """The seller inventory wasn't read in full, so nothing may be marked ended."""
-
-
-def read_discogs_inventory(me):
-    """
-    Every item of the seller's inventory, whatever its status, as the JSON
-    Discogs sent. (Discogs's inventory shows only For Sale items unless asked
-    for another status, so this asks for All: Drafts and Expired items are
-    still ours.) Raises DiscogsInventoryError if fewer came back than Discogs
-    says there are.
-    """
-    inventory = me.inventory
-    inventory.per_page = 100
-    inventory.filter(status="All")
-    total = len(inventory)
-    items = []
-    for page in range(1, inventory.pages + 1):
-        # The library's list objects keep their JSON in .data.
-        items.extend(listing.data for listing in inventory.page(page))
-        logger.info("Read Discogs inventory page " + str(page) + ".")
-    if len(items) != total:
-        raise DiscogsInventoryError(
-            "Discogs says the inventory has "
-            + str(total)
-            + " items but "
-            + str(len(items))
-            + " came back."
-        )
-    return items
 
 
 def sync_discogs_listings():
@@ -159,8 +128,9 @@ def sync_discogs_listings():
     """
     started = sync.utcnow()
     logger.info("Updating Discogs listings...")
-    me = discogs.client().identity()
-    items = read_discogs_inventory(me)
+    # Read in full or not at all (IncompleteRead fails the sync), so nothing
+    # is marked ended on a short read.
+    items = discogs_client.account().inventory()
     logger.info("Total Discogs listings: " + str(len(items)))
     seen = set()
     unlinked = 0

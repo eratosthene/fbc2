@@ -219,9 +219,8 @@ def save_discogs_listing(data, seen):
     stays with the listing even when the listing is no longer for sale.
     Returns the DiscogsListing.
     """
-    from discogs_client.utils import parse_timestamp
-
     from fbc import db
+    from fbc.discogs_client import parse_timestamp
     from fbc.listing import unit_id_from_sku
     from fbc.models.discogs import DiscogsListing
     from fbc.models.inventory import Unit
@@ -381,6 +380,13 @@ def add_ebay_order(item):
 
 
 def add_discogs_release(item):
+    """
+    Save one item of the Discogs collection (the JSON Discogs sent: its
+    `basic_information`, `instance_id`, `folder_id`, `date_added` and `notes`)
+    as a DiscogsInstance of its DiscogsRelease, adding or updating the
+    release. The country and release date, and the master's year, aren't in
+    the item, so they are fetched from Discogs.
+    """
     from fbc.models.discogs import (
         Artist,
         DiscogsInstance,
@@ -388,27 +394,31 @@ def add_discogs_release(item):
         Genre,
         Style,
     )
-    from fbc import db
+    from fbc import db, discogs_client
 
     logger.debug("add_discogs_release: " + str(item))
+    info = item["basic_information"]
+    instance_id = item["instance_id"]
+    release_id = info["id"]
+    full = discogs_client.release(release_id)
     artists = []
     genres = []
     styles = []
-    for artist in item.release.artists:
-        adoc = db.session.query(Artist).filter_by(artist_id=artist.id).first()
+    for artist in info.get("artists") or []:
+        adoc = db.session.query(Artist).filter_by(artist_id=artist["id"]).first()
         if not adoc:
             sn = ""
-            n = artist.name
+            n = artist["name"]
             if n.startswith("The "):
                 sn = n.removeprefix("The ") + ", The"
                 logger.debug("Replacing /" + n + "/ with /" + sn + "/")
-            adoc = Artist(artist_id=artist.id, name=artist.name, sort_name=sn)
+            adoc = Artist(artist_id=artist["id"], name=n, sort_name=sn)
             db.session.add(adoc)
             db.session.commit()
             db.session.refresh(adoc)
             logger.info("Added artist " + str(adoc))
         artists.append(adoc)
-    for genre in item.release.genres:
+    for genre in info.get("genres") or []:
         gdoc = db.session.query(Genre).filter_by(name=genre).first()
         if not gdoc:
             gdoc = Genre(name=genre)
@@ -417,7 +427,7 @@ def add_discogs_release(item):
             db.session.refresh(gdoc)
             logger.info("Added genre " + str(gdoc))
         genres.append(gdoc)
-    for style in item.release.styles:
+    for style in info.get("styles") or []:
         sdoc = db.session.query(Style).filter_by(name=style).first()
         if not sdoc:
             sdoc = Style(name=style)
@@ -426,20 +436,25 @@ def add_discogs_release(item):
             db.session.refresh(sdoc)
             logger.info("Added style " + str(sdoc))
         styles.append(sdoc)
-    folder_id = item.folder_id
+    folder_id = item["folder_id"]
     master_id = 0
-    master_year = item.release.year
-    if item.release.master:
-        master_id = item.release.master.id
-        master_year = item.release.master.year
-    date_added = item.date_added
+    master_year = info.get("year")
+    if info.get("master_id"):
+        master_id = info["master_id"]
+        master_year = discogs_client.master(master_id).get("year")
+    date_added = discogs_client.parse_timestamp(item["date_added"])
     labels = json.dumps(
-        [{"name": label.name, "catno": label.catno} for label in item.release.labels]
+        [
+            {"name": label["name"], "catno": label.get("catno")}
+            for label in info.get("labels") or []
+        ]
     )
-    country = item.release.country
+    country = full.get("country")
+    released = full.get("released")
+    formats = json.dumps(info.get("formats") or [])
     # TODO: make this whole thing atomic instead of if/then
     discogs_release = (
-        db.session.query(DiscogsRelease).filter_by(release_id=item.id).first()
+        db.session.query(DiscogsRelease).filter_by(release_id=release_id).first()
     )
     if discogs_release:
         if discogs_release.discogs_instances:
@@ -448,11 +463,11 @@ def add_discogs_release(item):
             )
             discogs_instance = (
                 db.session.query(DiscogsInstance)
-                .filter_by(instance_id=item.instance_id)
+                .filter_by(instance_id=instance_id)
                 .first()
             )
             if not discogs_instance:
-                discogs_instance = DiscogsInstance(instance_id=item.instance_id)
+                discogs_instance = DiscogsInstance(instance_id=instance_id)
             if discogs_instance not in discogs_release.discogs_instances:
                 logger.debug("appending instances: " + str(discogs_instance))
                 discogs_release.discogs_instances.append(discogs_instance)
@@ -461,39 +476,39 @@ def add_discogs_release(item):
         else:
             logger.debug("no existing instance(s)")
             discogs_release.discogs_instances = [
-                DiscogsInstance(instance_id=item.instance_id)
+                DiscogsInstance(instance_id=instance_id)
             ]
-        discogs_release.title = item.release.title
-        discogs_release.year = item.release.year
+        discogs_release.title = info.get("title")
+        discogs_release.year = info.get("year")
         discogs_release.artists = artists
         discogs_release.genres = genres
         discogs_release.styles = styles
         discogs_release.master_id = master_id
         discogs_release.master_year = master_year
-        discogs_release.formats = json.dumps(item.release.formats)
+        discogs_release.formats = formats
         discogs_release.labels = labels
         discogs_release.country = country
-        discogs_release.released = item.release.fetch("released")
+        discogs_release.released = released
         discogs_release.folder_id = folder_id
-        discogs_release.notes = json.dumps(item.notes)
+        discogs_release.notes = json.dumps(item.get("notes"))
         discogs_release.date_added = date_added
     else:
         discogs_release = DiscogsRelease(
-            release_id=item.id,
-            discogs_instances=[DiscogsInstance(instance_id=item.instance_id)],
-            title=item.release.title,
-            year=item.release.year,
+            release_id=release_id,
+            discogs_instances=[DiscogsInstance(instance_id=instance_id)],
+            title=info.get("title"),
+            year=info.get("year"),
             artists=artists,
             genres=genres,
             styles=styles,
             master_id=master_id,
             master_year=master_year,
-            formats=json.dumps(item.release.formats),
+            formats=formats,
             labels=labels,
             country=country,
-            released=item.release.fetch("released"),
+            released=released,
             folder_id=folder_id,
-            notes=json.dumps(item.notes),
+            notes=json.dumps(item.get("notes")),
             date_added=date_added,
         )
         db.session.add(discogs_release)

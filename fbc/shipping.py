@@ -462,12 +462,6 @@ def discogs_plan(unit):
     return instance, None
 
 
-def _discogs():
-    from fbc import discogs
-
-    return discogs.client()
-
-
 def remove_from_discogs(unit):
     """
     Delete `unit`'s own instance of its release from the Discogs collection,
@@ -478,9 +472,8 @@ def remove_from_discogs(unit):
     so other copies of the same release are left alone. In dev mode it's
     only removed from fbc.
     """
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
-
-    from fbc.discogs import DiscogsAuthError
+    from fbc import discogs_client
+    from fbc.discogs_client import ApiError, DiscogsAuthError
     from fbc.util import forget_discogs_instance
 
     instance, problem = discogs_plan(unit)
@@ -501,28 +494,15 @@ def remove_from_discogs(unit):
             "warning",
         )
     try:
-        client = _discogs()
-        me = client.identity()
-        try:
-            found = [
-                i
-                for i in me.collection_items(release_id)
-                if i.instance_id == instance_id
-            ]
-        except HTTPError as e:
-            # Discogs answers 404 when no copy of the release is left.
-            if e.status_code != 404:
-                raise
-            found = []
+        account = discogs_client.account()
+        found = [
+            i
+            for i in account.collection_items(release_id)
+            if i["instance_id"] == instance_id
+        ]
         if found:
-            client._delete(
-                me.fetch("resource_url")
-                + "/collection/folders/"
-                + str(found[0].folder_id)
-                + "/releases/"
-                + str(release_id)
-                + "/instances/"
-                + str(instance_id)
+            account.delete_collection_instance(
+                found[0]["folder_id"], release_id, instance_id
             )
             message = (
                 "Removed "
@@ -540,7 +520,7 @@ def remove_from_discogs(unit):
             )
     # DiscogsAuthError: fbc isn't connected to Discogs, which is only found
     # out once the receipt is saved, so it's reported like any other failure.
-    except (DiscogsAPIError, DiscogsAuthError, OSError) as e:
+    except (ApiError, DiscogsAuthError, OSError) as e:
         logger.error(e)
         return (
             "Couldn't remove "

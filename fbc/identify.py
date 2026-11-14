@@ -18,7 +18,7 @@ What Discogs's API gives (checked against its docs and python3-discogs-client
 - A release is added to the collection by POST to
   /users/{name}/collection/folders/{folder}/releases/{id}. Discogs answers
   with the new copy's instance_id (the library's add_release throws it away,
-  so fbc posts itself). The copy's condition, notes and other custom fields
+  so fbc.discogs_client posts itself). The copy's condition, notes and other custom fields
   are then set one at a time, by POST to .../instances/{instance}/fields/{field}.
   Field ids are the account's own, so they're looked up by name.
 
@@ -27,8 +27,8 @@ through its own "Add to my Discogs collection" button and form; nothing else
 here writes. "Just add the Unit" saves the release in fbc as a Release with no
 collection copy.
 
-Everything that reaches Discogs goes through discogs.client(), which refuses
-to run in dev mode; search() also checks devmode itself, so the page can say
+Everything that reaches Discogs goes through fbc.discogs_client, which refuses to
+run in dev mode; search() also checks devmode itself, so the page can say
 so plainly. Searches and release fetches are kept for a few minutes.
 
 How a matrix is scored: both sides are put in capitals with everything but
@@ -53,7 +53,7 @@ from difflib import SequenceMatcher
 
 from markupsafe import Markup, escape
 
-from fbc import devmode
+from fbc import devmode, discogs_client
 
 logger = logging.getLogger()
 
@@ -61,9 +61,6 @@ CACHE_SECONDS = 300
 MAX_CANDIDATES = 12
 # More when a matrix is given: it's what picks the release, so it's worth the calls.
 MAX_CANDIDATES_WITH_MATRIX = 20
-SEARCH_URL = "https://api.discogs.com/database/search"
-RELEASE_URL = "https://api.discogs.com/releases/"
-MASTER_URL = "https://api.discogs.com/masters/"
 DEFAULT_COUNTRY = "US"
 # Discogs spells the country out in releases; the search filter takes either.
 COUNTRY_NAMES = {"US": "US", "USA": "US", "UNITED STATES": "US", "UK": "UK"}
@@ -270,13 +267,12 @@ def _failure(message, **extra):
     return dict({"ok": False, "error": message}, **extra)
 
 
-def _get(client, url):
-    from discogs_client.exceptions import HTTPError
-
+def _call(fn, *args, **kwargs):
+    """fn(*args, **kwargs), with Discogs's 429 raised as RateLimited."""
     try:
-        return client._get(url)
-    except HTTPError as e:
-        if getattr(e, "status_code", None) == 429:
+        return fn(*args, **kwargs)
+    except discogs_client.ApiError as e:
+        if e.rate_limited:
             raise RateLimited() from e
         raise
 
@@ -331,7 +327,7 @@ def _summary(release, result=None):
     }
 
 
-def _check(client, hits):
+def _check(hits):
     """
     Fetch each hit's release record, for its matrix and pictures: (candidates,
     note, calls made). A hit that can't be fetched, or comes after Discogs's
@@ -344,7 +340,7 @@ def _check(client, hits):
         unchecked = False
         try:
             calls += 1
-            release = _release_record(client, hit["id"])
+            release = _release_record(hit["id"])
         except RateLimited:
             note = (
                 "Discogs's rate limit stopped the matrix check, so some"
@@ -387,12 +383,6 @@ def search(
     and barcode: its versions are listed, filtered by country, type and
     reissue, and `offset` skips the ones an earlier call already checked.
     """
-    from urllib.parse import urlencode
-
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
-
-    from fbc import discogs
-
     if devmode.on():
         return _failure("Not available in dev mode.", dev_mode=True)
     if (release_id or "").strip():
@@ -424,18 +414,12 @@ def search(
         params["country"] = country.strip()
 
     def fetch():
-        try:
-            client = discogs.client()
-        except discogs.DiscogsAuthError as e:
-            return _failure(str(e))
         calls = 0
 
         def run(query):
             nonlocal calls
             calls += 1
-            return (_get(client, SEARCH_URL + "?" + urlencode(query)) or {}).get(
-                "results"
-            ) or []
+            return _call(discogs_client.search, **query)
 
         try:
             hits = []
@@ -448,18 +432,20 @@ def search(
             if has_fields:
                 seen = {h.get("id") for h in hits}
                 hits += [h for h in run(params) if h.get("id") not in seen]
+        except discogs_client.DiscogsAuthError as e:
+            return _failure(str(e))
         except RateLimited:
             return _failure(
                 "Discogs says too many requests; wait a minute and try again."
             )
-        except (DiscogsAPIError, HTTPError) as e:
+        except discogs_client.ApiError as e:
             return _failure("Discogs said no: " + str(e))
         except Exception as e:
             logger.exception("Discogs search failed")
             return _failure("Couldn't reach Discogs: " + str(e))
         hits = [h for h in hits if keep_hit(h, type_word, reissue)]
         limit = MAX_CANDIDATES_WITH_MATRIX if matrix_text else MAX_CANDIDATES
-        candidates, note, used = _check(client, hits[:limit])
+        candidates, note, used = _check(hits[:limit])
         calls += used
         return {
             "ok": True,
@@ -480,7 +466,6 @@ def search(
     return dict(found, candidates=rank(found["candidates"], country, matrix, color))
 
 
-MASTER_URL_BASE = "https://api.discogs.com/masters/"
 # A master's versions come 100 to a page; a page or two covers most masters'
 # vinyl in one country, and this stops a huge master eating the rate limit.
 MAX_VERSION_PAGES = 5
@@ -507,12 +492,6 @@ def find_masters(artist="", title=""):
     {"ok": True, "masters": [{"id", "title", "year", "thumb", "url"}]} or
     {"ok": False, "error", "dev_mode"}. One Discogs call.
     """
-    from urllib.parse import urlencode
-
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
-
-    from fbc import discogs
-
     if devmode.on():
         return _failure("Not available in dev mode.", dev_mode=True)
     params = {"type": "master", "per_page": 15}
@@ -525,14 +504,12 @@ def find_masters(artist="", title=""):
 
     def fetch():
         try:
-            hits = (
-                _get(discogs.client(), SEARCH_URL + "?" + urlencode(params)) or {}
-            ).get("results") or []
-        except discogs.DiscogsAuthError as e:
+            hits = _call(discogs_client.search, **params)
+        except discogs_client.DiscogsAuthError as e:
             return _failure(str(e))
         except RateLimited:
             return _failure("Discogs says too many requests; try in a minute.")
-        except (DiscogsAPIError, HTTPError) as e:
+        except discogs_client.ApiError as e:
             return _failure("Discogs said no: " + str(e))
         except Exception as e:
             logger.exception("Discogs master search failed")
@@ -560,26 +537,20 @@ def find_masters(artist="", title=""):
     return found
 
 
-def _master_versions(client, master_id, country, type_word, reissue, need):
+def _master_versions(master_id, country, type_word, reissue, need):
     """
     The master's versions that are the wanted vinyl, as search-hit-like
     dicts, fetching pages until there are `need` of them or none are left:
     (hits, calls made, whether pages were left unread at the page limit).
     """
-    from urllib.parse import urlencode
-
-    params = {"per_page": 100, "sort": "released", "format": "Vinyl"}
+    params = {"sort": "released", "format": "Vinyl"}
     if (country or "").strip():
         params["country"] = country.strip()
     hits, calls, page, pages = [], 0, 0, 1
     while page < pages and page < MAX_VERSION_PAGES and len(hits) < need:
         page += 1
         calls += 1
-        body = _get(
-            client,
-            "%s%d/versions?%s"
-            % (MASTER_URL_BASE, master_id, urlencode(dict(params, page=page))),
-        )
+        body = _call(discogs_client.master_versions, master_id, page, **params)
         pages = ((body or {}).get("pagination") or {}).get("pages") or 1
         for v in (body or {}).get("versions") or []:
             formats = list(v.get("major_formats") or []) + [
@@ -606,10 +577,6 @@ def _master_search(master, country, matrix, color, type_word, reissue, offset):
     a matrix it carries on to the next 20, up to MASTER_AUTO_MAX, until a
     batch has an exact match.
     """
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
-
-    from fbc import discogs
-
     master_id = master_id_from(master)
     if not master_id:
         return _failure(
@@ -626,16 +593,15 @@ def _master_search(master, country, matrix, color, type_word, reissue, offset):
 
     def fetch():
         try:
-            client = discogs.client()
             hits, calls, truncated = _master_versions(
-                client, master_id, country, type_word, reissue, offset + reach + 1
+                master_id, country, type_word, reissue, offset + reach + 1
             )
-        except discogs.DiscogsAuthError as e:
+        except discogs_client.DiscogsAuthError as e:
             return _failure(str(e))
         except RateLimited:
             return _failure("Discogs says too many requests; try in a minute.")
-        except (DiscogsAPIError, HTTPError) as e:
-            if getattr(e, "status_code", None) == 404:
+        except discogs_client.ApiError as e:
+            if e.status_code == 404:
                 return _failure("Discogs has no master %d." % master_id)
             return _failure("Discogs said no: " + str(e))
         except Exception as e:
@@ -644,7 +610,7 @@ def _master_search(master, country, matrix, color, type_word, reissue, offset):
         candidates, note, used, at = [], None, 0, offset
         while at < len(hits) and at - offset < reach:
             batch = hits[at : min(at + MASTER_BATCH, offset + reach)]
-            found_now, note, calls_now = _check(client, batch)
+            found_now, note, calls_now = _check(batch)
             candidates += found_now
             used += calls_now
             at += len(batch)
@@ -696,10 +662,6 @@ def release_id_from(text):
 
 def _one_release(text, country, matrix, color):
     """search() for a release id: that one release, ranked like any other."""
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
-
-    from fbc import discogs
-
     rid = release_id_from(text)
     if not rid:
         return _failure(
@@ -707,13 +669,13 @@ def _one_release(text, country, matrix, color):
             " release's address from Discogs (not a master's)."
         )
     try:
-        record = _release_record(discogs.client(), rid)
-    except discogs.DiscogsAuthError as e:
+        record = _release_record(rid)
+    except discogs_client.DiscogsAuthError as e:
         return _failure(str(e))
     except RateLimited:
         return _failure("Discogs says too many requests; wait a minute and try again.")
-    except (DiscogsAPIError, HTTPError) as e:
-        if getattr(e, "status_code", None) == 404:
+    except discogs_client.ApiError as e:
+        if e.status_code == 404:
             return _failure("Discogs has no release " + str(rid) + ".")
         return _failure("Discogs said no: " + str(e))
     except Exception as e:
@@ -728,11 +690,11 @@ def _one_release(text, country, matrix, color):
     }
 
 
-def _release_record(client, release_id):
+def _release_record(release_id):
     """One release's full record, kept for a few minutes."""
     return _cached(
         ("release", int(release_id)),
-        lambda: _get(client, RELEASE_URL + str(int(release_id))),
+        lambda: _call(discogs_client.release, release_id),
     )
 
 
@@ -746,9 +708,7 @@ def save_release(release_id):
     in the collection). Returns (DiscogsRelease, None) or (None, why not).
     Reads from Discogs only.
     """
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
-
-    from fbc import db, discogs
+    from fbc import db
     from fbc.models.discogs import DiscogsRelease
 
     if devmode.on():
@@ -757,20 +717,20 @@ def save_release(release_id):
     if existing:
         return existing, None
     try:
-        record = _release_record(discogs.client(), release_id)
-    except discogs.DiscogsAuthError as e:
+        record = _release_record(release_id)
+    except discogs_client.DiscogsAuthError as e:
         return None, str(e)
     except RateLimited:
         return None, "Discogs says too many requests; wait a minute and try again."
-    except (DiscogsAPIError, HTTPError) as e:
+    except discogs_client.ApiError as e:
         return None, "Discogs said no: " + str(e)
     except Exception as e:
         logger.exception("Couldn't fetch release %s", release_id)
         return None, "Couldn't reach Discogs: " + str(e)
-    return save_record(record, _master_year(discogs.client(), record)), None
+    return save_record(record, _master_year(record)), None
 
 
-def _master_year(client, record):
+def _master_year(record):
     """The master's year, or None (the release's year is then used)."""
     master_id = record.get("master_id")
     if not master_id:
@@ -778,7 +738,7 @@ def _master_year(client, record):
     try:
         master = _cached(
             ("master", int(master_id)),
-            lambda: _get(client, MASTER_URL + str(int(master_id))),
+            lambda: _call(discogs_client.master, master_id),
         )
         return master.get("year") or None
     except Exception as e:
@@ -934,33 +894,23 @@ def grading_from(values):
     return "/".join(g for g in (media, sleeve) if g)
 
 
-def _me(client):
-    me = client.identity()
-    return me, me.fetch("resource_url")
-
-
 def collection_form():
     """
     What the collect form offers, from the account: {"ok": True, "folders":
     [(id, name)], "fields": [{"id", "name", "type", "options"}], "missing":
     [names not set up on the account]} or {"ok": False, "error", "dev_mode"}.
     """
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
-
-    from fbc import discogs
-
     if devmode.on():
         return _failure("Not available in dev mode.", dev_mode=True)
 
     def fetch():
         try:
-            client = discogs.client()
-            me, base = _me(client)
-            folders = client._get(base + "/collection/folders")["folders"]
-            fields = client._get(base + "/collection/fields")["fields"]
-        except discogs.DiscogsAuthError as e:
+            account = discogs_client.account()
+            folders = account.collection_folders()
+            fields = account.collection_fields()
+        except discogs_client.DiscogsAuthError as e:
             return _failure(str(e))
-        except (DiscogsAPIError, HTTPError) as e:
+        except discogs_client.ApiError as e:
             return _failure("Discogs said no: " + str(e))
         except Exception as e:
             logger.exception("Couldn't read the collection's folders and fields")
@@ -1000,9 +950,7 @@ def collect(release_id, folder_id, values):
     is made but something after fails, the answer says so: the release is
     then in Discogs and Sync Discogs will bring it in.
     """
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
-
-    from fbc import db, discogs
+    from fbc import db
     from fbc.models.discogs import DiscogsRelease
     from fbc.util import add_discogs_release
 
@@ -1015,22 +963,17 @@ def collect(release_id, folder_id, values):
         return None, None, [], "That isn't one of your Discogs folders."
     release_id = int(release_id)
     try:
-        client = discogs.client()
-        me, base = _me(client)
-        added = client._post(
-            "%s/collection/folders/%d/releases/%d" % (base, int(folder_id), release_id),
-            None,
-        )
-    except discogs.DiscogsAuthError as e:
+        account = discogs_client.account()
+        instance_id = account.add_to_collection(folder_id, release_id)
+    except discogs_client.DiscogsAuthError as e:
         return None, None, [], str(e)
-    except (DiscogsAPIError, HTTPError) as e:
-        if getattr(e, "status_code", None) == 429:
+    except discogs_client.ApiError as e:
+        if e.rate_limited:
             return None, None, [], "Discogs says too many requests; try in a minute."
         return None, None, [], "Discogs said no: " + str(e)
     except Exception as e:
         logger.exception("Couldn't add release %s to the collection", release_id)
         return None, None, [], "Couldn't reach Discogs: " + str(e)
-    instance_id = added["instance_id"]
     logger.info("Added release %s to Discogs as instance %s", release_id, instance_id)
 
     warnings = []
@@ -1042,10 +985,8 @@ def collect(release_id, folder_id, values):
             warnings.append(field["name"] + ": Discogs has no choice " + repr(value))
             continue
         try:
-            client._post(
-                "%s/collection/folders/%d/releases/%d/instances/%s/fields/%s"
-                % (base, int(folder_id), release_id, instance_id, field["id"]),
-                {"value": value},
+            account.set_collection_field(
+                folder_id, release_id, instance_id, field["id"], value
             )
         except Exception as e:
             logger.warning("Couldn't set %s: %s", field["name"], e)
@@ -1053,8 +994,8 @@ def collect(release_id, folder_id, values):
     try:
         item = next(
             i
-            for i in me.collection_items(release_id)
-            if int(i.instance_id) == int(instance_id)
+            for i in account.collection_items(release_id)
+            if int(i["instance_id"]) == int(instance_id)
         )
         add_discogs_release(item)
     except Exception as e:

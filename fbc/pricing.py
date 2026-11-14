@@ -5,16 +5,17 @@ worth right now, fetched only when the owner asks for it.
 What each site really gives (checked against the APIs' docs and the
 python3-discogs-client source; nothing here is a sold price from them):
 
-- Discogs: Release.price_suggestions (a suggested price per condition, from
-  the seller's own settings), marketplace_stats (the lowest asking price and
-  the number for sale) and community (how many have and want it). Its API has
+- Discogs: price suggestions (a suggested price per condition, from the
+  seller's own settings), marketplace stats (the lowest asking price and the
+  number for sale) and the release's community figures (how many have and
+  want it). Its API has
   no sold-price history; that is only on the website, which fbc doesn't scrape.
 - eBay: sold prices are only in the Marketplace Insights API, which eBay
   limits to approved partners, and the Finding API's findCompletedItems was
   shut down in February 2025. The Browse API shows active listings, so those
   are asking prices. eBay's own sold-items search is offered as a link.
 
-Everything that reaches Discogs or eBay goes through discogs.client() and
+Everything that reaches Discogs or eBay goes through fbc.discogs_client and
 listing.oauth_token(), which refuse to run in dev mode; research() also checks
 devmode itself, so the page can say so plainly. Answers are kept for a few
 minutes so reloading the page doesn't repeat the calls.
@@ -37,16 +38,16 @@ EBAY_RECORDS_CATEGORY = "176985"
 EBAY_RESULT_LIMIT = 50
 EBAY_SOLD_SEARCH_URL = "https://www.ebay.com/sch/" + EBAY_RECORDS_CATEGORY + "/i.html"
 
-# Best to worst, as python3-discogs-client names them and Discogs spells them.
+# Discogs's condition names, best to worst.
 DISCOGS_CONDITIONS = [
-    ("mint", "Mint (M)"),
-    ("near_mint", "Near Mint (NM or M-)"),
-    ("very_good_plus", "Very Good Plus (VG+)"),
-    ("very_good", "Very Good (VG)"),
-    ("good_plus", "Good Plus (G+)"),
-    ("good", "Good (G)"),
-    ("fair", "Fair (F)"),
-    ("poor", "Poor (P)"),
+    "Mint (M)",
+    "Near Mint (NM or M-)",
+    "Very Good Plus (VG+)",
+    "Very Good (VG)",
+    "Good Plus (G+)",
+    "Good (G)",
+    "Fair (F)",
+    "Poor (P)",
 ]
 
 _cache = {}
@@ -73,10 +74,10 @@ def _cached(key, fetch):
 
 
 def _price(obj):
-    """(amount, currency) from a Discogs Price, or None."""
+    """(amount, currency) from a Discogs price ({"value", "currency"}), or None."""
     try:
-        if obj is not None and obj.value is not None:
-            return round(float(obj.value), 2), obj.currency or "USD"
+        if obj is not None and obj.get("value") is not None:
+            return round(float(obj["value"]), 2), obj.get("currency") or "USD"
     except (AttributeError, TypeError, ValueError):
         pass
     return None
@@ -95,8 +96,7 @@ def discogs_research(release_id):
     own, for the release and for its master if it has one, to help choose a
     Storage Box.
     """
-    from fbc import discogs
-    from discogs_client.exceptions import DiscogsAPIError, HTTPError
+    from fbc import discogs_client
 
     if devmode.on():
         return _failure("Not available in Dev Mode.")
@@ -105,7 +105,7 @@ def discogs_research(release_id):
 
     def fetch():
         try:
-            release = discogs.client().release(int(release_id))
+            release = discogs_client.release(int(release_id))
             out = {
                 "ok": True,
                 "suggestions": [],
@@ -121,46 +121,45 @@ def discogs_research(release_id):
                 "master_styles": [],
             }
             try:
-                suggestions = release.price_suggestions
-                for attribute, label in DISCOGS_CONDITIONS:
-                    price = _price(getattr(suggestions, attribute, None))
+                suggestions = discogs_client.price_suggestions(int(release_id))
+                for condition in DISCOGS_CONDITIONS:
+                    price = _price(suggestions.get(condition))
                     if price:
-                        out["suggestions"].append((label, *price))
+                        out["suggestions"].append((condition, *price))
                 if not out["suggestions"]:
                     out["suggestions_note"] = (
                         "Discogs gave no price suggestions for this release."
                     )
-            except (DiscogsAPIError, HTTPError) as e:
+            except discogs_client.ApiError as e:
                 # Needs seller settings on the Discogs account; the rest still works.
                 out["suggestions_note"] = (
                     "Discogs wouldn't give price suggestions (" + str(e) + "). They"
                     " need seller settings filled in on the Discogs account."
                 )
-            out["genres"] = [str(g) for g in getattr(release, "genres", None) or []]
-            out["styles"] = [str(g) for g in getattr(release, "styles", None) or []]
+            out["genres"] = [str(g) for g in release.get("genres") or []]
+            out["styles"] = [str(g) for g in release.get("styles") or []]
             try:
-                master = getattr(release, "master", None)
-                if master is not None:
-                    out["master_genres"] = [str(g) for g in master.genres or []]
-                    out["master_styles"] = [str(g) for g in master.styles or []]
-            except (DiscogsAPIError, HTTPError):
+                if release.get("master_id"):
+                    master = discogs_client.master(release["master_id"])
+                    out["master_genres"] = [str(g) for g in master.get("genres") or []]
+                    out["master_styles"] = [str(g) for g in master.get("styles") or []]
+            except discogs_client.ApiError:
                 # The master is extra; the release's own answer still shows.
                 pass
-            stats = release.marketplace_stats
-            if stats is not None:
-                out["lowest"] = _price(stats.lowest_price)
-                out["num_for_sale"] = stats.num_for_sale
-            community = release.community
+            stats = discogs_client.marketplace_stats(int(release_id))
+            out["lowest"] = _price(stats.get("lowest_price"))
+            out["num_for_sale"] = stats.get("num_for_sale")
+            community = release.get("community")
             if community is not None:
-                out["have"] = community.have
-                out["want"] = community.want
-                rating = getattr(community, "rating", None)
-                if rating is not None and rating.count:
-                    out["rating"] = (rating.average, rating.count)
+                out["have"] = community.get("have")
+                out["want"] = community.get("want")
+                rating = community.get("rating")
+                if rating and rating.get("count"):
+                    out["rating"] = (rating.get("average"), rating["count"])
             return out
-        except discogs.DiscogsAuthError as e:
+        except discogs_client.DiscogsAuthError as e:
             return _failure(str(e))
-        except (DiscogsAPIError, HTTPError) as e:
+        except discogs_client.ApiError as e:
             return _failure("Discogs said no: " + str(e))
         except Exception as e:
             logger.exception("Discogs price research failed")
