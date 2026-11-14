@@ -6,6 +6,7 @@ from wtforms.validators import Optional
 
 from fbc import localtime, mystery
 from fbc.archive import ArchivableViewMixin
+from fbc.syncnote import EBAY_LISTINGS, EBAY_ORDERS, SyncedViewMixin
 from fbc.util import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
@@ -202,7 +203,8 @@ class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
         )
 
 
-class EbayListingModelView(ArchivableViewMixin, CustomModelView):
+class EbayListingModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
+    synced_by = [EBAY_LISTINGS]
     datamodel = SQLAInterface(EbayListing)
     base_order = ("start_time", "desc")
     list_widget = EbayListingListWidget
@@ -268,7 +270,9 @@ class EbayListingModelView(ArchivableViewMixin, CustomModelView):
     pre_update = _check_mystery_box
 
 
-class EbayOrderModelView(ArchivableViewMixin, CustomModelView):
+class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
+    # An order links to its listing, which the listings sync keeps.
+    synced_by = [EBAY_ORDERS, EBAY_LISTINGS]
     datamodel = SQLAInterface(EbayOrder)
     base_order = ("created_time", "desc")
     list_widget = EbayOrderListWidget
