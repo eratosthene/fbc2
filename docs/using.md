@@ -292,7 +292,7 @@ eBay. Nothing is posted until you press the button, and posting makes a
      (Very Good Plus (VG+) and so on). A grading Discogs has no word for, such
      as EX, or a Unit with no sleeve grade, leaves that box on "(choose)".
    - **Price** is the Unit's retail price.
-   - **Comments** are the Unit's Notes, shown to buyers.
+   - **Comments** are the Unit's Description, shown to buyers.
    - **Allow offers** starts ticked. Set `'ALLOW_OFFERS': False` in
      `DISCOGS_SETTINGS` in `config.py` to start it unticked.
    - **Weight (grams)** is eBay Drafts' package weight (by record size and

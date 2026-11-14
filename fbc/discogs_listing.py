@@ -117,7 +117,7 @@ def defaults(unit):
         "condition": media,
         "sleeve_condition": sleeve,
         "price": None if unit.retail_price is None else f"{unit.retail_price:.2f}",
-        "comments": unit.notes or "",
+        "comments": unit.description or "",
         "allow_offers": default_allow_offers(),
         "weight": weight_grams(unit),
         "external_id": sku(unit.id),
