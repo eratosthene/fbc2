@@ -194,6 +194,6 @@ class DiscogsListingModelView(CustomModelView):
         "external_id": "External ID (Private Comments)",
     }
     description_columns = {
-        "ended": "True once the listing is no longer in the Discogs inventory.",
+        "ended": "True once the listing is sold, or no longer in the Discogs inventory.",
         "unit": "Found from the External ID, which fbc sets to fbc-<Unit ID>.",
     }

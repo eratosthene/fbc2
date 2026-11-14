@@ -203,6 +203,11 @@ def _naive_utc(when):
     return when.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
 
+# Statuses a listing can't come back from. Discogs only lets For Sale, Draft
+# and Expired listings be edited, so those three are still ours to use.
+DISCOGS_ENDED_STATUSES = ("Sold", "Deleted", "Violation", "Suspended")
+
+
 def save_discogs_listing(data, seen):
     """
     Add or update the DiscogsListing for one item of Discogs's seller
@@ -242,7 +247,7 @@ def save_discogs_listing(data, seen):
     row.external_id = (data.get("external_id") or "")[:255] or None
     row.location = (data.get("location") or "")[:255] or None
     row.last_seen = seen
-    row.ended = False
+    row.ended = row.status in DISCOGS_ENDED_STATUSES
     unit_id = unit_id_from_sku(row.external_id)
     if unit_id is not None and db.session.get(Unit, unit_id):
         row.unit_id = unit_id
@@ -253,7 +258,8 @@ def save_discogs_listing(data, seen):
 def mark_ended_discogs_listings(seen_ids):
     """
     Mark every DiscogsListing that isn't in the seller inventory as ended, and
-    clear the flag on one that is back in it, as mark_ended_listings does for
+    clear the flag on one that is back in it (unless its status is one of
+    DISCOGS_ENDED_STATUSES, such as Sold), as mark_ended_listings does for
     eBay. Only call this after reading the whole inventory (the sync checks
     that it did), since anything missing from `seen_ids` is taken as gone.
     Returns how many were marked ended.
@@ -264,7 +270,7 @@ def mark_ended_discogs_listings(seen_ids):
     ended = 0
     for row in db.session.query(DiscogsListing).all():
         if row.listing_id in seen_ids:
-            row.ended = False
+            row.ended = row.status in DISCOGS_ENDED_STATUSES
         elif not row.ended:
             row.ended = True
             ended += 1

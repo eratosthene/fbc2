@@ -238,7 +238,9 @@ Pending, Payment Received, In Progress, Shipped, Refund Sent and Cancelled.
 inventory (checking it got as many items as `len(inventory)` says), saves each
 as a `DiscogsListing` (`util.save_discogs_listing`), links it to its Unit by
 `external_id` if the Unit exists, and then marks every listing not in that read
-as ended (`util.mark_ended_discogs_listings`). It only reads; there is no
+as ended (`util.mark_ended_discogs_listings`). A listing whose status is Sold,
+Deleted, Violation or Suspended is ended too (`util.DISCOGS_ENDED_STATUSES`):
+Discogs lets only For Sale, Draft and Expired listings be edited. It only reads; there is no
 write to Discogs in it, and it goes through `discogs.client()`, so dev mode
 stops it. The `sync_record` name is `discogs-listings`. There's no Task for it:
 a Task needs a way to list a Unit on Discogs first.

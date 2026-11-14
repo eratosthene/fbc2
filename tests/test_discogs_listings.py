@@ -187,6 +187,44 @@ def test_a_listing_that_left_the_inventory_is_marked_ended_and_can_return(
     assert db.session.get(DiscogsListing, 2).ended is False
 
 
+@pytest.mark.parametrize(
+    "status, ended",
+    [
+        ("For Sale", False),
+        ("Draft", False),
+        ("Expired", False),
+        ("Sold", True),
+        ("Deleted", True),
+        ("Violation", True),
+        ("Suspended", True),
+    ],
+)
+def test_a_listing_that_cant_come_back_is_ended_even_though_it_is_listed(
+    app, inventory, status, ended
+):
+    inventory([_item(1, status=status)])
+
+    syncjobs.sync_discogs_listings()
+    # A second sync, since the first one adds it and the second keeps it.
+    syncjobs.sync_discogs_listings()
+
+    row = db.session.get(DiscogsListing, 1)
+    assert row.ended is ended
+    assert row.is_for_sale() is (status == "For Sale")
+
+
+def test_a_listing_synced_as_not_ended_before_it_sold_is_ended_by_the_next_sync(
+    app, inventory
+):
+    inventory([_item(1)])
+    syncjobs.sync_discogs_listings()
+    inventory([_item(1, status="Sold")])
+
+    syncjobs.sync_discogs_listings()
+
+    assert db.session.get(DiscogsListing, 1).ended is True
+
+
 def test_a_short_read_marks_nothing_ended_and_records_nothing(app, inventory):
     inventory([_item(1), _item(2)])
     syncjobs.sync_discogs_listings()

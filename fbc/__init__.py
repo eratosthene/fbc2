@@ -388,12 +388,12 @@ def _register_views():
         appbuilder.add_view(GenreModelView, "Genres", category="Discogs")
         appbuilder.add_view(StyleModelView, "Styles", category="Discogs")
         appbuilder.add_view(FolderModelView, "Folders", category="Discogs")
-        appbuilder.add_view(
-            DiscogsListingModelView, "Discogs Listings", category="Discogs"
-        )
         appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Discogs")
         appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
         appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
+        appbuilder.add_view(
+            DiscogsListingModelView, "Discogs Listings", category="Sales"
+        )
         appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
         drafts = appbuilder.add_view(
             EbayDraftModelView, "eBay Drafts", category="Sales"
