@@ -246,8 +246,12 @@ def test_the_command_runs_the_job(app, inventory):
     assert db.session.get(DiscogsListing, 1) is not None
 
 
-def test_the_button_has_a_route(app):
-    # Not signed in, so it only has to exist.
+def test_the_button_has_a_route(app, monkeypatch):
+    # The route starts the sync, which would run in a thread that outlives the
+    # test (touching the next test's tables, and reaching for Discogs), so the
+    # job is claimed but never spawned.
+    monkeypatch.setattr(sync, "_spawn", lambda target: None)
+
     assert app.test_client().get("/syncdiscogslistings").status_code != 404
 
 
