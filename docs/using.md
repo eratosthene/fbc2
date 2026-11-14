@@ -271,6 +271,12 @@ too. A listing made by hand on the Discogs site shows up as well.
   stops being Ended. Draft and Expired listings aren't Ended, since you can
   still put them up for sale. Only a listing with status For Sale that isn't
   Ended is on the Marketplace.
+- To clear a listing out of fbc, for test data say, delete it on Discogs, run
+  Sync Discogs Listings so it is marked Ended, then press the delete button on
+  its row (or its page). Only an Ended listing has one, and it removes fbc's
+  row only; nothing changes on Discogs. If Discogs still reports the listing
+  with the status Deleted, the next sync brings the row back, so check the
+  list after a sync.
 - If a page of the inventory doesn't come back, or the listings don't add up
   to the count Discogs reports, the sync fails and changes nothing, so a bad
   answer can't mark listings ended. Run it again.

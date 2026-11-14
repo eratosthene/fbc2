@@ -151,13 +151,20 @@ class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
     can't be edited: they're changed on Discogs and the sync picks the change
     up. The only writes to Discogs are the two buttons List on Discogs
     (from_unit, which posts a Draft) and Make it For Sale (make_for_sale),
-    each its own explicit action.
+    each its own explicit action. An ended listing can also be deleted from
+    fbc (its row only, nothing on Discogs), to clear out test data.
     """
 
     datamodel = SQLAInterface(DiscogsListing)
     show_template = "discogs_listing/show.html"
     synced_by = [DISCOGS_LISTINGS]
-    base_permissions = ["can_list", "can_show", "can_from_unit", "can_make_for_sale"]
+    base_permissions = [
+        "can_list",
+        "can_show",
+        "can_delete",
+        "can_from_unit",
+        "can_make_for_sale",
+    ]
     base_order = ("posted", "desc")
     formatters_columns = localtime.formatters("posted", "last_seen")
     list_widget = DiscogsListingListWidget
@@ -214,6 +221,17 @@ class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
         "ended": "True once the listing is sold, or no longer in the Discogs inventory.",
         "unit": "Found from the External ID, which fbc sets to fbc-<Unit ID>.",
     }
+
+    def pre_delete(self, item):
+        """
+        Only an ended listing goes: a live one would come back at the next
+        sync, with nothing on Discogs changed. Deleting is only fbc's row.
+        """
+        if not item.ended:
+            raise ValueError(
+                "Only an ended listing can be deleted here. Delete it on Discogs"
+                " first, then run Sync Discogs Listings."
+            )
 
     @expose("/show/<pk>", methods=["GET"])
     @has_access
