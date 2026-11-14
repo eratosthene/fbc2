@@ -266,11 +266,12 @@ doesn't come back, or the listings don't add up to the count eBay reports, the
 sync fails and changes nothing, so a bad answer can't mark listings ended.
 Run it again.
 
-The home page shows the active listings as of that sync, and this month's
-free insertions: used so far, renewals still due before the month ends, and
-the projected total, against the limit (250 unless
-`EBAY_SETTINGS['LISTING']['FREE_INSERTIONS']` in `config.py` says
-otherwise; a Store subscription raises it). It warns when the projected total
+The home page shows one line: the active listings as of that sync, and this
+month's free insertions used so far, how many of the limit are left, the
+renewals still due before the month ends, the projected total, and when the
+sync last finished (Pacific time, like the month's count). The limit is 250
+unless `EBAY_SETTINGS['LISTING']['FREE_INSERTIONS']` in `config.py` says
+otherwise; a Store subscription raises it. The page warns when the projected total
 is within 10 of the limit. Nothing shows until the first listings sync, as
 every listing looks active before it. After a sync, the Ended flags are right
 for the listings fbc already had, so the first one after an upgrade ends all

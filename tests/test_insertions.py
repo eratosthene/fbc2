@@ -331,7 +331,31 @@ def test_the_home_page_shows_listings_and_insertions(app):
     html = app.test_client().get("/").get_data(as_text=True)
 
     assert "<strong>1</strong> active on eBay" in html
-    assert "2</strong> of" in html
+    assert "<strong>2</strong> free insertions used this month" in html
+    assert "<strong>248</strong> of 250 left" in html
+    assert "Last synced" in html
+
+
+def test_the_home_page_says_when_the_listings_last_synced(app):
+    # 2026-11-13 01:45 UTC is 2026-11-12 5:45 PM in Pacific (PST).
+    sync.record_finished(sync.LISTINGS_SYNC, D(2026, 11, 13, 1, 45))
+
+    html = " ".join(app.test_client().get("/").get_data(as_text=True).split())
+
+    assert "Last synced 2026-11-12 5:45 PM." in html
+
+
+def test_the_home_page_never_shows_fewer_than_none_left(app, monkeypatch):
+    monkeypatch.setitem(
+        fbc.app.config["EBAY_SETTINGS"], "LISTING", {"FREE_INSERTIONS": 1}
+    )
+    sync.record_finished(sync.LISTINGS_SYNC, sync.utcnow())
+    _listing("1", start=sync.utcnow())
+    _listing("2", start=sync.utcnow())
+
+    html = app.test_client().get("/").get_data(as_text=True)
+
+    assert "<strong>0</strong> of 1 left" in html
 
 
 def test_the_home_page_warns_when_close_to_the_limit(app, monkeypatch):
@@ -500,7 +524,7 @@ def test_calibrate_route_saves_the_number_and_the_home_page_uses_it(app):
 
     assert response.status_code == 302
     assert insertions.listing_summary()["calibration"]["adjustment"] == 66
-    assert "<strong>69</strong> of" in html
+    assert "<strong>69</strong> free insertions used this month" in html
 
 
 @pytest.mark.parametrize("value", ["", "abc", "-1", "251"])
