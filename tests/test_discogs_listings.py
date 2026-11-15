@@ -8,7 +8,8 @@ import pytest
 import sqlalchemy as sa
 from fake_discogs import FakeAccount, FakeDiscogs, failing
 
-from fbc import db, sync, syncjobs
+from fbc import db
+from fbc.sync import jobs, state
 from fbc.discogs import client as discogs_client
 from fbc.models.discogs import DiscogsListing
 from fbc.models.inventory import PurchaseLot, Unit
@@ -73,7 +74,7 @@ def inventory(monkeypatch):
 def test_a_listing_is_read_with_every_field(app, inventory):
     account = inventory([_item(7, external_id="fbc-3", location="Box 4")])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     row = db.session.get(DiscogsListing, 7)
     assert (row.release_id, row.title) == (555, "An Artist - A Title")
@@ -91,7 +92,7 @@ def test_a_listing_links_to_its_unit_by_external_id(app, inventory):
     unit = _unit()
     inventory([_item(1, external_id=f"fbc-{unit.id}")])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     assert db.session.get(DiscogsListing, 1).unit_id == unit.id
 
@@ -104,7 +105,7 @@ def test_a_listing_without_a_usable_external_id_has_no_unit(
 ):
     inventory([_item(1, external_id=external_id)])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     assert db.session.get(DiscogsListing, 1).unit_id is None
 
@@ -112,7 +113,7 @@ def test_a_listing_without_a_usable_external_id_has_no_unit(
 def test_a_release_that_isnt_in_the_collection_is_kept(app, inventory):
     inventory([_item(1, release={"id": 98765432, "description": "Not Mine"})])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     row = db.session.get(DiscogsListing, 1)
     assert row.release_id == 98765432 and row.release is None
@@ -120,10 +121,10 @@ def test_a_release_that_isnt_in_the_collection_is_kept(app, inventory):
 
 def test_a_second_sync_updates_rather_than_adds(app, inventory):
     inventory([_item(1)])
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
     inventory([_item(1, status="Draft", price={"value": 9.0, "currency": "USD"})])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     assert db.session.query(DiscogsListing).count() == 1
     row = db.session.get(DiscogsListing, 1)
@@ -134,10 +135,10 @@ def test_a_second_sync_updates_rather_than_adds(app, inventory):
 def test_a_unit_stays_linked_when_the_external_id_is_later_changed(app, inventory):
     unit = _unit()
     inventory([_item(1, external_id=f"fbc-{unit.id}")])
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
     inventory([_item(1, external_id="edited by hand")])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     assert db.session.get(DiscogsListing, 1).unit_id == unit.id
 
@@ -146,16 +147,16 @@ def test_a_listing_that_left_the_inventory_is_marked_ended_and_can_return(
     app, inventory
 ):
     inventory([_item(1), _item(2), _item(3)])
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
     inventory([_item(1), _item(3)])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     ended = {r.listing_id: r.ended for r in db.session.query(DiscogsListing)}
     assert ended == {1: False, 2: True, 3: False}
     assert not db.session.get(DiscogsListing, 2).is_for_sale()
     inventory([_item(1), _item(2), _item(3)])
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
     assert db.session.get(DiscogsListing, 2).ended is False
 
 
@@ -176,9 +177,9 @@ def test_a_listing_that_cant_come_back_is_ended_even_though_it_is_listed(
 ):
     inventory([_item(1, status=status)])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
     # A second sync, since the first one adds it and the second keeps it.
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     row = db.session.get(DiscogsListing, 1)
     assert row.ended is ended
@@ -189,18 +190,18 @@ def test_a_listing_synced_as_not_ended_before_it_sold_is_ended_by_the_next_sync(
     app, inventory
 ):
     inventory([_item(1)])
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
     inventory([_item(1, status="Sold")])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     assert db.session.get(DiscogsListing, 1).ended is True
 
 
 def test_a_short_read_marks_nothing_ended_and_records_nothing(app, inventory):
     inventory([_item(1), _item(2)])
-    syncjobs.sync_discogs_listings()
-    sync.record_finished(syncjobs.DISCOGS_LISTINGS_SYNC, datetime.datetime(2020, 1, 1))
+    jobs.sync_discogs_listings()
+    state.record_finished(jobs.DISCOGS_LISTINGS_SYNC, datetime.datetime(2020, 1, 1))
     inventory(
         [_item(1)],
         fail=failing(
@@ -209,10 +210,10 @@ def test_a_short_read_marks_nothing_ended_and_records_nothing(app, inventory):
     )
 
     with pytest.raises(discogs_client.IncompleteRead):
-        syncjobs.sync_discogs_listings()
+        jobs.sync_discogs_listings()
 
     assert not db.session.get(DiscogsListing, 2).ended
-    assert sync.last_finished(syncjobs.DISCOGS_LISTINGS_SYNC) == datetime.datetime(
+    assert state.last_finished(jobs.DISCOGS_LISTINGS_SYNC) == datetime.datetime(
         2020, 1, 1
     )
 
@@ -220,20 +221,20 @@ def test_a_short_read_marks_nothing_ended_and_records_nothing(app, inventory):
 def test_an_empty_inventory_is_fine(app, inventory):
     inventory([])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     assert db.session.query(DiscogsListing).count() == 0
-    assert sync.last_finished(syncjobs.DISCOGS_LISTINGS_SYNC) is not None
+    assert state.last_finished(jobs.DISCOGS_LISTINGS_SYNC) is not None
 
 
 def test_the_job_is_the_one_the_button_command_and_scheduler_share(app):
-    from fbc import scheduler
+    from fbc.sync import scheduler
 
-    job = syncjobs.discogs_listings_job()
+    job = jobs.discogs_listings_job()
 
     assert job.kind == "discogs-listings"
-    assert job.fn is syncjobs.sync_discogs_listings
-    assert scheduler.JOBS["discogs-listings"] is syncjobs.discogs_listings_job
+    assert job.fn is jobs.sync_discogs_listings
+    assert scheduler.JOBS["discogs-listings"] is jobs.discogs_listings_job
     assert scheduler.read_schedule(app.config).intervals["discogs-listings"]
 
 
@@ -251,7 +252,7 @@ def test_the_button_has_a_route(app, monkeypatch):
     # The route starts the sync, which would run in a thread that outlives the
     # test (touching the next test's tables, and reaching for Discogs), so the
     # job is claimed but never spawned.
-    monkeypatch.setattr(sync, "_spawn", lambda target: None)
+    monkeypatch.setattr(state, "_spawn", lambda target: None)
 
     assert app.test_client().get("/syncdiscogslistings").status_code != 404
 
@@ -264,7 +265,7 @@ def test_in_dev_mode_it_says_syncing_is_off_and_reaches_nothing(
     def never():
         raise AssertionError("reached Discogs")
 
-    monkeypatch.setattr(syncjobs.discogs_client, "account", never)
+    monkeypatch.setattr(jobs.discogs_client, "account", never)
 
     result = app.test_cli_runner().invoke(args=["sync", "discogs-listings"])
 
@@ -276,7 +277,7 @@ def test_in_dev_mode_it_says_syncing_is_off_and_reaches_nothing(
 def test_the_sync_only_reads_from_discogs(app, inventory):
     account = inventory([_item(1)])
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     assert account.names() == ["inventory"]
 

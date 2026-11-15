@@ -13,6 +13,7 @@ so far:
   Discogs. `settings.py`, `devmode.py`, `localtime.py`, `formatting.py` (price
   and percent), `forms.py` (`CustomForm`, `CustomModelView` and
   `FilterIdMatches`, the base classes for every view) and `widgets.py`.
+
 - `fbc/discogs/`: Discogs. `client.py` is every call to Discogs. `identify.py`
   searches and ranks for Identify Record, `collect.py` adds a release to the
   collection, `saving.py` saves the listings, releases and instances a sync or
@@ -20,6 +21,7 @@ so far:
   Unit's copy out of the collection, `naming.py` names a Unit from a release
   (models import it, so it loads nothing from `fbc`) and `samples.py` is the dev
   mode sample data. Modules refer to each other by module name, as in `ebay/`.
+
 - `fbc/ebay/`: eBay. `oauth.py` (consent, tokens) is the bottom layer, then
   `api.py` (Trading API calls and reading their replies), `describe.py` (a
   Unit's title, description and item specifics, no network), `drafts.py`
@@ -30,8 +32,14 @@ so far:
   (`oauth.oauth_token()`), not by importing the function, so a test patches
   `fbc.ebay.oauth.oauth_token` once and every caller sees it.
 
-The rest is still loose modules in `fbc/`, and moves into `sync/` and `sales/` in later
-changes. Package `__init__.py` files are empty,
+- `fbc/sync/`: syncing. `state.py` runs a sync in a thread and keeps its state
+  in job files, `jobs.py` is what each sync does (the buttons and `flask sync`
+  call the same functions), `scheduler.py` is `flask scheduler`, and `notes.py`
+  is the "last synced" note on a list. A sync's state module is imported as
+  `state` (`from fbc.sync import state`).
+
+The rest is still loose modules in `fbc/`, and moves into `sales/` in a later
+change. Package `__init__.py` files are empty,
 so importing one module never imports its neighbours. `models/` may import
 `core/` and modules that import nothing from `fbc` but `core/`.
 
@@ -134,7 +142,7 @@ it off.
 ## Running the syncs from the command line
 
 Each sync the Sync buttons run has a `flask sync` command. The command and
-the button call the same function in `fbc/syncjobs.py`, so they do the same
+the button call the same function in `fbc/sync/jobs.py`, so they do the same
 thing. A new sync goes there too, with a command beside the others in
 `fbc/__init__.py`.
 
@@ -161,7 +169,7 @@ two order syncs count as one sync, so `ebay-orders` and
 up to the Sync buttons the same way, so a button pressed meanwhile joins its
 log.
 
-The job files (`fbc/sync.py`) are in `SYNC_JOB_FOLDER`, which defaults to a
+The job files (`fbc/sync/state.py`) are in `SYNC_JOB_FOLDER`, which defaults to a
 folder in the system temp folder. A command and the web server have to use the
 same folder to see each other, so run commands in the same container as the
 web server.
@@ -178,9 +186,9 @@ about a second.
 
 ## The scheduler and the tasks lists
 
-`flask scheduler` (`fbc/scheduler.py`) runs the syncs on intervals. It's a
+`flask scheduler` (`fbc/sync/scheduler.py`) runs the syncs on intervals. It's a
 Flask command rather than cron or a shell loop because it reuses the app's
-settings and dev mode check, runs the same jobs as the buttons (`fbc/syncjobs.py`)
+settings and dev mode check, runs the same jobs as the buttons (`fbc/sync/jobs.py`)
 and logs to the container's output. `docker/docker-entrypoint.sh` starts it in
 the background, next to gunicorn, only when the container is running gunicorn:
 the jobs' lock is in that container's job files and PIDs. The entrypoint

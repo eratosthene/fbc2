@@ -189,11 +189,11 @@ def sync_group():
 
 def _run_sync(job):
     """
-    Run a fbc.syncjobs Job in the foreground, printing its log. Exits 1 if it
+    Run a fbc.sync.jobs Job in the foreground, printing its log. Exits 1 if it
     failed, logged an error (the syncs carry on from some) or is already
     running, from a button or another command.
     """
-    from fbc import sync
+    from fbc.sync import state
 
     # logging.basicConfig above prints every record on stderr already; the
     # job's own lines are the ones to show, so quiet those while it runs.
@@ -206,8 +206,8 @@ def _run_sync(job):
     for h, _ in quieted:
         h.setLevel(logging.CRITICAL + 1)
     try:
-        result = sync.run(job.kind, job.title, job.fn, echo=click.echo)
-    except sync.Busy as e:
+        result = state.run(job.kind, job.title, job.fn, echo=click.echo)
+    except state.Busy as e:
         raise click.ClickException(str(e))
     finally:
         for h, level in quieted:
@@ -223,25 +223,25 @@ def _run_sync(job):
 @sync_group.command("discogs")
 def sync_discogs_command():
     """Sync the Discogs collection."""
-    from fbc import syncjobs
+    from fbc.sync import jobs
 
-    _run_sync(syncjobs.discogs_job())
+    _run_sync(jobs.discogs_job())
 
 
 @sync_group.command("discogs-listings")
 def sync_discogs_listings_command():
     """Sync the Discogs Marketplace listings (read only)."""
-    from fbc import syncjobs
+    from fbc.sync import jobs
 
-    _run_sync(syncjobs.discogs_listings_job())
+    _run_sync(jobs.discogs_listings_job())
 
 
 @sync_group.command("ebay-listings")
 def sync_ebay_listings_command():
     """Sync eBay's active listings."""
-    from fbc import syncjobs
+    from fbc.sync import jobs
 
-    _run_sync(syncjobs.ebay_listings_job())
+    _run_sync(jobs.ebay_listings_job())
 
 
 @sync_group.command("ebay-orders")
@@ -249,15 +249,15 @@ def sync_ebay_listings_command():
 @click.option("--deep", is_flag=True, help="Look back 88 days, not 10.")
 def sync_ebay_orders_command(update, deep):
     """Sync recent eBay orders."""
-    from fbc import syncjobs
+    from fbc.sync import jobs
 
-    _run_sync(syncjobs.ebay_orders_job(update=update, deep=deep))
+    _run_sync(jobs.ebay_orders_job(update=update, deep=deep))
 
 
 @app.cli.command("scheduler")
 def scheduler_command():
-    """Run the syncs on their intervals, until stopped (see fbc/scheduler.py)."""
-    from fbc import scheduler
+    """Run the syncs on their intervals, until stopped (see fbc/sync/scheduler.py)."""
+    from fbc.sync import scheduler
 
     scheduler.loop(app.config)
 

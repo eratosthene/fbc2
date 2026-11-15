@@ -7,7 +7,8 @@ import requests
 from fake_discogs import FakeDiscogs, api_error, failing
 
 import fbc
-from fbc import db, syncjobs
+from fbc import db
+from fbc.sync import jobs
 from fbc.discogs import client as discogs_client, listing as discogs_listing
 from fbc.core import devmode
 from fbc.models.discogs import DiscogsInstance, DiscogsListing
@@ -436,7 +437,7 @@ def test_a_resync_updates_the_saved_draft(client, fake):
         )
     ]
 
-    syncjobs.sync_discogs_listings()
+    jobs.sync_discogs_listings()
 
     assert db.session.query(DiscogsListing).count() == 1
     row = db.session.get(DiscogsListing, 7001)

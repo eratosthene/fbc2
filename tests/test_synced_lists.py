@@ -5,7 +5,8 @@ import datetime
 import pytest
 
 import fbc
-from fbc import db, sync, syncjobs
+from fbc import db
+from fbc.sync import jobs, state
 from fbc.models.sync import SyncRecord
 
 # 5:45 PM in Central, in winter.
@@ -28,10 +29,10 @@ VIEWS = {
 }
 
 NAMES = {
-    "Discogs collection": syncjobs.DISCOGS_SYNC,
-    "Discogs listings": syncjobs.DISCOGS_LISTINGS_SYNC,
-    "eBay listings": sync.LISTINGS_SYNC,
-    "eBay orders": syncjobs.ORDERS_SYNC,
+    "Discogs collection": jobs.DISCOGS_SYNC,
+    "Discogs listings": jobs.DISCOGS_LISTINGS_SYNC,
+    "eBay listings": state.LISTINGS_SYNC,
+    "eBay orders": jobs.ORDERS_SYNC,
 }
 
 
@@ -75,7 +76,7 @@ def test_a_list_says_never_synced_without_a_record(client, view):
 
 
 def test_a_list_only_shows_its_own_syncs(client):
-    db.session.add(SyncRecord(name=syncjobs.ORDERS_SYNC, finished=FINISHED))
+    db.session.add(SyncRecord(name=jobs.ORDERS_SYNC, finished=FINISHED))
     db.session.commit()
 
     page = _page(client, "ebaylistingmodelview")

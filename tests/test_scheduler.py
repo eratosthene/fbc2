@@ -6,7 +6,7 @@ from collections import namedtuple
 
 import pytest
 
-from fbc import scheduler, sync, syncjobs
+from fbc.sync import jobs, scheduler, state
 from fbc.core import devmode
 
 NOW = datetime.datetime(2024, 6, 1, 12, 0)
@@ -42,7 +42,7 @@ def ran(monkeypatch):
                 if outcome.get(name) == "fail":
                     raise RuntimeError("eBay is down")
                 # As the real syncs do when they finish.
-                sync.record_finished(name)
+                state.record_finished(name)
 
             return Job(name, name + " sync", fn)
 
@@ -60,10 +60,10 @@ def test_everything_is_due_before_any_sync_has_finished(schedule, ran):
 
 
 def test_a_sync_is_due_once_its_interval_has_passed(schedule, ran):
-    sync.record_finished("ebay-orders", NOW - 14 * MIN)
-    sync.record_finished("ebay-listings", NOW - 31 * MIN)
-    sync.record_finished("discogs", NOW - 119 * MIN)
-    sync.record_finished("discogs-listings", NOW - 29 * MIN)
+    state.record_finished("ebay-orders", NOW - 14 * MIN)
+    state.record_finished("ebay-listings", NOW - 31 * MIN)
+    state.record_finished("discogs", NOW - 119 * MIN)
+    state.record_finished("discogs-listings", NOW - 29 * MIN)
 
     assert scheduler.due(schedule, {}, NOW) == ["ebay-listings"]
 
@@ -80,7 +80,7 @@ def test_intervals_come_from_the_settings(app, monkeypatch):
 
 def test_a_failed_sync_waits_for_the_retry_delay(schedule, ran):
     for name in scheduler.JOBS:
-        sync.record_finished(name, NOW - 1000 * MIN)
+        state.record_finished(name, NOW - 1000 * MIN)
     ran.outcome["discogs"] = "fail"
     failed_at = {}
 
@@ -89,15 +89,15 @@ def test_a_failed_sync_waits_for_the_retry_delay(schedule, ran):
     assert outcomes["discogs"] == "failed"
     assert "discogs" in failed_at
     # Failed a minute ago: not retried yet. Ten minutes on, it is.
-    assert scheduler.due(schedule, failed_at, sync.utcnow() + 5 * MIN) == []
-    assert scheduler.due(schedule, failed_at, sync.utcnow() + 11 * MIN) == ["discogs"]
+    assert scheduler.due(schedule, failed_at, state.utcnow() + 5 * MIN) == []
+    assert scheduler.due(schedule, failed_at, state.utcnow() + 11 * MIN) == ["discogs"]
 
 
 def test_a_busy_sync_is_skipped_and_not_counted_as_failed(schedule, ran, monkeypatch):
     def busy(*args, **kwargs):
-        raise sync.Busy("already running")
+        raise state.Busy("already running")
 
-    monkeypatch.setattr(sync, "run", busy)
+    monkeypatch.setattr(state, "run", busy)
     failed_at = {}
 
     outcomes = scheduler.run_due(schedule, failed_at, NOW)
@@ -107,10 +107,10 @@ def test_a_busy_sync_is_skipped_and_not_counted_as_failed(schedule, ran, monkeyp
 
 
 def test_a_sync_that_finished_is_not_run_again_on_the_next_tick(schedule, ran):
-    scheduler.run_due(schedule, {}, sync.utcnow())
+    scheduler.run_due(schedule, {}, state.utcnow())
     ran.clear()
 
-    scheduler.run_due(schedule, {}, sync.utcnow() + MIN)
+    scheduler.run_due(schedule, {}, state.utcnow() + MIN)
 
     assert ran == []
 
@@ -174,9 +174,9 @@ def test_the_command_exits_at_once_in_dev_mode(app, monkeypatch):
 
 
 def test_the_real_jobs_are_the_ones_the_buttons_run():
-    assert scheduler.JOBS["discogs"] is syncjobs.discogs_job
-    assert scheduler.JOBS["ebay-listings"] is syncjobs.ebay_listings_job
-    assert scheduler.JOBS["discogs-listings"] is syncjobs.discogs_listings_job
+    assert scheduler.JOBS["discogs"] is jobs.discogs_job
+    assert scheduler.JOBS["ebay-listings"] is jobs.ebay_listings_job
+    assert scheduler.JOBS["discogs-listings"] is jobs.discogs_listings_job
 
 
 def test_a_sync_that_logs_an_error_and_records_nothing_waits_to_retry(
@@ -200,7 +200,7 @@ def test_a_sync_that_logs_an_error_and_records_nothing_waits_to_retry(
     outcomes = scheduler.run_due(schedule, failed_at, NOW)
 
     assert outcomes == {"ebay-orders": "failed"}
-    assert scheduler.due(schedule, failed_at, sync.utcnow() + MIN) == []
+    assert scheduler.due(schedule, failed_at, state.utcnow() + MIN) == []
 
 
 def test_each_look_at_what_is_due_starts_from_a_fresh_session(schedule, monkeypatch):
