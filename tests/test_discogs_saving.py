@@ -5,7 +5,7 @@ from fake_discogs import FakeDiscogs, collection_item
 
 from fbc import db
 from fbc.models.discogs import Artist, DiscogsRelease, Genre, Style
-from fbc.util import add_discogs_release
+from fbc.discogs.saving import add_discogs_release
 
 
 @pytest.fixture

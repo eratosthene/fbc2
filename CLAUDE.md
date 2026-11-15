@@ -32,7 +32,10 @@ file is what they don't say.
 - `fbc/ebay/`: everything that talks to eBay or builds for it. `oauth.py`,
   `api.py` (Trading API), `describe.py` and `drafts.py` (an eBay Draft's title,
   specifics and item), `publish.py`, `pictures.py`, `vocab.py` (lookup tables),
-  `skus.py`, `insertions.py`, `tracking.py`, `mystery.py`.
+  `skus.py`, `insertions.py`, `tracking.py`, `mystery.py`, and `listings.py`
+  and `orders.py` (saving what a sync reads from eBay).
+- `fbc/discogs/`: Discogs. For now `saving.py` (what a sync reads from
+  Discogs); the rest of Discogs is moving in (#157).
 - `fbc/shipping.py` (Ship This),
   `fbc/discogs_client.py` (every call to Discogs, and the only module that imports its
   library), `fbc/sync.py` (syncs run in a thread, their state in files, since

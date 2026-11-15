@@ -3,12 +3,12 @@ import datetime
 from fbc import db
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import PurchaseLot, Unit
-from fbc.util import (
+from fbc.ebay.listings import (
     add_ebay_listing,
-    add_ebay_order,
     find_relisted_listing,
     relist_ebay_listing,
 )
+from fbc.ebay.orders import add_ebay_order
 
 
 def _ebay_listing_payload(item_id="123456", price="19.99", title="A Fine Record"):

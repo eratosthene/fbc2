@@ -17,18 +17,20 @@ from fbc import discogs_client, sync
 from fbc.core import devmode
 from fbc.ebay.api import fetch_active_items, trading
 from fbc.ebay.oauth import OAuthError
-from fbc.util import (
+from fbc.discogs.saving import (
     add_discogs_release,
-    add_ebay_listing,
-    add_ebay_order,
-    find_relisted_listing,
     forget_discogs_instance,
     mark_ended_discogs_listings,
+    save_discogs_listing,
+)
+from fbc.ebay.listings import (
+    add_ebay_listing,
+    find_relisted_listing,
     mark_ended_listings,
     relist_ebay_listing,
-    save_discogs_listing,
     save_renewals,
 )
+from fbc.ebay.orders import add_ebay_order
 
 logger = logging.getLogger()
 

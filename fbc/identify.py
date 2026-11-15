@@ -953,7 +953,7 @@ def collect(release_id, folder_id, values):
     """
     from fbc import db
     from fbc.models.discogs import DiscogsRelease
-    from fbc.util import add_discogs_release
+    from fbc.discogs.saving import add_discogs_release
 
     if devmode.on():
         return None, None, [], devmode.message("Discogs")
