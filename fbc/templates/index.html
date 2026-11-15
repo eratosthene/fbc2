@@ -113,6 +113,18 @@
   {% endif %}
   {% endif %}
 
+  {% if other_sales.sold %}
+  <h2>Other items</h2>
+  <p>Other items: <strong>{{ other_sales.sold }}</strong> sold,
+  <strong>{{ "${:,.2f}".format(other_sales.gross|float) }}</strong> in sales,
+  <strong>{{ "${:,.2f}".format(other_sales.net|float) }}</strong> net{% if other_sales.profit is not none %};
+  profit <strong>{{ "${:,.2f}".format(other_sales.profit|float) }}</strong> on the
+  {{ other_sales.costed }} that have a cost{% endif %}.</p>
+  <p class="text-muted">Not records: these aren't in the stock, cost or profit figures,
+  and the shipping supplies they used{% if other_sales.supplies %}
+  ({{ "${:,.2f}".format(other_sales.supplies|float) }}){% endif %} aren't in the supply cost.</p>
+  {% endif %}
+
   <h2>Stock</h2>
   <p>Units in stock: <strong>{{ stock_total }}</strong></p>
 

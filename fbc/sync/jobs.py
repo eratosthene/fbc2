@@ -25,6 +25,7 @@ from fbc.discogs.saving import (
     save_discogs_listing,
     save_discogs_order,
 )
+from fbc.ebay.sorting import category_in, item_category, sort_listing
 from fbc.ebay.listings import (
     add_ebay_listing,
     find_relisted_listing,
@@ -227,7 +228,11 @@ def sync_ebay_listings():
     remote_item_ids = {item["ItemID"] for item in all_items}
     for item in all_items:
         logger.info("Checking ebay: " + str(item["ItemID"]))
-        if not db.session.query(EbayListing).filter_by(item_id=item["ItemID"]).first():
+        listing = db.session.get(EbayListing, item["ItemID"])
+        if listing is None:
+            # Its eBay category sorts it into a record's listing or an Other
+            # Item (see fbc/ebay/sorting.py); None if it couldn't be read.
+            category = item_category(item)
             old_listing = find_relisted_listing(item, remote_item_ids)
             if old_listing:
                 logger.info(
@@ -236,10 +241,14 @@ def sync_ebay_listings():
                     + " -> "
                     + item["ItemID"]
                 )
-                relist_ebay_listing(old_listing, item)
+                relist_ebay_listing(old_listing, item, category)
             else:
                 logger.info("Adding " + str(item["ItemID"]))
-                add_ebay_listing(item)
+                add_ebay_listing(item, category)
+        elif listing.category_id is None and category_in(item):
+            # eBay's list carries the category: no GetItem needed.
+            sort_listing(listing, category_in(item))
+            db.session.commit()
     save_renewals(all_items, started)
     ended = mark_ended_listings(remote_item_ids, previous_sync)
     logger.info("Marked " + str(ended) + " listings as ended.")

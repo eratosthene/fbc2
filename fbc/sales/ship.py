@@ -5,6 +5,10 @@ It reads the order's earnings from eBay's Finances API (see fbc.ebay.finances),
 records a Sales Receipt for that amount, marks the order's Unit sold, takes the
 mailer, sleeves and label it used out of the Supply List and removes that
 Unit's own instance of the release from the Discogs collection.
+
+An order for an Other Item (see fbc/models/other.py) is shipped the same way,
+with no Units and no Discogs step: the receipt marks the Item sold, and the
+supplies are counted by hand, since a record's size doesn't apply.
 """
 
 import logging
@@ -81,6 +85,41 @@ def order_unit(order):
     return None
 
 
+def other_items(order):
+    """
+    (the Other Items `order` sold, problems). ([], []) when none of the order's
+    listings is an Other Item's, so it's an order of records. Otherwise
+    problems say what stops Ship This, which is left to be done by hand: the
+    order mixes records and Other Items, or an Item is already sold.
+    """
+    from fbc import db
+    from fbc.models.other import OtherItem
+
+    listings = order.listing_ids()
+    if not listings:
+        return [], []
+    found = (
+        db.session.query(OtherItem)
+        .filter(OtherItem.ebay_listing_id.in_(list(listings)))
+        .order_by(OtherItem.id)
+        .all()
+    )
+    if not found:
+        return [], []
+    problems = []
+    if len(found) < len(listings):
+        problems.append(
+            "Order "
+            + order.order_id
+            + " has records and Other Items together, which Ship This can't"
+            " record in one Sales Receipt."
+        )
+    for item in found:
+        if item.sold or item.sales_receipt_id:
+            problems.append(item.name + " is already sold.")
+    return found, problems
+
+
 # How far apart a buyer's orders can be and still be offered for shipping
 # together. Ship This lets you choose which go in the package.
 COMBINE_DAYS = 7
@@ -146,7 +185,15 @@ def combined_discount(orders, earnings):
     }
 
 
-def ship_order(orders, units, net_sold, supplies=None, lines=None, unit_prices=None):
+def ship_order(
+    orders,
+    units,
+    net_sold,
+    supplies=None,
+    lines=None,
+    unit_prices=None,
+    other_items=None,
+):
     """
     Record one Sales Receipt for `orders` (one EbayOrder or several shipped
     together), dated the first of them, with its earnings `lines` (as
@@ -154,7 +201,8 @@ def ship_order(orders, units, net_sold, supplies=None, lines=None, unit_prices=N
     up to `net_sold`. Mark `units` (one Unit or several) sold with it and
     take `supplies` ({supply: count}) out of stock. `unit_prices` ({unit id:
     price}) is what Units picked for a mystery box sold for, as their order
-    items can't say. Returns the receipt.
+    items can't say. `other_items` are Other Items the order sold (with no
+    Units): they're marked sold with the receipt. Returns the receipt.
     """
     from fbc import db
     from fbc.models.sales import SalesReceipt, item_prices
@@ -181,6 +229,9 @@ def ship_order(orders, units, net_sold, supplies=None, lines=None, unit_prices=N
             unit.sold_price = unit_prices[unit.id]
         elif len(units) > 1:
             unit.sold_price = prices.get(unit.ebay_listing_id)
+    for item in other_items or []:
+        item.sold = True
+        item.sales_receipt_id = receipt.id
     for supply, count in (supplies or {}).items():
         supply.use(count, SHIPPING, receipt=receipt)
     db.session.commit()
