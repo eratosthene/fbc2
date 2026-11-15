@@ -7,7 +7,7 @@ Older ones don't, so the syncs can't tell which Unit they belong to.
 works out the SKU each should have from the Unit linked to it, and, with
 --apply, sets it with ReviseFixedPriceItem.
 
-Everything goes through listing._call(), and so through listing.trading():
+Everything goes through api._call(), and so through api.trading():
 in dev mode it refuses, and nothing reaches eBay.
 """
 
@@ -16,13 +16,27 @@ import io
 import logging
 import time
 
-from fbc import listing
+from fbc.ebay import api
 
 logger = logging.getLogger()
 
 PAGE_SIZE = 200
 # Between revises, to stay well inside the Trading API's daily call limit.
 PAUSE_SECONDS = 0.5
+
+SKU_PREFIX = "fbc-"
+
+
+def sku(unit_id):
+    """The Custom label (SKU) fbc puts on a listing so it can find the Unit."""
+    return SKU_PREFIX + str(unit_id)
+
+
+def unit_id_from_sku(value):
+    if value and value.startswith(SKU_PREFIX) and value[len(SKU_PREFIX) :].isdigit():
+        return int(value[len(SKU_PREFIX) :])
+    return None
+
 
 # What happens to a listing.
 SET = "set"
@@ -50,7 +64,7 @@ def active_listings(echo=None):
     page = 1
     pages = 1
     while page <= pages:
-        resp, summary = listing._call(
+        resp, summary = api._call(
             "GetMyeBaySelling",
             {
                 "ActiveList": {
@@ -67,7 +81,7 @@ def active_listings(echo=None):
             )
         active = resp.get("ActiveList") or {}
         pages = int((active.get("PaginationResult") or {}).get("TotalNumberOfPages", 1))
-        for item in listing._as_list((active.get("ItemArray") or {}).get("Item")):
+        for item in api._as_list((active.get("ItemArray") or {}).get("Item")):
             items.append(
                 (str(item["ItemID"]), item.get("Title") or "", item.get("SKU") or "")
             )
@@ -89,12 +103,12 @@ def decide(item_id, current, units, overwrite=False):
         return ONLY_SOLD, None, ", ".join(str(u.id) for u in units)
     if len(unsold) > 1:
         return SEVERAL, None, ", ".join(str(u.id) for u in unsold)
-    wanted = listing.sku(unsold[0].id)
+    wanted = sku(unsold[0].id)
     if current == wanted:
         return RIGHT, None, ""
     if not current:
         return SET, wanted, ""
-    named = listing.unit_id_from_sku(current)
+    named = unit_id_from_sku(current)
     if named is not None:
         return CONFLICT, None, current + " (wanted " + wanted + ")"
     if overwrite:
@@ -104,7 +118,7 @@ def decide(item_id, current, units, overwrite=False):
 
 def revise_sku(item_id, new_sku):
     """Set the SKU, sending nothing else. Returns the summary's errors."""
-    resp, summary = listing._call(
+    resp, summary = api._call(
         "ReviseFixedPriceItem", {"Item": {"ItemID": item_id, "SKU": new_sku}}
     )
     if resp is None and not summary["errors"]:

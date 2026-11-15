@@ -8,7 +8,7 @@ from fake_discogs import FakeAccount, FakeDiscogs
 
 from fbc import sync, syncjobs
 from fbc.discogs_client import DiscogsAuthError
-from fbc.listing import OAuthError
+from fbc.ebay.oauth import OAuthError
 
 
 @pytest.fixture(autouse=True)

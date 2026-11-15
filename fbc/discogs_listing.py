@@ -16,19 +16,15 @@ import logging
 
 from fbc import discogs_client
 from fbc.core import devmode
-from fbc.listing import (
-    build_item_specifics,
-    default_weight,
-    disc_count,
-    listing_settings,
-    sku,
-    split_grading,
-)
+from fbc.ebay.api import listing_settings
+from fbc.ebay.describe import build_item_specifics, disc_count, split_grading
+from fbc.ebay.drafts import default_weight
+from fbc.ebay.skus import sku
 
 logger = logging.getLogger()
 
 # Discogs's condition names, best first. These are the only values Discogs
-# accepts for a Media Condition. fbc/listing.py GRADES uses the same words.
+# accepts for a Media Condition. fbc/ebay/vocab.py GRADES uses the same words.
 MEDIA_CONDITIONS = (
     "Mint (M)",
     "Near Mint (NM or M-)",

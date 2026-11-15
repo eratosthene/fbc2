@@ -4,7 +4,7 @@ from flask_appbuilder.actions import action
 from markupsafe import Markup
 from wtforms.validators import Optional
 
-from fbc import mystery
+from fbc.ebay import mystery
 from fbc.core import localtime
 from fbc.archive import ArchivableViewMixin
 from fbc.syncnote import EBAY_LISTINGS, EBAY_ORDERS, SyncedViewMixin
@@ -480,7 +480,7 @@ class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
 class MysteryBoxesView(BaseView):
     """
     Mystery Boxes, under Sales: each active mystery box listing and how many
-    more boxes its Storage Box can fill (see fbc.mystery).
+    more boxes its Storage Box can fill (see fbc.ebay.mystery).
     """
 
     route_base = "/mysteryboxes"

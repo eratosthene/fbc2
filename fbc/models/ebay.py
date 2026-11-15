@@ -43,7 +43,7 @@ class EbayListing(Model):
     # Box with each sale, so none of those Units is linked to it. Columns,
     # not a SKU: fbc doesn't keep SKUs, and these show on the edit page.
     # util.relist_ebay_listing carries them to the relisted listing. Both set
-    # or both blank; see fbc/mystery.py.
+    # or both blank; see fbc/ebay/mystery.py.
     pick_from_box_id = Column(Integer, ForeignKey("storage_box.id"), index=True)
     pick_from_box = relationship("StorageBox")
     pick_count = Column(Integer)
@@ -69,7 +69,7 @@ class EbayListing(Model):
 
     def fmt_boxes_available(self):
         """How many more mystery boxes the Storage Box can fill, or blank."""
-        from fbc import mystery
+        from fbc.ebay import mystery
 
         if not self.is_mystery_box():
             return ""
@@ -79,7 +79,7 @@ class EbayListing(Model):
 class InsertionCalibration(Model):
     """
     What the eBay app said was left of a month's free insertions, and how far
-    fbc's own count was from it then (see fbc/insertions.py). One row a month,
+    fbc's own count was from it then (see fbc/ebay/insertions.py). One row a month,
     keyed by the month's start, so a new month starts with none.
     """
 
@@ -103,7 +103,7 @@ class EbayOrder(Model):
     # What the buyer paid for shipping. None for orders synced before fbc
     # kept it.
     shipping = Column(Float)
-    # From eBay once the order has shipped; see fbc/tracking.py.
+    # From eBay once the order has shipped; see fbc/ebay/tracking.py.
     shipping_carrier = Column(String(40))
     tracking_number = Column(String(40))
     # The first item's title and listing; every item is in items.
@@ -151,7 +151,7 @@ class EbayOrder(Model):
         """The carrier and tracking number, linked to the carrier's page."""
         from markupsafe import escape
 
-        from fbc.tracking import carrier_name, tracking_url
+        from fbc.ebay.tracking import carrier_name, tracking_url
 
         if not self.tracking_number:
             return ""

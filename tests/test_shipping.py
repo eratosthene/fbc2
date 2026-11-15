@@ -8,7 +8,7 @@ from fake_discogs import FakeAccount, FakeDiscogs, api_error, collection_item, f
 import fbc
 from fbc import db
 from fbc import discogs_client as discogs_calls
-from fbc import listing
+from fbc.ebay import describe, oauth
 from fbc import shipping
 from fbc.discogs_client import DiscogsAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsRelease
@@ -85,7 +85,7 @@ def finances(monkeypatch):
     import requests
 
     monkeypatch.setattr(
-        listing, "oauth_token", lambda scope=listing.MEDIA_SCOPE: "access-" + scope[-8:]
+        oauth, "oauth_token", lambda scope=oauth.MEDIA_SCOPE: "access-" + scope[-8:]
     )
     state = SimpleNamespace(reply=_transactions(SALE, LABEL), calls=[])
 
@@ -174,7 +174,7 @@ def test_finances_token_is_minted_for_its_own_scope(app, monkeypatch):
     monkeypatch.setitem(
         fbc.app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "refresh"
     )
-    monkeypatch.setattr(listing, "_oauth", {})
+    monkeypatch.setattr(oauth, "_oauth", {})
     scopes = []
 
     def fake_post(url, **kwargs):
@@ -185,12 +185,12 @@ def test_finances_token_is_minted_for_its_own_scope(app, monkeypatch):
 
     monkeypatch.setattr(requests, "post", fake_post)
 
-    assert listing.oauth_token() == "t1"
-    assert listing.oauth_token(listing.FINANCES_SCOPE) == "t2"
-    assert listing.oauth_token() == "t1"
+    assert oauth.oauth_token() == "t1"
+    assert oauth.oauth_token(oauth.FINANCES_SCOPE) == "t2"
+    assert oauth.oauth_token() == "t1"
     # A refresh token from before Connect eBay asked for finances keeps
     # working for pictures, since each scope is asked for on its own.
-    assert scopes == [listing.MEDIA_SCOPE, listing.FINANCES_SCOPE]
+    assert scopes == [oauth.MEDIA_SCOPE, oauth.FINANCES_SCOPE]
 
 
 def test_ship_this_is_offered_until_there_is_a_sales_receipt(app):
@@ -490,7 +490,7 @@ def test_supplies_plan_is_a_normal_shipment_of_the_units(app):
 def test_record_size(unit_type, formats, size):
     release = DiscogsRelease(release_id=9, formats=formats) if formats else None
     assert (
-        listing.record_size(Unit(unit_type=unit_type, discogs_release=release)) == size
+        describe.record_size(Unit(unit_type=unit_type, discogs_release=release)) == size
     )
 
 

@@ -5,7 +5,8 @@ from auth import signed_in_client
 import pytest
 
 import fbc
-from fbc import db, insertions, listing, sync
+from fbc import db, sync
+from fbc.ebay import api, insertions
 from fbc.models.ebay import EbayDraft, EbayListing
 from fbc.util import mark_ended_listings
 from test_listing import SETTINGS, _carnaval
@@ -214,7 +215,7 @@ def _answer(monkeypatch, pages):
             return None, {"errors": [page], "warnings": [], "fees": []}
         return page, {"errors": [], "warnings": [], "fees": []}
 
-    monkeypatch.setattr(listing, "_call", fake_call)
+    monkeypatch.setattr(api, "_call", fake_call)
 
 
 def test_fetch_reads_every_page(monkeypatch):
@@ -222,30 +223,30 @@ def test_fetch_reads_every_page(monkeypatch):
         monkeypatch,
         [_page([{"ItemID": "1"}], 1, 2, 2), _page({"ItemID": "2"}, 2, 2, 2)],
     )
-    assert [i["ItemID"] for i in listing.fetch_active_items()] == ["1", "2"]
+    assert [i["ItemID"] for i in api.fetch_active_items()] == ["1", "2"]
 
 
 def test_fetch_accepts_no_listings_when_ebay_says_zero(monkeypatch):
     _answer(monkeypatch, [_page(None, 1, 0, 0)])
-    assert listing.fetch_active_items() == []
+    assert api.fetch_active_items() == []
 
 
 def test_fetch_fails_when_a_page_fails(monkeypatch):
     _answer(monkeypatch, [_page([{"ItemID": "1"}], 1, 2, 2), "HTTP 500"])
-    with pytest.raises(listing.ActiveListError, match="HTTP 500"):
-        listing.fetch_active_items()
+    with pytest.raises(api.ActiveListError, match="HTTP 500"):
+        api.fetch_active_items()
 
 
 def test_fetch_fails_on_a_short_list(monkeypatch):
     _answer(monkeypatch, [_page([{"ItemID": "1"}], 1, 1, 3)])
-    with pytest.raises(listing.ActiveListError, match="says there are 3"):
-        listing.fetch_active_items()
+    with pytest.raises(api.ActiveListError, match="says there are 3"):
+        api.fetch_active_items()
 
 
 def test_fetch_fails_when_the_reply_has_no_count(monkeypatch):
     _answer(monkeypatch, [{"Ack": "Success"}])
-    with pytest.raises(listing.ActiveListError):
-        listing.fetch_active_items()
+    with pytest.raises(api.ActiveListError):
+        api.fetch_active_items()
 
 
 # --- The listings sync ---
@@ -287,9 +288,7 @@ def test_a_failed_sync_marks_nothing_and_records_nothing(app, inline_sync, monke
     row = _listing("1")
 
     def fail():
-        raise listing.ActiveListError(
-            "Read 0 active listings but eBay says there are 5."
-        )
+        raise api.ActiveListError("Read 0 active listings but eBay says there are 5.")
 
     monkeypatch.setattr("fbc.syncjobs.fetch_active_items", fail)
 
@@ -387,9 +386,9 @@ def client(monkeypatch):
 def _ready_draft(client, monkeypatch):
     def fake_call(verb, data):
         resp = {"ItemID": "123", "StartTime": "2026-11-11T16:00:00.000Z"}
-        return resp, listing.summarize_response(resp)
+        return resp, api.summarize_response(resp)
 
-    monkeypatch.setattr(listing, "_call", fake_call)
+    monkeypatch.setattr(api, "_call", fake_call)
     unit = _carnaval()
     client.get("/ebaydraftmodelview/fromunit/" + str(unit.id))
     draft = db.session.query(EbayDraft).one()

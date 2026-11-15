@@ -132,7 +132,7 @@ def test_allow_offers_follows_the_setting(app, monkeypatch):
 
 
 def test_weight_counts_discs(app):
-    from fbc.listing import disc_count
+    from fbc.ebay.describe import disc_count
 
     unit = _unit()
     unit.discogs_release.formats = json.dumps([{"name": "Vinyl", "qty": "2"}])

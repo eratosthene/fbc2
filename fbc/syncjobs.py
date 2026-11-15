@@ -15,7 +15,8 @@ from ebaysdk.exception import ConnectionError
 
 from fbc import discogs_client, sync
 from fbc.core import devmode
-from fbc.listing import OAuthError, fetch_active_items, trading
+from fbc.ebay.api import fetch_active_items, trading
+from fbc.ebay.oauth import OAuthError
 from fbc.util import (
     add_discogs_release,
     add_ebay_listing,

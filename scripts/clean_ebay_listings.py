@@ -9,7 +9,7 @@ from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit
 from fbc.models.sales import SalesReceipt
 from fbc import app, db
-from fbc.listing import trading
+from fbc.ebay.api import trading
 from ebaysdk.exception import ConnectionError
 import logging
 

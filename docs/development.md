@@ -13,8 +13,16 @@ so far:
   Discogs. `settings.py`, `devmode.py`, `localtime.py`, `formatting.py` (price
   and percent), `forms.py` (`CustomForm`, `CustomModelView` and
   `FilterIdMatches`, the base classes for every view) and `widgets.py`.
+- `fbc/ebay/`: eBay. `oauth.py` (consent, tokens) is the bottom layer, then
+  `api.py` (Trading API calls and reading their replies), `describe.py` (a
+  Unit's title, description and item specifics, no network), `drafts.py`
+  (an eBay Draft's item), `publish.py` (verify and publish), `pictures.py`,
+  `vocab.py` (the lookup tables), `skus.py`, `insertions.py`, `tracking.py`
+  and `mystery.py`. Each module refers to the others by module name
+  (`oauth.oauth_token()`), not by importing the function, so a test patches
+  `fbc.ebay.oauth.oauth_token` once and every caller sees it.
 
-The rest is still loose modules in `fbc/`, and moves into `ebay/`, `discogs/`,
+The rest is still loose modules in `fbc/`, and moves into `discogs/`,
 `sync/` and `sales/` in later changes. Package `__init__.py` files are empty,
 so importing one module never imports its neighbours. `models/` may import
 `core/` and modules that import nothing from `fbc` but `core/`.
@@ -266,8 +274,8 @@ Draft.
 **`external_id` and `location`.** Both are free text set by the seller. The
 spec describes `external_id` as the seller's private comments, which is where
 Discogs shows it, so someone can type over it by hand. fbc will write
-`fbc-<Unit ID>` there, the same as eBay's SKU (`listing.sku`,
-`listing.unit_id_from_sku`), and treat anything else as "no Unit". `location`
+`fbc-<Unit ID>` there, the same as eBay's SKU (`skus.sku`,
+`skus.unit_id_from_sku`), and treat anything else as "no Unit". `location`
 is the Storage Box's place for the Unit.
 
 **Fees and earnings.** `client.fee_for(price)` gives Discogs's selling fee
@@ -311,8 +319,8 @@ against Discogs, so check it on the first real Draft. Notes:
   the views check `devmode.on()` first as well.
 - After a create, the row is saved from what was posted
   (`util.save_discogs_listing`, the same function the sync uses), so a later
-  sync updates it by `listing_id`. `external_id` is `listing.sku(unit.id)` and
-  is read back with `listing.unit_id_from_sku`, as for eBay.
+  sync updates it by `listing_id`. `external_id` is `skus.sku(unit.id)` and
+  is read back with `skus.unit_id_from_sku`, as for eBay.
 - A 4xx from Discogs (not 429) is a refusal: nothing is saved. A timeout, a
   dropped connection, a 5xx or an answer with no `listing_id` raises
   `PostUncertain`. The create always reads the newest `RECENT_ITEMS` items of
@@ -329,7 +337,7 @@ against Discogs, so check it on the first real Draft. Notes:
 
 ## Shipment tracking
 
-`fbc/tracking.py` reads each order's carrier and tracking number from the
+`fbc/ebay/tracking.py` reads each order's carrier and tracking number from the
 `GetOrders` sync (`ShipmentTrackingDetails`, which needs no new OAuth scope)
 and links to the carrier's page. It doesn't ask for tracking progress: eBay
 doesn't give it, and a carrier's API would. USPS's Tracking API was tried and
@@ -342,14 +350,14 @@ changes. Any such client would keep its state on `EbayOrder` and go through
 ## Active listings and free insertions
 
 `EbayListing.ended` and `end_time` are set only by the listings sync, through
-`util.mark_ended_listings`, after `listing.fetch_active_items` has read the
+`util.mark_ended_listings`, after `api.fetch_active_items` has read the
 whole active list (it raises unless every page came back and the items match
 eBay's `TotalNumberOfEntries`, and a failed sync records nothing).
 `sync.record_finished` and `sync.last_finished` keep when a sync last
 finished in the `sync_record` table, by name; the listings sync's is
 `sync.LISTINGS_SYNC`. Unlike the job files, it lasts.
 
-`fbc/insertions.py` holds the free-insertions maths in one place, with its
+`fbc/ebay/insertions.py` holds the free-insertions maths in one place, with its
 assumptions in the docstring (Pacific calendar month, a renewal each month on the start's Pacific day and time, with
 `EbayListing.renews_at` (the listings sync sets it from eBay's `TimeLeft`) winning when it falls in the month, ended
 listings counted up to `end_time`). Change them there and in

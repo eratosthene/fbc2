@@ -7,22 +7,17 @@ from flask_appbuilder.models.sqla.interface import SQLAInterface
 from markupsafe import Markup
 from wtforms import TextAreaField
 
-from fbc import insertions
+from fbc.ebay import insertions
 from fbc.core import devmode
-from fbc.listing import (
-    check_ready,
-    describe_template,
+from fbc.ebay.api import listing_settings, seller_profiles
+from fbc.ebay.drafts import check_ready, describe_template, listing_details, new_draft
+from fbc.ebay.pictures import (
     fetch_picture,
-    listing_details,
-    listing_settings,
-    new_draft,
-    publish_draft,
     rotate_picture,
-    seller_profiles,
     upright_picture,
     upload_picture,
-    verify_draft,
 )
+from fbc.ebay.publish import publish_draft, verify_draft
 from fbc.models.ebay import EbayDraft
 from fbc.core.forms import CustomModelView
 from fbc.core.widgets import EbayDraftListWidget, TallTextAreaWidget

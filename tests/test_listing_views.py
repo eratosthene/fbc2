@@ -5,7 +5,7 @@ import pytest
 
 import fbc
 from fbc import db
-from fbc import listing
+from fbc.ebay import api, drafts
 from fbc.models.ebay import EbayDraft
 from test_listing import SETTINGS, _carnaval
 
@@ -89,9 +89,9 @@ def test_uploading_pictures_adds_them_in_order(client, monkeypatch):
 def test_publish_endpoint_lists_the_draft(client, monkeypatch):
     def fake_call(verb, data):
         resp = {"ItemID": "123", "StartTime": "2026-10-29T16:00:00.000Z"}
-        return resp, listing.summarize_response(resp)
+        return resp, api.summarize_response(resp)
 
-    monkeypatch.setattr(listing, "_call", fake_call)
+    monkeypatch.setattr(api, "_call", fake_call)
     unit = _carnaval()
     client.get("/ebaydraftmodelview/fromunit/" + str(unit.id))
     draft = db.session.query(EbayDraft).one()
@@ -197,7 +197,7 @@ def test_policies_page_shows_what_a_listing_without_policies_would_copy(
         "fbc.views.listing.listing_details",
         lambda item_id: (
             {"shipping": None, "return": None, "payment": None},
-            listing.template_from_item(FLAT_ITEM),
+            drafts.template_from_item(FLAT_ITEM),
             {"errors": [], "warnings": [], "fees": []},
         ),
     )
@@ -314,7 +314,7 @@ def test_connect_page_says_when_connected(client, exchanged):
 
 def _draft_with_result(result):
     unit = _carnaval()
-    from fbc.listing import new_draft
+    from fbc.ebay.drafts import new_draft
 
     draft = new_draft(unit)
     draft.messages = json.dumps(result)
@@ -433,7 +433,7 @@ def test_rotating_a_picture_swaps_its_size_and_keeps_its_place(
 def test_rotating_left_and_right_go_opposite_ways():
     from PIL import Image
 
-    from fbc.listing import rotate_picture
+    from fbc.ebay.pictures import rotate_picture
 
     image = Image.new("RGB", (4, 2), "white")
     image.putpixel((0, 0), (255, 0, 0))
