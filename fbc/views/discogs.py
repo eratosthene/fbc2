@@ -148,7 +148,7 @@ class FolderModelView(SyncedViewMixin, CustomModelView):
 
 # Filters preset on the Discogs Listings list by the Tasks menu link: status
 # Equal to Draft (string filter 3) and ended Not Equal to yes (boolean filter 1;
-# an Equal filter can't be given "no"), as fbc.tasks.ids_discogs_drafts_to_list.
+# an Equal filter can't be given "no"), as fbc.sales.tasks.ids_discogs_drafts_to_list.
 DISCOGS_DRAFTS_TO_LIST_FILTERS = {"_flt_3_status": "Draft", "_flt_1_ended": "y"}
 
 

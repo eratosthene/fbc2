@@ -9,7 +9,8 @@ import requests
 from flask import Flask
 
 import fbc
-from fbc import db, shipping
+from fbc import db
+from fbc.ebay import finances
 from fbc.discogs import client as discogs_client, removal
 from fbc.ebay import api, drafts, oauth
 from fbc.core import devmode
@@ -394,7 +395,7 @@ def test_connect_discogs_is_turned_off_in_dev_mode(client, dev_mode, monkeypatch
 
 
 def test_order_earnings_ask_for_net_sold_in_dev_mode(app, dev_mode):
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = finances.order_earnings("12-34567-89012")
 
     assert earnings["net"] is None
     assert earnings["errors"] == []

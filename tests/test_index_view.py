@@ -4,7 +4,7 @@ from auth import signed_in_client
 import pytest
 
 from fbc import db
-from fbc.index import MyIndexView
+from fbc.sales.index import MyIndexView
 from fbc.models.expenses import Expense
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.models.sales import SalesReceipt

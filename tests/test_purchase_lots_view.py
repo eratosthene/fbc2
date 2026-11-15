@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy import event
 
 import fbc
-from fbc import finance
-from fbc.index import home_totals
+from fbc.sales import finance
+from fbc.sales.index import home_totals
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.models.sales import SalesReceipt
 

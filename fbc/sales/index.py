@@ -4,7 +4,7 @@ from flask import flash, jsonify, redirect, request, url_for
 from flask_appbuilder import IndexView, has_access
 from flask_appbuilder.views import expose
 
-from fbc import tasks
+from fbc.sales import tasks
 from fbc.sync import jobs, state
 from fbc.ebay import insertions
 
@@ -13,7 +13,8 @@ logger = logging.getLogger()
 
 def home_totals():
     """Everything the home page shows, worked out from the database."""
-    from fbc import db, finance
+    from fbc import db
+    from fbc.sales import finance
     from fbc.models.inventory import PurchaseLot, StorageBox
     from fbc.models.expenses import (
         category_label,
@@ -22,7 +23,7 @@ def home_totals():
     )
     from fbc.models.supplies import PurchaseOrder, Supply
 
-    # The Units and receipts are loaded once, in fbc.finance, and the
+    # The Units and receipts are loaded once, in fbc.sales.finance, and the
     # per-lot figures come from there too, so the Purchase Lots list
     # shows the same numbers.
     inv = finance.Inventory()

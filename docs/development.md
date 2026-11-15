@@ -6,14 +6,23 @@ a copy of live data. For the live server, see
 
 ## How `fbc/` is laid out
 
-`fbc/` is being grouped into packages by area (#157). The packages that exist
-so far:
+`fbc/__init__.py` builds the app, `models/` and `views/` hold one module per
+area, and everything else is in a package by area (#157):
 
 - `fbc/core/`: what every area uses and that knows nothing about eBay or
   Discogs. `settings.py`, `devmode.py`, `localtime.py`, `formatting.py` (price
   and percent), `forms.py` (`CustomForm`, `CustomModelView` and
   `FilterIdMatches`, the base classes for every view) and `widgets.py`.
-
+- `fbc/ebay/`: eBay. `oauth.py` (consent, tokens) is the bottom layer, then
+  `api.py` (Trading API calls and reading their replies), `describe.py` (a
+  Unit's title, description and item specifics, no network), `drafts.py`
+  (an eBay Draft's item), `publish.py` (verify and publish), `pictures.py`,
+  `vocab.py` (the lookup tables), `skus.py`, `insertions.py`, `tracking.py`,
+  `mystery.py`, `finances.py` (an order's transactions, fees and earnings from
+  the Finances API), and `listings.py` and `orders.py` (saving the listings and
+  orders a sync reads from eBay). Each module refers to the others by module name
+  (`oauth.oauth_token()`), not by importing the function, so a test patches
+  `fbc.ebay.oauth.oauth_token` once and every caller sees it.
 - `fbc/discogs/`: Discogs. `client.py` is every call to Discogs. `identify.py`
   searches and ranks for Identify Record, `collect.py` adds a release to the
   collection, `saving.py` saves the listings, releases and instances a sync or
@@ -21,27 +30,23 @@ so far:
   Unit's copy out of the collection, `naming.py` names a Unit from a release
   (models import it, so it loads nothing from `fbc`) and `samples.py` is the dev
   mode sample data. Modules refer to each other by module name, as in `ebay/`.
-
-- `fbc/ebay/`: eBay. `oauth.py` (consent, tokens) is the bottom layer, then
-  `api.py` (Trading API calls and reading their replies), `describe.py` (a
-  Unit's title, description and item specifics, no network), `drafts.py`
-  (an eBay Draft's item), `publish.py` (verify and publish), `pictures.py`,
-  `vocab.py` (the lookup tables), `skus.py`, `insertions.py`, `tracking.py`,
-  `mystery.py`, and `listings.py` and `orders.py` (saving the listings and
-  orders a sync reads from eBay). Each module refers to the others by module name
-  (`oauth.oauth_token()`), not by importing the function, so a test patches
-  `fbc.ebay.oauth.oauth_token` once and every caller sees it.
-
 - `fbc/sync/`: syncing. `state.py` runs a sync in a thread and keeps its state
   in job files, `jobs.py` is what each sync does (the buttons and `flask sync`
   call the same functions), `scheduler.py` is `flask scheduler`, and `notes.py`
   is the "last synced" note on a list. A sync's state module is imported as
   `state` (`from fbc.sync import state`).
+- `fbc/sales/`: what the owner does with stock and sales, using both eBay and
+  Discogs. `ship.py` is Ship This, `stock.py` is the supplies it takes out of
+  the Supply List, `combine.py` combines receipts, `archive.py`, `finance.py`
+  (Purchase Lot money), `pricing.py` (what to ask), `tasks.py` and `index.py`
+  (the home page), and `widgets.py` (the Supplies Used field).
 
-The rest is still loose modules in `fbc/`, and moves into `sales/` in a later
-change. Package `__init__.py` files are empty,
-so importing one module never imports its neighbours. `models/` may import
-`core/` and modules that import nothing from `fbc` but `core/`.
+The packages sit in layers, lowest first: `core`, `models`, `ebay` and
+`discogs`, `sync`, `sales`, then `views`. A module only imports from its own
+layer or lower, and within a layer the modules don't import each other in a
+circle. Package `__init__.py` files are empty, so importing one module never
+imports its neighbours. `models/` may import `core/` and modules that import
+nothing from `fbc` when they load (`discogs/naming.py`, `ebay/tracking.py`).
 
 ## Setting up
 
@@ -213,17 +218,17 @@ and `docker/compose.dev.yml` runs `flask run`, so it doesn't start one at all.
 To try it by hand, run `flask scheduler` with a short interval in a throwaway
 setup; with `FBC_DEV_MODE=1` it does nothing.
 
-The Tasks menu and the home page's To do banner (`fbc/tasks.py`) have no table
+The Tasks menu and the home page's To do banner (`fbc/sales/tasks.py`) have no table
 of their own: each task is a query that stops matching once the work is done.
 The lists are the existing ones with a filter (`fbc/views/tasks.py`), and eBay
-Drafts to List (eBay) and Drafts to List (Discogs) are filter links on the eBay Drafts and Discogs Listings lists. `fbc/tasks.py` says
+Drafts to List (eBay) and Drafts to List (Discogs) are filter links on the eBay Drafts and Discogs Listings lists. `fbc/sales/tasks.py` says
 what each one means. A new kind of task is a new function there, a view or
 filter link, and a count for the banner.
 
 ## Signing in
 
 Every page needs signing in, the home page and the Sync buttons' routes
-included (`MyIndexView` in `fbc/index.py`, whose routes use `has_access`;
+included (`MyIndexView` in `fbc/sales/index.py`, whose routes use `has_access`;
 Flask-AppBuilder's own home page is public). Signed out, they redirect to the
 login page and start nothing. Each route is a permission on `MyIndexView`
 (`can_index`, `can_syncdiscogs`, `can_syncdiscogslistings`,

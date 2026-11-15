@@ -9,7 +9,8 @@ import fbc
 from fbc import db
 from fbc.discogs import client as discogs_calls
 from fbc.ebay import describe, oauth
-from fbc import shipping
+from fbc.ebay import finances as ebay_finances
+from fbc.sales import ship, stock
 from fbc.discogs import removal
 from fbc.discogs.client import DiscogsAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsRelease
@@ -119,7 +120,7 @@ def discogs(monkeypatch):
 
 
 def test_order_earnings_adds_up_the_sale_and_the_label(app, finances):
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert earnings["net"] == 16.50
     assert [
@@ -132,7 +133,7 @@ def test_order_earnings_adds_up_the_sale_and_the_label(app, finances):
     assert earnings["items"] == 1
     assert earnings["errors"] == earnings["warnings"] == []
     url, kwargs = finances.calls[0]
-    assert url == shipping.FINANCES_URL
+    assert url == ebay_finances.FINANCES_URL
     assert kwargs["params"]["filter"] == "orderId:{12-34567-89012}"
     assert kwargs["headers"]["Authorization"] == "Bearer access-finances"
 
@@ -140,7 +141,7 @@ def test_order_earnings_adds_up_the_sale_and_the_label(app, finances):
 def test_order_earnings_warns_when_no_label_is_bought(app, finances):
     finances.reply = _transactions(SALE)
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert earnings["net"] == 21.13
     assert "no eBay shipping label" in earnings["warnings"][0]
@@ -149,7 +150,7 @@ def test_order_earnings_warns_when_no_label_is_bought(app, finances):
 def test_order_earnings_are_unknown_without_a_sale(app, finances):
     finances.reply = _transactions()
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert earnings["net"] is None
     assert "doesn't show a sale" in earnings["warnings"][0]
@@ -161,7 +162,7 @@ def test_order_earnings_reports_ebay_errors(app, finances):
         {"errors": [{"message": "Insufficient permissions to fulfill the request."}]},
     )
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert earnings["net"] is None
     assert earnings["errors"] == [
@@ -228,7 +229,7 @@ def test_ship_this_says_how_to_ship_by_hand_when_the_unit_is_unclear(client):
     )
 
     html = page.get_data(as_text=True)
-    assert shipping.order_unit(order) is None
+    assert ship.order_unit(order) is None
     assert "Listing L1 has 2 unsold Units on it, and 1 was bought." in html
     assert "ship it by hand" in html
     assert "/salesreceiptmodelview/add?sold_price=25.0&amp;ebay_orders=" in html
@@ -468,7 +469,7 @@ def test_supplies_plan_is_a_normal_shipment_of_the_units(app):
     order, unit = _order()
     _shipping_supplies()
 
-    plan = [(s.name, n) for s, n in shipping.supplies_plan([unit])]
+    plan = [(s.name, n) for s, n in stock.supplies_plan([unit])]
 
     assert plan == [
         ("LP Mailers", 1),
@@ -566,7 +567,7 @@ def test_shipping_takes_the_supplies_used_out_of_stock(client, discogs):
 def test_stock_problems_names_each_supply_short_of_what_its_used_for(app):
     supplies = _shipping_supplies()
 
-    problems = shipping.stock_problems(
+    problems = stock.stock_problems(
         {supplies["mailers"]: 10, supplies["sleeves 12"]: 21, supplies["labels"]: 222}
     )
 
@@ -705,7 +706,7 @@ def _lines(earnings):
 def test_order_earnings_split_out_the_fees_in_the_sale(app, finances):
     finances.reply = _transactions(SALE_WITH_FEES, LABEL, AD_FEE)
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert _lines(earnings) == [
         ("SALE", "Sale, less the taxes eBay collects", 25.30),
@@ -735,7 +736,7 @@ def test_order_earnings_add_up_fees_of_each_kind_across_items(app, finances):
         )
     )
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert _lines(earnings) == [
         ("SALE", "Sale, less the taxes eBay collects", 24.13),
@@ -758,7 +759,7 @@ def test_order_earnings_name_an_unknown_fee_readably(app, finances):
         )
     )
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert earnings["lines"][1]["label"] == "Below standard fee"
 
@@ -822,7 +823,7 @@ def test_shipping_without_ebays_earnings_keeps_no_lines(client):
 def _shipped(net_sold=16.50, lines=None):
     """A Sales Receipt for the Carnaval order, with `lines` if given."""
     order, unit = _order()
-    receipt = shipping.ship_order(order, unit, net_sold, lines=lines or [])
+    receipt = ship.ship_order(order, unit, net_sold, lines=lines or [])
     return receipt
 
 
@@ -877,7 +878,7 @@ def test_refresh_earnings_can_keep_net_sold(client, finances):
 
 
 def test_refresh_earnings_replaces_the_lines_it_had(client, finances):
-    receipt = _shipped(lines=shipping.order_earnings("12-34567-89012")["lines"])
+    receipt = _shipped(lines=ebay_finances.order_earnings("12-34567-89012")["lines"])
     finances.reply = _transactions(SALE, LABEL)
 
     client.post(
@@ -920,7 +921,7 @@ def test_refresh_earnings_is_off_in_dev_mode(client, finances, monkeypatch):
 
 
 def test_receipt_page_shows_its_lines(client, finances):
-    receipt = _shipped(lines=shipping.order_earnings("12-34567-89012")["lines"])
+    receipt = _shipped(lines=ebay_finances.order_earnings("12-34567-89012")["lines"])
 
     html = client.get("/salesreceiptmodelview/show/" + str(receipt.id)).get_data(
         as_text=True
@@ -942,7 +943,7 @@ def test_receipt_page_says_when_there_are_no_lines(client):
 
 
 def test_editing_net_sold_keeps_the_lines_adding_up(client, finances):
-    receipt = _shipped(lines=shipping.order_earnings("12-34567-89012")["lines"])
+    receipt = _shipped(lines=ebay_finances.order_earnings("12-34567-89012")["lines"])
 
     client.post(
         "/salesreceiptmodelview/edit/" + str(receipt.id),
@@ -960,7 +961,7 @@ def test_backfill_earnings_only_shows_without_apply(app, finances):
     receipt = _shipped()
     said = []
 
-    counts = shipping.backfill_earnings(echo=said.append)
+    counts = ebay_finances.backfill_earnings(echo=said.append)
 
     assert counts == {
         "saved": 0,
@@ -979,7 +980,7 @@ def test_backfill_earnings_saves_lines_and_keeps_net_sold(app, finances):
     receipt = _shipped(net_sold=20.00)
     said = []
 
-    counts = shipping.backfill_earnings(apply=True, echo=said.append)
+    counts = ebay_finances.backfill_earnings(apply=True, echo=said.append)
 
     assert counts == {
         "saved": 1,
@@ -998,7 +999,7 @@ def test_backfill_earnings_saves_lines_and_keeps_net_sold(app, finances):
 def test_backfill_earnings_can_set_net_sold_to_ebays(app, finances):
     receipt = _shipped(net_sold=20.00)
 
-    shipping.backfill_earnings(apply=True, update_net=True, echo=lambda _: None)
+    ebay_finances.backfill_earnings(apply=True, update_net=True, echo=lambda _: None)
 
     db.session.expire_all()
     receipt = db.session.get(SalesReceipt, receipt.id)
@@ -1007,10 +1008,10 @@ def test_backfill_earnings_can_set_net_sold_to_ebays(app, finances):
 
 
 def test_backfill_earnings_leaves_receipts_with_lines_or_no_sale(app, finances):
-    _shipped(lines=shipping.order_earnings("12-34567-89012")["lines"])
+    _shipped(lines=ebay_finances.order_earnings("12-34567-89012")["lines"])
     finances.calls.clear()
 
-    counts = shipping.backfill_earnings(apply=True, echo=lambda _: None)
+    counts = ebay_finances.backfill_earnings(apply=True, echo=lambda _: None)
 
     assert finances.calls == []
     assert counts["saved"] == 0
@@ -1018,7 +1019,7 @@ def test_backfill_earnings_leaves_receipts_with_lines_or_no_sale(app, finances):
     db.session.query(SalesReceipt).one().lines = []
     db.session.commit()
     finances.reply = _transactions(LABEL)
-    counts = shipping.backfill_earnings(apply=True, echo=lambda _: None)
+    counts = ebay_finances.backfill_earnings(apply=True, echo=lambda _: None)
     assert counts == {
         "saved": 0,
         "differ": 0,
@@ -1033,7 +1034,7 @@ def test_backfill_earnings_stops_at_an_ebay_error(app, finances):
     finances.reply = FakeHTTPResponse(403, {"errors": [{"message": "No access."}]})
     said = []
 
-    counts = shipping.backfill_earnings(apply=True, echo=said.append)
+    counts = ebay_finances.backfill_earnings(apply=True, echo=said.append)
 
     assert counts["saved"] == 0
     assert said[-2:] == [
@@ -1139,7 +1140,7 @@ def test_order_earnings_split_out_the_fees_a_refund_credits_back(app, finances):
     # eBay lists the newest first; the lines are oldest first.
     finances.reply = _transactions(*reversed(RETURNED))
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert _lines(earnings) == [
         ("SALE", "Sale, less the taxes eBay collects", 10.89),
@@ -1157,7 +1158,9 @@ def test_order_earnings_split_out_the_fees_a_refund_credits_back(app, finances):
 
 def test_a_returned_orders_totals_match_ebays_order_page(app, finances):
     finances.reply = _transactions(*reversed(RETURNED))
-    _shipped(net_sold=-9.19, lines=shipping.order_earnings("12-34567-89012")["lines"])
+    _shipped(
+        net_sold=-9.19, lines=ebay_finances.order_earnings("12-34567-89012")["lines"]
+    )
 
     totals = earnings_totals()
 
@@ -1177,7 +1180,7 @@ def test_earnings_lines_fit_their_columns(app, finances):
     finances.reply = _transactions(*RETURNED, SALE_WITH_FEES, AD_FEE)
     columns = SalesReceiptLine.__table__.columns
 
-    for line in shipping.order_earnings("12-34567-89012")["lines"]:
+    for line in ebay_finances.order_earnings("12-34567-89012")["lines"]:
         for name, value in line.items():
             if isinstance(value, str):
                 assert len(value) <= columns[name].type.length, (name, value)
@@ -1212,7 +1215,7 @@ def test_order_earnings_leave_out_a_transfer_paying_for_a_label(app, finances):
         },
     )
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert [line["kind"] for line in earnings["lines"]] == [
         "SALE",
@@ -1241,7 +1244,7 @@ def test_backfill_earnings_leaves_an_order_split_across_receipts(app, finances):
     receipt, other = _split_order()
     said = []
 
-    counts = shipping.backfill_earnings(apply=True, echo=said.append)
+    counts = ebay_finances.backfill_earnings(apply=True, echo=said.append)
 
     assert counts == {
         "saved": 0,
@@ -1285,7 +1288,7 @@ RETURN_OPEN = RETURNED[:3]
 def test_order_earnings_say_when_ebay_is_holding_money(app, finances):
     finances.reply = _transactions(*reversed(RETURN_OPEN))
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert earnings["unsettled"] is True
     assert earnings["net"] == -6.44
@@ -1295,7 +1298,7 @@ def test_order_earnings_say_when_ebay_is_holding_money(app, finances):
 def test_order_earnings_are_settled_once_ebay_releases_the_hold(app, finances):
     finances.reply = _transactions(*reversed(RETURNED))
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert earnings["unsettled"] is False
     assert earnings["warnings"] == []
@@ -1307,7 +1310,7 @@ def test_order_earnings_name_a_refunded_label(app, finances):
         SALE, LABEL, RETURN_LABEL, dict(RETURN_LABEL, bookingEntry="CREDIT")
     )
 
-    earnings = shipping.order_earnings("12-34567-89012")
+    earnings = ebay_finances.order_earnings("12-34567-89012")
 
     assert _lines(earnings)[-1] == (
         "SHIPPING_LABEL",
@@ -1342,7 +1345,9 @@ def test_backfill_earnings_leaves_an_open_return_for_a_later_run(app, finances):
     finances.reply = _transactions(*reversed(RETURN_OPEN))
     said = []
 
-    counts = shipping.backfill_earnings(apply=True, update_net=True, echo=said.append)
+    counts = ebay_finances.backfill_earnings(
+        apply=True, update_net=True, echo=said.append
+    )
 
     assert counts == {
         "saved": 0,
@@ -1357,5 +1362,7 @@ def test_backfill_earnings_leaves_an_open_return_for_a_later_run(app, finances):
     assert (receipt.net_sold, receipt.lines) == (6.50, [])
 
     finances.reply = _transactions(*reversed(RETURNED))
-    counts = shipping.backfill_earnings(apply=True, update_net=True, echo=said.append)
+    counts = ebay_finances.backfill_earnings(
+        apply=True, update_net=True, echo=said.append
+    )
     assert counts["saved"] == 1

@@ -155,7 +155,7 @@ class SalesReceipt(Model):
     )
     sold_price = Column(Float)
     net_sold = Column(Float)
-    # Hidden from the lists by default; see fbc/archive.py.
+    # Hidden from the lists by default; see fbc/sales/archive.py.
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True
     )
