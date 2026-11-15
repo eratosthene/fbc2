@@ -4,8 +4,8 @@ fbc keeps track of a record shop's stock and sales, and keeps them in step
 with Discogs and eBay. This is what each part of the app does. To set it up,
 see [Running fbc in production](production.md).
 
-Before syncing, sign in to each site once: Sales > Connect eBay and
-Discogs > Connect Discogs. The app keeps the tokens in the database.
+Before syncing, sign in to each site once: Connect > Connect eBay and
+Connect > Connect Discogs. The app keeps the tokens in the database.
 
 ## Searching by id
 

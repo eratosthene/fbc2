@@ -16,15 +16,10 @@ from wtforms import BooleanField, StringField
 from wtforms.validators import Length, Optional
 
 
-# Filters preset on the Units lists by the "w/out" and Rebox menu links, as FAB
-# list URL args _flt_<n>_<column>: n picks the column's nth filter type
-# (relation 0 is Relation, boolean 1 is Not Equal to, number 1 is Greater than,
-# string 3 is Equal to).
+# Filters preset on the Units lists by the Rebox and "w/out Master" menu links,
+# as FAB list URL args _flt_<n>_<column>: n picks the column's nth filter type
+# (boolean 1 is Not Equal to, number 1 is Greater than, string 3 is Equal to).
 UNSOLD_UNITS_OVER_2_FILTERS = {"_flt_1_sold": "y", "_flt_1_retail_price": "2"}
-UNITS_WITHOUT_LISTING_FILTERS = {
-    "_flt_0_ebay_listing": "__None",
-    **UNSOLD_UNITS_OVER_2_FILTERS,
-}
 UNITS_WITHOUT_MASTER_FILTERS = {"_flt_3_discogs_master": ""}
 
 # discogs_master and sold are NOT NULL, which Flask-AppBuilder would turn into
