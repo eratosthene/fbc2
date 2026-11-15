@@ -8,7 +8,7 @@ import fbc
 from fbc import db, sync
 from fbc.ebay import api, insertions
 from fbc.models.ebay import EbayDraft, EbayListing
-from fbc.util import mark_ended_listings
+from fbc.ebay.listings import mark_ended_listings
 from test_listing import SETTINGS, _carnaval
 
 D = datetime.datetime

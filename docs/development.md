@@ -13,12 +13,15 @@ so far:
   Discogs. `settings.py`, `devmode.py`, `localtime.py`, `formatting.py` (price
   and percent), `forms.py` (`CustomForm`, `CustomModelView` and
   `FilterIdMatches`, the base classes for every view) and `widgets.py`.
+- `fbc/discogs/`: Discogs. So far only `saving.py`, which saves the listings,
+  releases and collection instances a sync reads from Discogs.
 - `fbc/ebay/`: eBay. `oauth.py` (consent, tokens) is the bottom layer, then
   `api.py` (Trading API calls and reading their replies), `describe.py` (a
   Unit's title, description and item specifics, no network), `drafts.py`
   (an eBay Draft's item), `publish.py` (verify and publish), `pictures.py`,
-  `vocab.py` (the lookup tables), `skus.py`, `insertions.py`, `tracking.py`
-  and `mystery.py`. Each module refers to the others by module name
+  `vocab.py` (the lookup tables), `skus.py`, `insertions.py`, `tracking.py`,
+  `mystery.py`, and `listings.py` and `orders.py` (saving the listings and
+  orders a sync reads from eBay). Each module refers to the others by module name
   (`oauth.oauth_token()`), not by importing the function, so a test patches
   `fbc.ebay.oauth.oauth_token` once and every caller sees it.
 
@@ -289,10 +292,10 @@ Pending, Payment Received, In Progress, Shipped, Refund Sent and Cancelled.
 
 **What the sync does.** `syncjobs.sync_discogs_listings` reads the whole
 inventory (checking it got as many items as `len(inventory)` says), saves each
-as a `DiscogsListing` (`util.save_discogs_listing`), links it to its Unit by
+as a `DiscogsListing` (`saving.save_discogs_listing`), links it to its Unit by
 `external_id` if the Unit exists, and then marks every listing not in that read
-as ended (`util.mark_ended_discogs_listings`). A listing whose status is Sold,
-Deleted, Violation or Suspended is ended too (`util.DISCOGS_ENDED_STATUSES`):
+as ended (`saving.mark_ended_discogs_listings`). A listing whose status is Sold,
+Deleted, Violation or Suspended is ended too (`saving.DISCOGS_ENDED_STATUSES`):
 Discogs lets only For Sale, Draft and Expired listings be edited. It only
 reads, and it goes through `fbc/discogs_client.py`, so dev mode stops it. The `sync_record` name is `discogs-listings`. There's no Task for it
 yet.
@@ -318,7 +321,7 @@ against Discogs, so check it on the first real Draft. Notes:
 - Every write goes through `fbc/discogs_client.py`, which raises in dev mode, and
   the views check `devmode.on()` first as well.
 - After a create, the row is saved from what was posted
-  (`util.save_discogs_listing`, the same function the sync uses), so a later
+  (`saving.save_discogs_listing`, the same function the sync uses), so a later
   sync updates it by `listing_id`. `external_id` is `skus.sku(unit.id)` and
   is read back with `skus.unit_id_from_sku`, as for eBay.
 - A 4xx from Discogs (not 429) is a refusal: nothing is saved. A timeout, a
@@ -350,7 +353,7 @@ changes. Any such client would keep its state on `EbayOrder` and go through
 ## Active listings and free insertions
 
 `EbayListing.ended` and `end_time` are set only by the listings sync, through
-`util.mark_ended_listings`, after `api.fetch_active_items` has read the
+`listings.mark_ended_listings`, after `api.fetch_active_items` has read the
 whole active list (it raises unless every page came back and the items match
 eBay's `TotalNumberOfEntries`, and a failed sync records nothing).
 `sync.record_finished` and `sync.last_finished` keep when a sync last

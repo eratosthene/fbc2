@@ -1,8 +1,9 @@
 from fbc import db
 from fbc.models.ebay import EbayOrder
 from fbc.ebay.tracking import carrier_name, from_order, tracking_url
-from fbc.util import add_ebay_listing, add_ebay_order
-from test_util_ebay_sync import _ebay_listing_payload, _ebay_order_payload
+from fbc.ebay.listings import add_ebay_listing
+from fbc.ebay.orders import add_ebay_order
+from test_ebay_saving import _ebay_listing_payload, _ebay_order_payload
 
 
 def _shipped(order, carrier="USPS", number="9400111899223344556677"):

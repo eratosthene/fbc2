@@ -352,7 +352,7 @@ class DiscogsListing(Model):
     # The listings sync sets these. last_seen is the UTC start of the last
     # sync that found the listing in the inventory. A listing that has left
     # the inventory (deleted on Discogs), or whose status is Sold or another one
-    # it can't come back from, is marked ended, as eBay Listings are; see fbc/util.py mark_ended_discogs_listings.
+    # it can't come back from, is marked ended, as eBay Listings are; see fbc/discogs/saving.py mark_ended_discogs_listings.
     last_seen = Column(DateTime)
     ended = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True

@@ -31,7 +31,7 @@ class EbayListing(Model):
     # The listings sync sets these when a listing is no longer in eBay's
     # active list. end_time is the last sync that still saw it active (or
     # start_time if there was none), so "ended no later than"; see
-    # fbc/util.py mark_ended_listings. Times are UTC, as eBay sends them.
+    # fbc/ebay/listings.py mark_ended_listings. Times are UTC, as eBay sends them.
     ended = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True
     )
@@ -42,7 +42,7 @@ class EbayListing(Model):
     # A mystery box listing sells `pick_count` random Units from one Storage
     # Box with each sale, so none of those Units is linked to it. Columns,
     # not a SKU: fbc doesn't keep SKUs, and these show on the edit page.
-    # util.relist_ebay_listing carries them to the relisted listing. Both set
+    # listings.relist_ebay_listing carries them to the relisted listing. Both set
     # or both blank; see fbc/ebay/mystery.py.
     pick_from_box_id = Column(Integer, ForeignKey("storage_box.id"), index=True)
     pick_from_box = relationship("StorageBox")

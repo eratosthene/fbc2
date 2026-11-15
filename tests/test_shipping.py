@@ -16,7 +16,7 @@ from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit
 from fbc.models.sales import SalesReceipt, SalesReceiptLine, earnings_totals
 from fbc.models.supplies import Supply, SupplyUse
-from fbc.util import forget_discogs_instance
+from fbc.discogs.saving import forget_discogs_instance
 from test_listing import FakeHTTPResponse, _carnaval
 
 

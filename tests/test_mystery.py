@@ -7,7 +7,7 @@ from fbc.ebay import mystery
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import StorageBox, Unit
 from fbc.models.sales import SalesReceipt
-from fbc.util import relist_ebay_listing
+from fbc.ebay.listings import relist_ebay_listing
 from test_combined_shipping import (  # noqa: F401
     WHEN,
     _label,

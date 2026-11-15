@@ -19,7 +19,7 @@ tests will say what moved:
 - A relist is a new listing with a new StartTime, so it starts a new cycle
   (the sync keeps the new listing and drops the old one).
 - A listing that ended is counted up to its end_time (see
-  fbc/util.py mark_ended_listings). Listings fbc never synced before they
+  fbc/ebay/listings.py mark_ended_listings). Listings fbc never synced before they
   ended are missed, so the count can be a little low; entering the eBay
   app's number (calibrate) corrects that for the rest of the month.
 - eBay has no call that says how many free listings are left; Seller Hub's

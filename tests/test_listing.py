@@ -19,7 +19,7 @@ from fbc.ebay.publish import publish_draft
 from fbc.models.discogs import Artist, DiscogsRelease, Genre, Style
 from fbc.models.ebay import EbayDraft, EbayListing
 from fbc.models.inventory import PurchaseLot, Unit
-from fbc.util import add_ebay_listing
+from fbc.ebay.listings import add_ebay_listing
 
 SETTINGS = {
     "SHIPPING_PROFILE_ID": "111",

@@ -14,7 +14,8 @@ from fbc.models.ebay import EbayListing, EbayOrder, EbayOrderItem
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.models.sales import SalesReceipt, SalesReceiptLine, unit_weights
 from fbc.models.supplies import SupplyUse
-from fbc.util import add_ebay_listing, add_ebay_order
+from fbc.ebay.listings import add_ebay_listing
+from fbc.ebay.orders import add_ebay_order
 from test_listing import FakeHTTPResponse
 from test_shipping import _shipping_supplies, client  # noqa: F401
 

@@ -11,7 +11,7 @@ from fake_discogs import FakeAccount, FakeDiscogs, failing
 from fbc import db, discogs_client, sync, syncjobs
 from fbc.models.discogs import DiscogsListing
 from fbc.models.inventory import PurchaseLot, Unit
-from fbc.util import save_discogs_listing
+from fbc.discogs.saving import save_discogs_listing
 
 VERSIONS = Path(__file__).parent.parent / "migrations" / "versions"
 

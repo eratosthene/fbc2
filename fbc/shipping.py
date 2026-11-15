@@ -475,7 +475,7 @@ def remove_from_discogs(unit):
     """
     from fbc import discogs_client
     from fbc.discogs_client import ApiError, DiscogsAuthError
-    from fbc.util import forget_discogs_instance
+    from fbc.discogs.saving import forget_discogs_instance
 
     instance, problem = discogs_plan(unit)
     if problem:
