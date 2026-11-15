@@ -5,6 +5,7 @@ import pytest
 import fbc
 from fbc.sales import archive, finance
 from fbc.sales.index import home_totals
+from fbc.models.discogs import DiscogsOrder
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.models.sales import SalesReceipt, SalesReceiptLine, earnings_totals
@@ -272,3 +273,49 @@ def test_the_archive_command_is_a_dry_run_without_apply(app):
     assert "Archived 1 sales receipts" in result.output
     fbc.db.session.expire_all()
     assert receipt.archived is True
+
+
+@pytest.mark.parametrize(
+    "status, when, archived",
+    [
+        ("Shipped", OLD, True),
+        ("Refund Sent", OLD, True),
+        ("Cancelled (Non-Paying Buyer)", OLD, True),
+        ("Payment Received", OLD, False),
+        ("New Order", OLD, False),
+        ("Shipped", RECENT, False),
+    ],
+)
+def test_a_discogs_order_is_archived_once_old_and_finished(status, when, archived):
+    order = DiscogsOrder(order_id="1-1", status=status, created_time=when)
+    fbc.db.session.add(order)
+
+    _run()
+
+    assert order.archived is archived
+
+
+def test_discogs_orders_can_be_archived_by_hand_and_hidden(client):
+    shown = DiscogsOrder(order_id="1-1", status="New Order", created_time=RECENT)
+    gone = DiscogsOrder(
+        order_id="1-2", status="Shipped", created_time=OLD, archived=True
+    )
+    fbc.db.session.add_all([shown, gone])
+    fbc.db.session.commit()
+
+    page = client.get("/discogsordermodelview/list/").get_data(as_text=True)
+    assert "1-1" in page and "1-2" not in page
+    assert "Show archived" in page
+
+    client.post(
+        "/discogsordermodelview/action_post",
+        data={"action": "archive", "rowid": "1-1"},
+    )
+    fbc.db.session.expire_all()
+    assert shown.archived is True
+    client.post(
+        "/discogsordermodelview/action_post",
+        data={"action": "unarchive", "rowid": "1-1"},
+    )
+    fbc.db.session.expire_all()
+    assert shown.archived is False

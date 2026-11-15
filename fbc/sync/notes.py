@@ -19,6 +19,9 @@ DISCOGS = Source(jobs.DISCOGS_SYNC, "Discogs collection", "/syncdiscogs")
 DISCOGS_LISTINGS = Source(
     jobs.DISCOGS_LISTINGS_SYNC, "Discogs listings", "/syncdiscogslistings"
 )
+DISCOGS_ORDERS = Source(
+    jobs.DISCOGS_ORDERS_SYNC, "Discogs orders", "/syncdiscogsorders"
+)
 EBAY_LISTINGS = Source(state.LISTINGS_SYNC, "eBay listings", "/syncebaylistings")
 EBAY_ORDERS = Source(jobs.ORDERS_SYNC, "eBay orders", "/syncebayorders")
 

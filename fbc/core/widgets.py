@@ -69,6 +69,10 @@ class DiscogsListingListWidget(ListWidget):
     template = "widgets/d_l_list.html"
 
 
+class DiscogsOrderListWidget(ListWidget):
+    template = "widgets/d_o_list.html"
+
+
 class EbayListingListWidget(ListWidget):
     template = "widgets/e_l_list.html"
 

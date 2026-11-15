@@ -63,6 +63,79 @@ def save_discogs_listing(data, seen):
     return row
 
 
+def _money(amount):
+    """An amount from Discogs ({"currency": "USD", "value": 4.5}) as a float, or None."""
+    try:
+        return float((amount or {})["value"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _when(text):
+    from fbc.discogs.client import parse_timestamp
+
+    try:
+        return naive_utc(parse_timestamp(text)) if text else None
+    except ValueError:
+        return None
+
+
+def save_discogs_order(data):
+    """
+    Add or update the DiscogsOrder for one order of Discogs's seller orders
+    (`data` is the order's JSON), with its items. An item is linked to the
+    Unit its listing is linked to, when fbc knows the listing. Returns the
+    DiscogsOrder.
+
+    An order is always brought up to date, since Discogs changes its status as
+    the seller works through it. Its items are written once, then kept: a
+    Discogs order's items don't change after it is placed.
+    """
+    from fbc import db
+    from fbc.models.discogs import (
+        DiscogsListing,
+        DiscogsOrder,
+        DiscogsOrderItem,
+    )
+
+    order_id = str(data["id"])
+    order = db.session.get(DiscogsOrder, order_id)
+    if order is None:
+        order = DiscogsOrder(order_id=order_id)
+        db.session.add(order)
+    total = data.get("total") or {}
+    shipping = data.get("shipping") or {}
+    order.created_time = _when(data.get("created"))
+    order.last_activity = _when(data.get("last_activity"))
+    order.status = (data.get("status") or "")[:60] or None
+    order.buyer = ((data.get("buyer") or {}).get("username") or "")[:60] or None
+    order.shipping = _money(shipping)
+    order.shipping_method = (shipping.get("method") or "")[:100] or None
+    order.fee = _money(data.get("fee"))
+    order.total = _money(total)
+    order.currency = (total.get("currency") or "")[:3] or None
+    if not order.items:
+        for item in data.get("items") or []:
+            release = item.get("release") or {}
+            listing_id = item.get("id")
+            listing = (
+                db.session.get(DiscogsListing, int(listing_id)) if listing_id else None
+            )
+            order.items.append(
+                DiscogsOrderItem(
+                    listing_id=int(listing_id) if listing_id else None,
+                    release_id=release.get("id"),
+                    title=(release.get("description") or "")[:255] or None,
+                    price=_money(item.get("price")),
+                    media_condition=item.get("media_condition"),
+                    sleeve_condition=item.get("sleeve_condition"),
+                    unit_id=listing.unit_id if listing else None,
+                )
+            )
+    db.session.commit()
+    return order
+
+
 def mark_ended_discogs_listings(seen_ids):
     """
     Mark every DiscogsListing that isn't in the seller inventory as ended, and

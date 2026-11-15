@@ -23,6 +23,7 @@ from fbc.discogs.saving import (
     forget_discogs_instance,
     mark_ended_discogs_listings,
     save_discogs_listing,
+    save_discogs_order,
 )
 from fbc.ebay.listings import (
     add_ebay_listing,
@@ -40,6 +41,11 @@ logger = logging.getLogger()
 DISCOGS_SYNC = "discogs"
 ORDERS_SYNC = "ebay-orders"
 DISCOGS_LISTINGS_SYNC = "discogs-listings"
+DISCOGS_ORDERS_SYNC = "discogs-orders"
+
+# How far back a plain Discogs orders sync looks. An order's status changes as
+# it is worked through, and the sync refreshes every order it reads.
+DISCOGS_ORDER_DAYS = 30
 
 # A Job is what state.start and state.run take: the kind, a title, the function.
 Job = namedtuple("Job", "kind title fn")
@@ -56,6 +62,19 @@ def discogs_job():
 
 def discogs_listings_job():
     return _job(DISCOGS_LISTINGS_SYNC, "Discogs listings sync", sync_discogs_listings)
+
+
+def discogs_orders_job(deep=False):
+    """`deep` reads every order Discogs has, not just the last 30 days'."""
+    if deep:
+        title, days = "Discogs orders deep sync", None
+    else:
+        title, days = "Discogs orders sync", DISCOGS_ORDER_DAYS
+
+    def run():
+        sync_discogs_orders(days)
+
+    return _job(DISCOGS_ORDERS_SYNC, title, run)
 
 
 def ebay_listings_job():
@@ -149,6 +168,25 @@ def sync_discogs_listings():
     logger.info(str(unlinked) + " listings aren't linked to a Unit.")
     state.record_finished(DISCOGS_LISTINGS_SYNC, started)
     logger.info("Discogs listings sync finished.")
+
+
+def sync_discogs_orders(days=DISCOGS_ORDER_DAYS):
+    """
+    Read Discogs orders into DiscogsOrders, newest `days` days (all of them if
+    `days` is None). It only reads from Discogs. Orders are added and brought
+    up to date, never removed.
+    """
+    started = state.utcnow()
+    logger.info("Updating Discogs orders...")
+    since = None if days is None else started - datetime.timedelta(days=days)
+    # Read in full or not at all (IncompleteRead fails the sync).
+    orders = discogs_client.account().orders(since)
+    logger.info("Total Discogs orders: " + str(len(orders)))
+    for data in orders:
+        logger.info("Saving Discogs order " + str(data["id"]))
+        save_discogs_order(data)
+    state.record_finished(DISCOGS_ORDERS_SYNC, started)
+    logger.info("Discogs orders sync finished.")
 
 
 def sync_ebay_listings():

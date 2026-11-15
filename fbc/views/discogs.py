@@ -5,8 +5,14 @@ from flask_appbuilder import expose, has_access
 
 from fbc.discogs import listing as discogs_listing
 from fbc.core import devmode, localtime
-from fbc.sync.notes import DISCOGS, DISCOGS_LISTINGS, SyncedViewMixin
+from fbc.sync.notes import (
+    DISCOGS,
+    DISCOGS_LISTINGS,
+    DISCOGS_ORDERS,
+    SyncedViewMixin,
+)
 from fbc.core.forms import CustomModelView
+from fbc.sales.archive import ArchivableViewMixin
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.sqla.filters import (
     get_field_setup_query,
@@ -16,6 +22,7 @@ from flask_appbuilder.models.filters import BaseFilter
 from fbc.models.discogs import (
     Artist,
     DiscogsListing,
+    DiscogsOrder,
     DiscogsRelease,
     Folder,
     Genre,
@@ -23,6 +30,7 @@ from fbc.models.discogs import (
 )
 from fbc.core.widgets import (
     DiscogsListingListWidget,
+    DiscogsOrderListWidget,
     DiscogsReleaseListWidget,
 )
 from fbc.views.inventory import UnitModelView
@@ -361,3 +369,68 @@ class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
         else:
             flash("This listing is now For Sale on Discogs.", "success")
         return back
+
+
+class DiscogsOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
+    """
+    Discogs Marketplace orders as the last sync read them. Read only: an order
+    is worked on (invoiced, marked shipped) on Discogs, and the sync picks the
+    change up. Rows can be deleted from fbc (only fbc's row), to clear out
+    test data; the next sync brings back any that Discogs still has.
+    """
+
+    # Items link to Units through listings, which the listings sync keeps.
+    synced_by = [DISCOGS_ORDERS, DISCOGS_LISTINGS]
+    datamodel = SQLAInterface(DiscogsOrder)
+    base_permissions = [
+        "can_list",
+        "can_show",
+        "can_delete",
+        "can_archive",
+        "can_unarchive",
+    ]
+    base_order = ("created_time", "desc")
+    list_widget = DiscogsOrderListWidget
+    formatters_columns = localtime.formatters("created_time", "last_activity")
+    list_columns = [
+        "created_time",
+        "fmt_url",
+        "fmt_title",
+        "buyer",
+        "status",
+        "fmt_total",
+        "fmt_fee",
+    ]
+    search_columns = [
+        "order_id",
+        "buyer",
+        "status",
+        "total",
+        "fee",
+        "created_time",
+        "archived",
+    ]
+    show_columns = [
+        "order_id",
+        "created_time",
+        "last_activity",
+        "buyer",
+        "status",
+        "fmt_title",
+        "fmt_shipping",
+        "shipping_method",
+        "fmt_fee",
+        "fmt_total",
+        "fmt_url",
+    ]
+    label_columns = {
+        "fmt_url": "Order Id",
+        "fmt_title": "Title",
+        "fmt_total": "Total",
+        "fmt_fee": "Discogs Fee",
+        "fmt_shipping": "Shipping",
+    }
+    description_columns = {
+        "fmt_fee": "Discogs's selling fee. Its payment processing fee isn't in the API.",
+        "fmt_total": "Items and shipping, as Discogs works it out.",
+    }

@@ -110,6 +110,8 @@ it failed or couldn't start:
 ```bash
 docker/live-flask.sh sync discogs
 docker/live-flask.sh sync discogs-listings
+docker/live-flask.sh sync discogs-orders
+docker/live-flask.sh sync discogs-orders --deep
 docker/live-flask.sh sync ebay-listings
 docker/live-flask.sh sync ebay-orders
 docker/live-flask.sh sync ebay-orders --deep
@@ -144,6 +146,7 @@ SCHEDULER_EBAY_ORDERS_MINUTES = 10   # minutes between syncs, at least 1
 SCHEDULER_EBAY_LISTINGS_MINUTES = 60
 SCHEDULER_DISCOGS_MINUTES = 240
 SCHEDULER_DISCOGS_LISTINGS_MINUTES = 60
+SCHEDULER_DISCOGS_ORDERS_MINUTES = 15
 SCHEDULER_RETRY_MINUTES = 30
 ```
 

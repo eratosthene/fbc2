@@ -11,6 +11,8 @@ ROUTES = [
     ("get", "/syncjob/" + "0" * 32),
     ("get", "/syncdiscogs"),
     ("get", "/syncdiscogslistings"),
+    ("get", "/syncdiscogsorders"),
+    ("get", "/syncdiscogsordersdeep"),
     ("get", "/syncebaylistings"),
     ("get", "/syncebayorders"),
     ("get", "/syncebayordersdeep"),
@@ -51,7 +53,13 @@ def test_signed_out_cant_calibrate_the_insertions_count(app):
 
 @pytest.mark.parametrize(
     "path",
-    ["/syncdiscogs", "/syncdiscogslistings", "/syncebaylistings", "/syncebayorders"],
+    [
+        "/syncdiscogs",
+        "/syncdiscogslistings",
+        "/syncdiscogsorders",
+        "/syncebaylistings",
+        "/syncebayorders",
+    ],
 )
 def test_signed_in_starts_the_job(app, started, path):
     client = signed_in_client(app)

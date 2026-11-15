@@ -252,6 +252,8 @@ def test_new_draft_skips_the_discogs_lookup_in_dev_mode(app, dev_mode, monkeypat
     "path, sync",
     [
         ("/syncdiscogs", "sync_discogs"),
+        ("/syncdiscogsorders", "sync_discogs_orders"),
+        ("/syncdiscogsordersdeep", "sync_discogs_orders"),
         ("/syncebaylistings", "sync_ebay_listings"),
         ("/syncebayorders", "sync_ebay_orders"),
         ("/syncebayordersdeep", "sync_ebay_orders"),
