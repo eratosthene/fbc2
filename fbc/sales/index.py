@@ -12,15 +12,21 @@ from fbc.ebay import insertions
 logger = logging.getLogger()
 
 
+NO_ORDER_NAME = "In person or not linked to an order"
+
+
 def marketplace_sales():
     """
-    [{"name", "receipts", "gross", "net"}] for eBay, Discogs and receipts
-    with no order, from the Sales Receipts. Discogs's net is its total less
+    [{"name", "receipts", "gross", "net", "no_order"}] for eBay, Discogs and
+    receipts with no order (no_order is True for that one), from the Sales Receipts. Discogs's net is its total less
     its fee unless corrected by hand: its API has no payment processing fee.
     """
     from fbc import db
     from fbc.models.sales import SalesReceipt
 
+    # eBay and Discogs are always listed, even at zero, so a marketplace
+    # with no sales yet is still there. The row for receipts with no order
+    # is only listed when there are some.
     rows = {name: [0, 0.0, 0.0] for name in ("eBay", "Discogs", "")}
     for receipt in db.session.query(SalesReceipt).options(
         sa.orm.selectinload(SalesReceipt.ebay_orders),
@@ -31,9 +37,15 @@ def marketplace_sales():
         row[1] += receipt.sold_price or 0
         row[2] += receipt.net_sold or 0
     return [
-        {"name": name or "Other", "receipts": r, "gross": g, "net": n}
+        {
+            "name": name or NO_ORDER_NAME,
+            "receipts": r,
+            "gross": g,
+            "net": n,
+            "no_order": not name,
+        }
         for name, (r, g, n) in rows.items()
-        if r
+        if r or name
     ]
 
 

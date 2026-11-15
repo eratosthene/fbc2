@@ -504,6 +504,20 @@ Sales by marketplace table all show Discogs sales next to eBay's. A Sales
 Receipt of a Discogs order has no Refresh Earnings: there is nothing more to
 ask Discogs.
 
+### Sales in person, and Notes on a Sales Receipt
+
+A sale in person has no eBay or Discogs order, so add its Sales Receipt by hand
+(Sales Receipts, then Add) and link its Units to it. A Sales Receipt has a free
+text Notes field on its forms, its page and in the search, for what the receipt
+can't say itself, such as "sold in person to a friend".
+
+The home page's Sales by marketplace table always has eBay and Discogs rows,
+even with no sales. Its "In person or not linked to an order" row counts the
+Sales Receipts with no order of either kind, and shows only when there are some.
+Click it to open the Sales Receipts list filtered to them, archived ones
+included, as the table counts them. In the search, that filter is "Has no
+order", under eBay Orders.
+
 ### Selling on both eBay and Discogs
 
 A Unit can be listed on eBay and Discogs at once. When it sells on one, fbc
