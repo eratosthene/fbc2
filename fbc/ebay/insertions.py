@@ -210,11 +210,12 @@ def listing_summary(now=None):
     nothing is marked ended before then and the counts would be wrong.
     `calibration` is this month's entry from the eBay app, or None.
     """
-    from fbc import db, sync
+    from fbc import db
+    from fbc.sync import state
     from fbc.models.ebay import EbayListing, InsertionCalibration
 
-    now = now or sync.utcnow()
-    synced = sync.last_finished(sync.LISTINGS_SYNC)
+    now = now or state.utcnow()
+    synced = state.last_finished(state.LISTINGS_SYNC)
     month_start, _ = month_bounds(now)
     calibration = db.session.get(InsertionCalibration, month_start)
     summary = count_insertions(
@@ -242,10 +243,11 @@ def calibrate(remaining, now=None):
     fbc's own count carries on from there. Run the listings sync first, so
     fbc's count is current. Returns the adjustment.
     """
-    from fbc import db, sync
+    from fbc import db
+    from fbc.sync import state
     from fbc.models.ebay import InsertionCalibration
 
-    now = now or sync.utcnow()
+    now = now or state.utcnow()
     limit = free_insertions_limit()
     month_start, _ = month_bounds(now)
     own = count_insertions(_listing_pairs(now), now, limit)["used"]

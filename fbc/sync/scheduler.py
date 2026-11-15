@@ -3,12 +3,12 @@ Keeps the Discogs and eBay syncs fresh by running each one when it's due.
 
 `flask scheduler` is a loop that wakes every TICK_SECONDS, asks what is due
 and runs those syncs one at a time, in this process, with the same jobs the
-Sync buttons and `flask sync` run (see fbc.syncjobs). docker/docker-entrypoint.sh
+Sync buttons and `flask sync` run (see fbc.sync.jobs). docker/docker-entrypoint.sh
 starts it in the same container as gunicorn, because the job lock lives in
 that container's job files and PIDs (see fbc.sync).
 
 A sync is due when it has never finished, or last finished at least its
-interval ago (sync.last_finished, so a sync run by hand counts too). Two
+interval ago (state.last_finished, so a sync run by hand counts too). Two
 things stop it hammering eBay or Discogs:
 
 - A sync that is already running, from a button or a command, is skipped and
@@ -26,7 +26,8 @@ import logging
 import time
 from collections import namedtuple
 
-from fbc import db, sync, syncjobs
+from fbc import db
+from fbc.sync import jobs, state
 from fbc.core import devmode
 
 logger = logging.getLogger()
@@ -37,26 +38,26 @@ TICK_SECONDS = 60
 # name. Orders are checked more often than listings because a new order is
 # something to ship; Discogs changes least.
 DEFAULT_INTERVALS = {
-    syncjobs.ORDERS_SYNC: 15,
-    sync.LISTINGS_SYNC: 30,
-    syncjobs.DISCOGS_SYNC: 120,
-    syncjobs.DISCOGS_LISTINGS_SYNC: 30,
+    jobs.ORDERS_SYNC: 15,
+    state.LISTINGS_SYNC: 30,
+    jobs.DISCOGS_SYNC: 120,
+    jobs.DISCOGS_LISTINGS_SYNC: 30,
 }
 INTERVAL_SETTINGS = {
-    syncjobs.ORDERS_SYNC: "SCHEDULER_EBAY_ORDERS_MINUTES",
-    sync.LISTINGS_SYNC: "SCHEDULER_EBAY_LISTINGS_MINUTES",
-    syncjobs.DISCOGS_SYNC: "SCHEDULER_DISCOGS_MINUTES",
-    syncjobs.DISCOGS_LISTINGS_SYNC: "SCHEDULER_DISCOGS_LISTINGS_MINUTES",
+    jobs.ORDERS_SYNC: "SCHEDULER_EBAY_ORDERS_MINUTES",
+    state.LISTINGS_SYNC: "SCHEDULER_EBAY_LISTINGS_MINUTES",
+    jobs.DISCOGS_SYNC: "SCHEDULER_DISCOGS_MINUTES",
+    jobs.DISCOGS_LISTINGS_SYNC: "SCHEDULER_DISCOGS_LISTINGS_MINUTES",
 }
 DEFAULT_RETRY_MINUTES = 10
 
 # The jobs, in the order they run when several are due: orders first, since
 # they're the most urgent.
 JOBS = {
-    syncjobs.ORDERS_SYNC: syncjobs.ebay_orders_job,
-    sync.LISTINGS_SYNC: syncjobs.ebay_listings_job,
-    syncjobs.DISCOGS_SYNC: syncjobs.discogs_job,
-    syncjobs.DISCOGS_LISTINGS_SYNC: syncjobs.discogs_listings_job,
+    jobs.ORDERS_SYNC: jobs.ebay_orders_job,
+    state.LISTINGS_SYNC: jobs.ebay_listings_job,
+    jobs.DISCOGS_SYNC: jobs.discogs_job,
+    jobs.DISCOGS_LISTINGS_SYNC: jobs.discogs_listings_job,
 }
 
 Schedule = namedtuple("Schedule", "intervals retry")
@@ -95,7 +96,7 @@ def due(schedule, failed_at, now):
     db.session.remove()
     names = []
     for name in JOBS:
-        last = sync.last_finished(name)
+        last = state.last_finished(name)
         if last is not None and now - last < schedule.intervals[name]:
             continue
         failed = failed_at.get(name)
@@ -111,15 +112,15 @@ def run_due(schedule, failed_at, now=None):
     where outcome is "done", "failed" or "busy". `failed_at` is the dict that
     remembers when each sync last failed; it's updated here.
     """
-    now = now or sync.utcnow()
+    now = now or state.utcnow()
     outcomes = {}
     for name in due(schedule, failed_at, now):
         job = JOBS[name]()
         # No echo: the root logger already prints each line to the container's
         # output, and echoing it too would print every line twice.
         try:
-            result = sync.run(job.kind, job.title, job.fn, echo=None)
-        except sync.Busy:
+            result = state.run(job.kind, job.title, job.fn, echo=None)
+        except state.Busy:
             logger.info("%s is already running; trying again next time.", job.title)
             outcomes[name] = "busy"
             continue
@@ -132,7 +133,7 @@ def run_due(schedule, failed_at, now=None):
             failed_at.pop(name, None)
             outcomes[name] = "done"
         else:
-            failed_at[name] = sync.utcnow()
+            failed_at[name] = state.utcnow()
             outcomes[name] = "failed"
     return outcomes
 

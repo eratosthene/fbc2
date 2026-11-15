@@ -3,7 +3,7 @@
 import pytest
 from auth import signed_in_client
 
-from fbc import sync
+from fbc.sync import state
 
 ROUTES = [
     ("get", "/"),
@@ -21,7 +21,7 @@ ROUTES = [
 def started(monkeypatch):
     """Every sync job that gets started (none is run)."""
     jobs = []
-    monkeypatch.setattr(sync, "_spawn", lambda target: jobs.append(target))
+    monkeypatch.setattr(state, "_spawn", lambda target: jobs.append(target))
     return jobs
 
 

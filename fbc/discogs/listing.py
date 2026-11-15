@@ -262,10 +262,10 @@ def find_existing(account, unit):
 
 def save_posted(data):
     """Save one item of Discogs's JSON as a DiscogsListing, as the sync would."""
-    from fbc import sync
+    from fbc.sync import state
     from fbc.discogs.saving import save_discogs_listing
 
-    return save_discogs_listing(data, sync.utcnow())
+    return save_discogs_listing(data, state.utcnow())
 
 
 def _as_item(listing_id, payload, url=None):

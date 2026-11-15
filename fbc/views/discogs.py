@@ -5,7 +5,7 @@ from flask_appbuilder import expose, has_access
 
 from fbc.discogs import listing as discogs_listing
 from fbc.core import devmode, localtime
-from fbc.syncnote import DISCOGS, DISCOGS_LISTINGS, SyncedViewMixin
+from fbc.sync.notes import DISCOGS, DISCOGS_LISTINGS, SyncedViewMixin
 from fbc.core.forms import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.sqla.filters import (

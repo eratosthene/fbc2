@@ -7,7 +7,7 @@ import time
 from auth import signed_in_client
 import pytest
 
-from fbc import sync
+from fbc.sync import state
 from fbc.discogs.client import DiscogsAuthError
 
 
@@ -28,7 +28,7 @@ def blocked():
 def _wait_until_finished(job_id, timeout=5):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        job = sync.read(job_id)
+        job = state.read(job_id)
         if job["status"] != "running":
             return job
         time.sleep(0.01)
@@ -41,8 +41,8 @@ def test_a_job_logs_and_finishes(inline_sync, info_logs):
         logging.getLogger("fbc.something").warning("second")
         logging.getLogger().debug("left out")
 
-    job_id = sync.start("test", "Test sync", fn, "/back/")
-    job = sync.read(job_id)
+    job_id = state.start("test", "Test sync", fn, "/back/")
+    job = state.read(job_id)
 
     assert job["status"] == "done"
     assert job["title"] == "Test sync"
@@ -59,7 +59,7 @@ def test_a_job_counts_the_errors_it_logged_and_carried_on_from(inline_sync):
         logging.getLogger().error("page 1 didn't come back")
         logging.getLogger().error("page 2 didn't come back")
 
-    job = sync.read(sync.start("test", "Test sync", fn, "/back/"))
+    job = state.read(state.start("test", "Test sync", fn, "/back/"))
 
     assert job["status"] == "done"
     assert job["errors"] == 2
@@ -70,21 +70,21 @@ def test_reading_from_an_offset_returns_only_the_rest(inline_sync, info_logs):
         logging.getLogger().info("first")
         logging.getLogger().info("second")
 
-    job_id = sync.start("test", "Test sync", fn, "/back/")
-    first = sync.read(job_id)
-    rest = sync.read(job_id, first["offset"])
+    job_id = state.start("test", "Test sync", fn, "/back/")
+    first = state.read(job_id)
+    rest = state.read(job_id, first["offset"])
 
     assert rest["log"] == ""
     assert rest["offset"] == first["offset"]
     line_one = first["log"].splitlines(keepends=True)[0]
-    assert sync.read(job_id, len(line_one.encode()))["log"].endswith("second\n")
+    assert state.read(job_id, len(line_one.encode()))["log"].endswith("second\n")
 
 
 def test_a_job_that_raises_is_failed_with_its_traceback(inline_sync):
     def fn():
         raise DiscogsAuthError("Connect fbc to Discogs first.")
 
-    job = sync.read(sync.start("test", "Test sync", fn, "/back/"))
+    job = state.read(state.start("test", "Test sync", fn, "/back/"))
 
     assert job["status"] == "failed"
     assert "Test sync failed" in job["log"]
@@ -100,9 +100,9 @@ def test_a_job_runs_in_its_own_thread_and_logs_only_its_own_records(info_logs):
         go_on.wait(5)
         logging.getLogger().info("from the job")
 
-    job_id = sync.start("test", "Test sync", fn, "/back/")
+    job_id = state.start("test", "Test sync", fn, "/back/")
     assert started.wait(5)
-    assert sync.read(job_id)["status"] == "running"
+    assert state.read(job_id)["status"] == "running"
     logging.getLogger().info("from the request")
     go_on.set()
     job = _wait_until_finished(job_id)
@@ -113,76 +113,76 @@ def test_a_job_runs_in_its_own_thread_and_logs_only_its_own_records(info_logs):
 
 
 def test_a_running_job_hides_a_line_still_being_written(sync_job_folder, blocked):
-    job_id = sync.start("test", "Test sync", blocked, "/back/")
+    job_id = state.start("test", "Test sync", blocked, "/back/")
     with open(sync_job_folder / (job_id + ".log"), "a") as f:
         f.write("whole line\nhalf a li")
 
-    job = sync.read(job_id)
+    job = state.read(job_id)
 
     assert job["status"] == "running"
     assert job["log"] == "whole line\n"
-    assert sync.read(job_id, job["offset"])["log"] == ""
+    assert state.read(job_id, job["offset"])["log"] == ""
 
 
 def test_starting_a_kind_that_is_running_returns_the_running_job(blocked):
-    first = sync.start("discogs", "Discogs sync", blocked, "/back/")
-    again = sync.start("discogs", "Discogs sync", blocked, "/back/")
-    other = sync.start("ebay-orders", "eBay orders sync", blocked, "/back/")
+    first = state.start("discogs", "Discogs sync", blocked, "/back/")
+    again = state.start("discogs", "Discogs sync", blocked, "/back/")
+    other = state.start("ebay-orders", "eBay orders sync", blocked, "/back/")
 
     assert again == first
     assert other != first
 
 
 def test_a_job_whose_process_has_gone_is_failed(monkeypatch, blocked):
-    job_id = sync.start("test", "Test sync", blocked, "/back/")
-    monkeypatch.setattr(sync, "_process_alive", lambda pid: False)
+    job_id = state.start("test", "Test sync", blocked, "/back/")
+    monkeypatch.setattr(state, "_process_alive", lambda pid: False)
 
-    job = sync.read(job_id)
+    job = state.read(job_id)
 
     assert job["status"] == "failed"
     assert "The server stopped before the sync finished." in job["log"]
     # And a new sync of that kind can start.
-    assert sync.start("test", "Test sync", lambda: None, "/back/") != job_id
+    assert state.start("test", "Test sync", lambda: None, "/back/") != job_id
 
 
 def test_finished_jobs_are_deleted_after_a_day(inline_sync, sync_job_folder):
-    old = sync.start("test", "Test sync", lambda: None, "/back/")
-    a_while_ago = time.time() - sync.KEEP_SECONDS - 60
+    old = state.start("test", "Test sync", lambda: None, "/back/")
+    a_while_ago = time.time() - state.KEEP_SECONDS - 60
     os.utime(sync_job_folder / (old + ".json"), (a_while_ago, a_while_ago))
-    recent = sync.start("test", "Test sync", lambda: None, "/back/")
+    recent = state.start("test", "Test sync", lambda: None, "/back/")
 
-    sync.start("test", "Test sync", lambda: None, "/back/")
+    state.start("test", "Test sync", lambda: None, "/back/")
 
-    assert sync.read(old) is None
+    assert state.read(old) is None
     assert not (sync_job_folder / (old + ".log")).exists()
-    assert sync.read(recent)["status"] == "done"
+    assert state.read(recent)["status"] == "done"
 
 
 @pytest.mark.parametrize("job_id", ["", "nope", "../../etc/passwd", "A" * 32])
 def test_reading_something_that_isnt_a_job_id_returns_none(job_id):
-    assert sync.read(job_id) is None
+    assert state.read(job_id) is None
 
 
 def test_the_job_state_is_json_on_disk(inline_sync, sync_job_folder):
-    job_id = sync.start("test", "Test sync", lambda: None, "/back/")
+    job_id = state.start("test", "Test sync", lambda: None, "/back/")
 
     with open(sync_job_folder / (job_id + ".json")) as f:
-        state = json.load(f)
+        saved = json.load(f)
 
-    assert state["kind"] == "test"
-    assert state["status"] == "done"
-    assert state["pid"] == os.getpid()
+    assert saved["kind"] == "test"
+    assert saved["status"] == "done"
+    assert saved["pid"] == os.getpid()
 
 
 def test_sync_link_from_the_page_script_gets_the_job_as_json(
     app, monkeypatch, inline_sync
 ):
-    from fbc import syncjobs
+    from fbc.sync import jobs
 
     def no_discogs():
         raise DiscogsAuthError("Connect fbc to Discogs first.")
 
-    monkeypatch.setattr(syncjobs.discogs_client, "client", no_discogs)
+    monkeypatch.setattr(jobs.discogs_client, "client", no_discogs)
     client = signed_in_client(app)
 
     response = client.get(
@@ -203,9 +203,9 @@ def test_sync_link_from_the_page_script_gets_the_job_as_json(
 
 
 def test_sync_link_opened_as_a_page_shows_the_job(app, monkeypatch, inline_sync):
-    from fbc import syncjobs
+    from fbc.sync import jobs
 
-    monkeypatch.setattr(syncjobs, "sync_discogs", lambda: None)
+    monkeypatch.setattr(jobs, "sync_discogs", lambda: None)
     client = signed_in_client(app)
 
     response = client.get("/syncdiscogs", headers={"Accept": "text/html"})

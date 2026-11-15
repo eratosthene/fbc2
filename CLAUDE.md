@@ -39,9 +39,12 @@ file is what they don't say.
   ranking), `collect.py`, `saving.py` (what a sync or Identify reads from
   Discogs), `listing.py` (List on Discogs), `removal.py`, `naming.py` and
   `samples.py`.
-- `fbc/shipping.py` (Ship This),
-  `fbc/sync.py` (syncs run in a thread, their state in files, since
-  gunicorn workers don't share memory), `fbc/core/devmode.py`.
+- `fbc/sync/`: `state.py` (syncs run in a thread, their state in files, since
+  gunicorn workers don't share memory), `jobs.py` (what each sync does, shared
+  by the buttons and `flask sync`), `scheduler.py` and `notes.py` (the "last
+  synced" note on a list).
+- `fbc/shipping.py` (Ship This), and the sales modules still loose in `fbc/`
+  until they move into `fbc/sales/` (#157).
 - `migrations/`: Alembic, through Flask-Migrate. `flask setup-db` builds a new
   database from the models and stamps it, or migrates an existing one.
 - `scripts/`: one-off and admin scripts. `scripts/deprecated_*` is history;

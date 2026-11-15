@@ -11,7 +11,7 @@ from flask_appbuilder.models.filters import BaseFilter
 from flask_appbuilder.models.sqla.filters import get_field_setup_query
 
 from fbc import tasks
-from fbc.syncnote import DISCOGS_LISTINGS, EBAY_LISTINGS, SyncedViewMixin
+from fbc.sync.notes import DISCOGS_LISTINGS, EBAY_LISTINGS, SyncedViewMixin
 from fbc.views.discogs import DiscogsReleaseModelBaseView
 from fbc.views.inventory import UnitModelBaseView
 from fbc.views.sales import EbayOrderModelView

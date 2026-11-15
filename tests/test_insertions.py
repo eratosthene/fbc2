@@ -5,7 +5,8 @@ from auth import signed_in_client
 import pytest
 
 import fbc
-from fbc import db, sync
+from fbc import db
+from fbc.sync import state
 from fbc.ebay import api, insertions
 from fbc.models.ebay import EbayDraft, EbayListing
 from fbc.ebay.listings import mark_ended_listings
@@ -273,7 +274,7 @@ def test_the_sync_marks_ended_and_records_when_it_finished(
     app, inline_sync, monkeypatch
 ):
     gone = _listing("1")
-    monkeypatch.setattr("fbc.syncjobs.fetch_active_items", lambda: [_active_item("2")])
+    monkeypatch.setattr("fbc.sync.jobs.fetch_active_items", lambda: [_active_item("2")])
 
     job = _sync(signed_in_client(app))
 
@@ -281,7 +282,7 @@ def test_the_sync_marks_ended_and_records_when_it_finished(
     db.session.expire_all()
     assert gone.ended is True
     assert db.session.get(EbayListing, "2").ended is False
-    assert sync.last_finished(sync.LISTINGS_SYNC) is not None
+    assert state.last_finished(state.LISTINGS_SYNC) is not None
 
 
 def test_a_failed_sync_marks_nothing_and_records_nothing(app, inline_sync, monkeypatch):
@@ -290,23 +291,23 @@ def test_a_failed_sync_marks_nothing_and_records_nothing(app, inline_sync, monke
     def fail():
         raise api.ActiveListError("Read 0 active listings but eBay says there are 5.")
 
-    monkeypatch.setattr("fbc.syncjobs.fetch_active_items", fail)
+    monkeypatch.setattr("fbc.sync.jobs.fetch_active_items", fail)
 
     job = _sync(signed_in_client(app))
 
     assert job["status"] == "failed"
     db.session.expire_all()
     assert row.ended is False
-    assert sync.last_finished(sync.LISTINGS_SYNC) is None
+    assert state.last_finished(state.LISTINGS_SYNC) is None
 
 
 def test_the_second_sync_ends_a_listing_from_the_first_syncs_time(
     app, inline_sync, monkeypatch
 ):
     first = D(2026, 11, 1)
-    sync.record_finished(sync.LISTINGS_SYNC, first)
+    state.record_finished(state.LISTINGS_SYNC, first)
     row = _listing("1")
-    monkeypatch.setattr("fbc.syncjobs.fetch_active_items", lambda: [])
+    monkeypatch.setattr("fbc.sync.jobs.fetch_active_items", lambda: [])
 
     _sync(signed_in_client(app))
 
@@ -324,9 +325,9 @@ def test_the_home_page_asks_for_a_sync_before_the_first_one(app):
 
 
 def test_the_home_page_shows_listings_and_insertions(app):
-    sync.record_finished(sync.LISTINGS_SYNC, sync.utcnow())
-    _listing("1", start=sync.utcnow())
-    _listing("2", start=sync.utcnow(), ended=True, end_time=sync.utcnow())
+    state.record_finished(state.LISTINGS_SYNC, state.utcnow())
+    _listing("1", start=state.utcnow())
+    _listing("2", start=state.utcnow(), ended=True, end_time=state.utcnow())
 
     html = signed_in_client(app).get("/").get_data(as_text=True)
 
@@ -339,7 +340,7 @@ def test_the_home_page_shows_listings_and_insertions(app):
 def test_the_home_page_says_when_the_listings_last_synced(app):
     # Shown in the TIMEZONE setting (Central), not the Pacific time the count
     # uses: 2026-11-13 01:45 UTC is 2026-11-12 7:45 PM in CST.
-    sync.record_finished(sync.LISTINGS_SYNC, D(2026, 11, 13, 1, 45))
+    state.record_finished(state.LISTINGS_SYNC, D(2026, 11, 13, 1, 45))
 
     html = " ".join(signed_in_client(app).get("/").get_data(as_text=True).split())
 
@@ -350,9 +351,9 @@ def test_the_home_page_never_shows_fewer_than_none_left(app, monkeypatch):
     monkeypatch.setitem(
         fbc.app.config["EBAY_SETTINGS"], "LISTING", {"FREE_INSERTIONS": 1}
     )
-    sync.record_finished(sync.LISTINGS_SYNC, sync.utcnow())
-    _listing("1", start=sync.utcnow())
-    _listing("2", start=sync.utcnow())
+    state.record_finished(state.LISTINGS_SYNC, state.utcnow())
+    _listing("1", start=state.utcnow())
+    _listing("2", start=state.utcnow())
 
     html = signed_in_client(app).get("/").get_data(as_text=True)
 
@@ -363,8 +364,8 @@ def test_the_home_page_warns_when_close_to_the_limit(app, monkeypatch):
     monkeypatch.setitem(
         fbc.app.config["EBAY_SETTINGS"], "LISTING", {"FREE_INSERTIONS": 2}
     )
-    sync.record_finished(sync.LISTINGS_SYNC, sync.utcnow())
-    _listing("1", start=sync.utcnow())
+    state.record_finished(state.LISTINGS_SYNC, state.utcnow())
+    _listing("1", start=state.utcnow())
 
     html = signed_in_client(app).get("/").get_data(as_text=True)
 
@@ -401,9 +402,9 @@ def _fill_month(monkeypatch, listings=1, limit=1):
     monkeypatch.setitem(
         fbc.app.config["EBAY_SETTINGS"]["LISTING"], "FREE_INSERTIONS", limit
     )
-    sync.record_finished(sync.LISTINGS_SYNC, sync.utcnow())
+    state.record_finished(state.LISTINGS_SYNC, state.utcnow())
     for n in range(listings):
-        _listing("old" + str(n), start=sync.utcnow())
+        _listing("old" + str(n), start=state.utcnow())
 
 
 def test_publishing_past_the_limit_needs_publish_anyway(client, monkeypatch):
@@ -473,9 +474,9 @@ def test_the_draft_page_shows_an_insertion_fee_eBay_did_not_cover(client, monkey
 
 
 def _synced_month(count=3):
-    sync.record_finished(sync.LISTINGS_SYNC, sync.utcnow())
+    state.record_finished(state.LISTINGS_SYNC, state.utcnow())
     for n in range(count):
-        _listing("c" + str(n), start=sync.utcnow())
+        _listing("c" + str(n), start=state.utcnow())
 
 
 def test_calibrate_adds_the_difference_to_used(app):
@@ -494,7 +495,7 @@ def test_a_new_listing_after_calibrating_adds_to_the_count(app):
     _synced_month(3)
     insertions.calibrate(181)
 
-    _listing("later", start=sync.utcnow())
+    _listing("later", start=state.utcnow())
 
     assert insertions.listing_summary()["used"] == 70
 
@@ -509,7 +510,7 @@ def test_calibrating_again_replaces_the_last_entry(app):
 
 def test_calibration_does_not_carry_into_the_next_month(app):
     _synced_month(1)
-    last_month = sync.utcnow() - datetime.timedelta(days=40)
+    last_month = state.utcnow() - datetime.timedelta(days=40)
     insertions.calibrate(100, now=last_month)
 
     assert insertions.listing_summary()["calibration"] is None
@@ -594,14 +595,14 @@ def test_an_ended_listing_uses_its_saved_date_up_to_its_end():
 
 def test_the_sync_saves_when_each_listing_renews(app, inline_sync, monkeypatch):
     item = dict(_active_item("2"), TimeLeft="P10D")
-    monkeypatch.setattr("fbc.syncjobs.fetch_active_items", lambda: [item])
+    monkeypatch.setattr("fbc.sync.jobs.fetch_active_items", lambda: [item])
 
     _sync(signed_in_client(app))
 
     db.session.expire_all()
     renews = db.session.get(EbayListing, "2").renews_at
     assert abs(
-        (renews - sync.utcnow()) - datetime.timedelta(days=10)
+        (renews - state.utcnow()) - datetime.timedelta(days=10)
     ) < datetime.timedelta(minutes=5)
 
 

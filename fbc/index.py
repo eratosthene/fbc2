@@ -4,7 +4,8 @@ from flask import flash, jsonify, redirect, request, url_for
 from flask_appbuilder import IndexView, has_access
 from flask_appbuilder.views import expose
 
-from fbc import sync, syncjobs, tasks
+from fbc import tasks
+from fbc.sync import jobs, state
 from fbc.ebay import insertions
 
 logger = logging.getLogger()
@@ -224,12 +225,12 @@ class MyIndexView(IndexView):
 
     def _start_sync(self, job, fallback_url):
         """
-        Start a sync (a fbc.syncjobs Job) as a background job (see fbc.sync).
+        Start a sync (a fbc.sync.jobs Job) as a background job (see fbc.sync).
         A request from the Sync buttons' script gets the job as JSON, to show
         in a modal; any other request gets a page that shows the job's log.
         In dev mode the job only logs that syncing is off.
         """
-        job_id = sync.start(
+        job_id = state.start(
             job.kind, job.title, job.fn, request.referrer or fallback_url
         )
         job_url = url_for("MyIndexView.syncjob", job_id=job_id)
@@ -244,7 +245,7 @@ class MyIndexView(IndexView):
     @expose("/syncjob/<job_id>")
     @has_access
     def syncjob(self, job_id):
-        job = sync.read(job_id, request.args.get("offset", 0, type=int))
+        job = state.read(job_id, request.args.get("offset", 0, type=int))
         if job is None:
             return jsonify(error="No such sync."), 404
         return jsonify(job)
@@ -252,35 +253,31 @@ class MyIndexView(IndexView):
     @expose("/syncdiscogs")
     @has_access
     def syncdiscogs(self):
-        return self._start_sync(
-            syncjobs.discogs_job(), "/discogsreleasemodelview/list/"
-        )
+        return self._start_sync(jobs.discogs_job(), "/discogsreleasemodelview/list/")
 
     @expose("/syncdiscogslistings")
     @has_access
     def syncdiscogslistings(self):
         return self._start_sync(
-            syncjobs.discogs_listings_job(), "/discogslistingmodelview/list/"
+            jobs.discogs_listings_job(), "/discogslistingmodelview/list/"
         )
 
     @expose("/syncebaylistings")
     @has_access
     def syncebaylistings(self):
-        return self._start_sync(
-            syncjobs.ebay_listings_job(), "/ebaylistingmodelview/list/"
-        )
+        return self._start_sync(jobs.ebay_listings_job(), "/ebaylistingmodelview/list/")
 
     @expose("/syncebayorders")
     @has_access
     def syncebayorders(self):
         update = request.args.get("doupdate") == "True"
         return self._start_sync(
-            syncjobs.ebay_orders_job(update=update), "/ebayordermodelview/list/"
+            jobs.ebay_orders_job(update=update), "/ebayordermodelview/list/"
         )
 
     @expose("/syncebayordersdeep")
     @has_access
     def syncebayordersdeep(self):
         return self._start_sync(
-            syncjobs.ebay_orders_job(deep=True), "/ebayordermodelview/list/"
+            jobs.ebay_orders_job(deep=True), "/ebayordermodelview/list/"
         )

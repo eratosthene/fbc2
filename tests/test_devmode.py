@@ -259,10 +259,10 @@ def test_new_draft_skips_the_discogs_lookup_in_dev_mode(app, dev_mode, monkeypat
 def test_syncs_do_nothing_and_succeed_in_dev_mode(
     app, dev_mode, inline_sync, monkeypatch, caplog, path, sync
 ):
-    from fbc import syncjobs
+    from fbc.sync import jobs
 
     caplog.set_level(logging.INFO)
-    monkeypatch.setattr(syncjobs, sync, _fails)
+    monkeypatch.setattr(jobs, sync, _fails)
     client = signed_in_client(app)
 
     response = client.get(path, headers={"Accept": "application/json"})

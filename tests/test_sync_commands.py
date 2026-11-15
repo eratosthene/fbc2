@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from fake_discogs import FakeAccount, FakeDiscogs
 
-from fbc import sync, syncjobs
+from fbc.sync import jobs, state
 from fbc.discogs.client import DiscogsAuthError
 from fbc.ebay.oauth import OAuthError
 
@@ -43,31 +43,31 @@ def test_discogs_prints_its_log_and_records_that_it_finished(run, monkeypatch):
     assert result.exit_code == 0
     assert "INFO Updating discogs..." in result.output
     assert "INFO Discogs sync finished." in result.output
-    assert sync.last_finished(syncjobs.DISCOGS_SYNC) is not None
+    assert state.last_finished(jobs.DISCOGS_SYNC) is not None
 
 
 def test_a_failed_sync_exits_non_zero_and_records_nothing(run, monkeypatch):
     def no_discogs():
         raise DiscogsAuthError("Connect fbc to Discogs first.")
 
-    monkeypatch.setattr(syncjobs.discogs_client, "account", no_discogs)
+    monkeypatch.setattr(jobs.discogs_client, "account", no_discogs)
 
     result = run("discogs")
 
     assert result.exit_code == 1
     assert "Connect fbc to Discogs first." in result.output
     assert "Discogs sync failed." in result.output
-    assert sync.last_finished(syncjobs.DISCOGS_SYNC) is None
+    assert state.last_finished(jobs.DISCOGS_SYNC) is None
 
 
 def test_ebay_listings_records_that_it_finished(run, monkeypatch):
-    monkeypatch.setattr(syncjobs, "fetch_active_items", lambda: [])
+    monkeypatch.setattr(jobs, "fetch_active_items", lambda: [])
 
     result = run("ebay-listings")
 
     assert result.exit_code == 0
     assert "eBay listings sync finished." in result.output
-    assert sync.last_finished(sync.LISTINGS_SYNC) is not None
+    assert state.last_finished(state.LISTINGS_SYNC) is not None
 
 
 class _Api:
@@ -85,7 +85,7 @@ class _Api:
 
 def test_ebay_orders_looks_back_ten_days_unless_deep(run, monkeypatch):
     api = _Api()
-    monkeypatch.setattr(syncjobs, "trading", lambda compatibility=None: api)
+    monkeypatch.setattr(jobs, "trading", lambda compatibility=None: api)
 
     assert run("ebay-orders").exit_code == 0
     shown = api.sent[1]
@@ -97,28 +97,28 @@ def test_ebay_orders_looks_back_ten_days_unless_deep(run, monkeypatch):
     assert result.exit_code == 0
     assert "Deep updating eBay orders..." in result.output
     assert api.sent[1]["CreateTimeFrom"] < ten[0]
-    assert sync.last_finished(syncjobs.ORDERS_SYNC) is not None
+    assert state.last_finished(jobs.ORDERS_SYNC) is not None
 
 
 def test_ebay_orders_not_connected_is_a_failure(run, monkeypatch):
     def not_connected(compatibility=None):
         raise OAuthError("Connect fbc to eBay first.")
 
-    monkeypatch.setattr(syncjobs, "trading", not_connected)
+    monkeypatch.setattr(jobs, "trading", not_connected)
 
     result = run("ebay-orders")
 
     # The sync logs the error and returns, which counts as a failure here.
     assert result.exit_code == 1
     assert "Connect fbc to eBay first." in result.output
-    assert sync.last_finished(syncjobs.ORDERS_SYNC) is None
+    assert state.last_finished(jobs.ORDERS_SYNC) is None
 
 
 def test_a_sync_that_logs_an_error_and_carries_on_exits_non_zero(run, monkeypatch):
     def carries_on():
         logging.getLogger().error("page 2 didn't come back")
 
-    monkeypatch.setattr(syncjobs, "sync_discogs", carries_on)
+    monkeypatch.setattr(jobs, "sync_discogs", carries_on)
 
     result = run("discogs")
 
@@ -128,9 +128,9 @@ def test_a_sync_that_logs_an_error_and_carries_on_exits_non_zero(run, monkeypatc
 
 def test_a_command_refuses_while_the_same_sync_is_running(run, monkeypatch):
     called = []
-    monkeypatch.setattr(syncjobs, "sync_discogs", lambda: called.append(1))
+    monkeypatch.setattr(jobs, "sync_discogs", lambda: called.append(1))
     # What a button, or a command in another process, leaves while it runs.
-    state, _ = sync._claim("discogs", "Discogs sync", "/")
+    claimed, _ = state._claim("discogs", "Discogs sync", "/")
 
     result = run("discogs")
 
@@ -138,7 +138,7 @@ def test_a_command_refuses_while_the_same_sync_is_running(run, monkeypatch):
     assert "Discogs sync is already running." in result.output
     assert called == []
     # The orders sync is a different kind, so it isn't held up.
-    monkeypatch.setattr(syncjobs, "trading", lambda compatibility=None: _Api())
+    monkeypatch.setattr(jobs, "trading", lambda compatibility=None: _Api())
     assert run("ebay-orders").exit_code == 0
 
 
@@ -147,23 +147,25 @@ def test_a_command_and_a_button_share_the_one_job_check(run, monkeypatch, inline
 
     def during():
         # A button pressed while the command runs gets the command's job.
-        seen.append(sync.start("discogs", "Discogs sync", lambda: None, "/"))
-        seen.append(sync._running_job(sync._folder(), "discogs"))
+        seen.append(state.start("discogs", "Discogs sync", lambda: None, "/"))
+        seen.append(state._running_job(state._folder(), "discogs"))
 
-    monkeypatch.setattr(syncjobs, "sync_discogs", during)
+    monkeypatch.setattr(jobs, "sync_discogs", during)
 
     assert run("discogs").exit_code == 0
     assert seen[0] == seen[1]
     # Once it finished, a new one can start.
-    assert sync._running_job(sync._folder(), "discogs") is None
+    assert state._running_job(state._folder(), "discogs") is None
 
 
 def test_the_command_shows_up_as_a_job_the_buttons_modal_can_read(run, monkeypatch):
     _empty_discogs(monkeypatch)
     run("discogs")
 
-    jobs = [n for n in __import__("os").listdir(sync._folder()) if n.endswith(".json")]
-    job = sync.read(jobs[0][:-5])
+    files = [
+        n for n in __import__("os").listdir(state._folder()) if n.endswith(".json")
+    ]
+    job = state.read(files[0][:-5])
     assert job["status"] == "done"
     assert "Discogs sync finished." in job["log"]
 
@@ -179,10 +181,10 @@ def test_in_dev_mode_a_command_finishes_without_reaching_out(
         raise AssertionError("reached out")
 
     for name in ("sync_discogs", "sync_ebay_listings", "sync_ebay_orders"):
-        monkeypatch.setattr(syncjobs, name, fails)
+        monkeypatch.setattr(jobs, name, fails)
 
     result = run(*args)
 
     assert result.exit_code == 0
     assert "Dev Mode is turned on, external syncing disabled." in result.output
-    assert sync.last_finished(syncjobs.DISCOGS_SYNC) is None
+    assert state.last_finished(jobs.DISCOGS_SYNC) is None

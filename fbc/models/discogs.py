@@ -314,7 +314,7 @@ class DiscogsOAuthToken(Model):
 class DiscogsListing(Model):
     """
     One item in the seller inventory on the Discogs Marketplace, as the
-    Discogs listings sync last read it (fbc/syncjobs.py). The sync only reads:
+    Discogs listings sync last read it (fbc/sync/jobs.py). The sync only reads:
     nothing here is ever sent back to Discogs.
     """
 

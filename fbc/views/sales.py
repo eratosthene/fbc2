@@ -7,7 +7,7 @@ from wtforms.validators import Optional
 from fbc.ebay import mystery
 from fbc.core import localtime
 from fbc.archive import ArchivableViewMixin
-from fbc.syncnote import EBAY_LISTINGS, EBAY_ORDERS, SyncedViewMixin
+from fbc.sync.notes import EBAY_LISTINGS, EBAY_ORDERS, SyncedViewMixin
 from fbc.core.forms import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
