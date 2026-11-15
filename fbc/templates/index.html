@@ -82,6 +82,9 @@
   </p>
   {% endif %}
 
+  <h2>Stock</h2>
+  <p>Units in stock: <strong>{{ stock_total }}</strong></p>
+
   {% if marketplace_sales %}
   <h2>Sales by marketplace</h2>
   <table class="table table-condensed" style="width: auto">
@@ -113,35 +116,11 @@
   {% endif %}
   {% endif %}
 
-  <h2>Stock</h2>
-  <p>Units in stock: <strong>{{ stock_total }}</strong></p>
-
-  <h2>Money</h2>
-  <p>Supply cost: <strong>{{ "${:,.2f}".format(supply_total|float) }}</strong></p>
-  <p>Other expenses: <strong>{{ "${:,.2f}".format(expense_total|float) }}</strong></p>
-  {% call lib.accordion_tag("expensedetails","Expense Details", False) %}
-  <table class="table table-bordered table-condensed table-hover" style="width: auto">
-    <tr>
-      <th>Category</th>
-      <th>Amount</th>
-    </tr>
-    {% for label, amount in expenses %}
-    <tr>
-      <td>{{ label }}</td>
-      <td>{{ "${:,.2f}".format(amount|float) }}</td>
-    </tr>
-    {% else %}
-    <tr>
-      <td colspan="2">No expenses yet.</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% endcall %}
-  <p>
+  <h3>
     Net profit:
     <strong>{% if (total_net_profit|float < 0) %}<span style="color: red">{% endif %}{{ "${:,.2f}".format(total_net_profit|float) }} ({{
     "{:,.2f}%".format(profit_margin|float) }} profit margin){% if (total_net_profit|float < 0) %}</span>{% endif %}</strong>
-  </p>
+  </h3>
   <p>
     Breakeven per unit, including supplies (a supply cost of {{ "${:,.2f}".format(supply_per_unit|float) }} per unit):
     <strong>{{ "${:,.2f}".format(breakeven_per_unit|float) }}</strong>
@@ -217,6 +196,28 @@
       <td>{{ "${:,.2f}".format(box_totals[box]['net']|float) }}</td>
       <td>{{ "${:,.2f}".format(box_totals[box]['profit']|float) }}</td>
       <td>{{ "{:,.2f}%".format(box_totals[box]['roi']|float) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endcall %}
+
+  <h2>Money</h2>
+  <p>Supply cost: <strong>{{ "${:,.2f}".format(supply_total|float) }}</strong></p>
+  <p>Other expenses: <strong>{{ "${:,.2f}".format(expense_total|float) }}</strong></p>
+  {% call lib.accordion_tag("expensedetails","Expense Details", False) %}
+  <table class="table table-bordered table-condensed table-hover" style="width: auto">
+    <tr>
+      <th>Category</th>
+      <th>Amount</th>
+    </tr>
+    {% for label, amount in expenses %}
+    <tr>
+      <td>{{ label }}</td>
+      <td>{{ "${:,.2f}".format(amount|float) }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="2">No expenses yet.</td>
     </tr>
     {% endfor %}
   </table>

@@ -17,15 +17,17 @@ range (`100-200`) or a mix (`5, 100-200`).
 ## The home page
 
 It has the alerts first (supplies to reorder, a To do banner, and free
-insertions close to or over the limit), then three sections:
+insertions close to or over the limit), then these sections, in order:
 
 - **Listings**: the active listings and this month's free insertions (see
   below).
 - **Stock**: the Units in stock.
-- **Money**: supply cost, other expenses, net profit and the breakeven price
-  per Unit, with Expense Details and Profit Details to open. Profit Details
-  has a table by Purchase Lot and one by Storage Box, each with its Units,
-  Units Sold and Stock.
+- **Sales by marketplace**: Sales Receipts, Sold Price and Net Sold for eBay,
+  Discogs and sales not linked to an order.
+- **Net profit** and the **breakeven price per Unit**, then **Profit Details**
+  to open: a table by Purchase Lot and one by Storage Box, each with its
+  Units, Units Sold and Stock.
+- **Money**: supply cost and other expenses, with Expense Details to open.
 
 Every page has the shop's name in small type at the bottom.
 
