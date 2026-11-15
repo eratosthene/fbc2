@@ -8,7 +8,8 @@ import pytest
 import sqlalchemy as sa
 from fake_discogs import FakeAccount, FakeDiscogs, failing
 
-from fbc import db, discogs_client, sync, syncjobs
+from fbc import db, sync, syncjobs
+from fbc.discogs import client as discogs_client
 from fbc.models.discogs import DiscogsListing
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.discogs.saving import save_discogs_listing

@@ -24,7 +24,7 @@ import sqlalchemy as sa
 LISTING_PRICE_OVER = 2
 
 DRAFT_STATUS = "draft"
-# Discogs's own word, as fbc.discogs_listing.DRAFT.
+# Discogs's own word, as fbc.discogs.listing.DRAFT.
 DISCOGS_DRAFT_STATUS = "Draft"
 DISCOGS_OPEN_STATUSES = ("Draft", "For Sale")
 
@@ -84,7 +84,7 @@ def ids_drafts_to_list():
 
 def ids_units_needing_discogs_drafts():
     """
-    What fbc.discogs_listing.problem_with lets be listed: in the Discogs
+    What fbc.discogs.listing.problem_with lets be listed: in the Discogs
     collection, with no open Discogs listing; and over the price a Unit gets
     its own listing at. A Unit that is on eBay is still here: it can be sold
     in both places, and List on Discogs warns about it.

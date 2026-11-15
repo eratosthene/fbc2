@@ -8,7 +8,7 @@ from auth import signed_in_client
 import pytest
 
 from fbc import sync
-from fbc.discogs_client import DiscogsAuthError
+from fbc.discogs.client import DiscogsAuthError
 
 
 @pytest.fixture

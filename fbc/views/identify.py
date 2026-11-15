@@ -1,7 +1,8 @@
 from flask import flash, redirect, request, url_for
 from flask_appbuilder import BaseView, expose, has_access
 
-from fbc import db, identify
+from fbc import db
+from fbc.discogs import collect, identify, naming, samples, saving
 from fbc.core import devmode
 from fbc.models.inventory import PurchaseLot
 
@@ -9,7 +10,7 @@ from fbc.models.inventory import PurchaseLot
 class IdentifyRecordView(BaseView):
     """
     Identify Record, under Inventory: find the Discogs release a record in
-    hand is, then go to Add Unit for it. See fbc/identify.py.
+    hand is, then go to Add Unit for it. See fbc/discogs/identify.py.
     """
 
     route_base = "/identifyrecord"
@@ -47,7 +48,7 @@ class IdentifyRecordView(BaseView):
         keep = {k: v for k, v in form.items() if v or k == "country"}
         found = None
         if request.args.get("sample") and devmode.on():
-            found = identify.sample(form["country"], form["matrix"], form["color"])
+            found = samples.sample(form["country"], form["matrix"], form["color"])
         elif request.args.get("go"):
             found = identify.search(
                 **{k: form[k] for k in ("artist", "title", "catno", "barcode")},
@@ -98,18 +99,18 @@ class IdentifyRecordView(BaseView):
         if not release_id.isdigit():
             flash("Pick a release.", "danger")
             return redirect(url_for("IdentifyRecordView.search"))
-        if devmode.on() and int(release_id) in identify.SAMPLE_IDS:
+        if devmode.on() and int(release_id) in samples.SAMPLE_IDS:
             # The sample data's releases don't exist anywhere to save.
             flash("Sample releases can't be added; they're only for testing.", "info")
             return redirect(url_for("IdentifyRecordView.search", sample=1))
-        release, problem = identify.save_release(release_id)
+        release, problem = saving.save_release(release_id)
         if problem:
             flash(problem, "danger")
             return redirect(url_for("IdentifyRecordView.search"))
         return redirect(
             url_for(
                 "UnitModelView.add",
-                **identify.unit_add_params(release, lot, matrix),
+                **naming.unit_add_params(release, lot, matrix),
             )
         )
 
@@ -128,7 +129,7 @@ class IdentifyRecordView(BaseView):
         if not release_id.isdigit():
             flash("Pick a release.", "danger")
             return redirect(url_for("IdentifyRecordView.search"))
-        form = identify.collection_form()
+        form = collect.collection_form()
         if request.method == "POST" and form["ok"]:
             values = {
                 f["name"]: data.get("field_" + str(f["id"]), "") for f in form["fields"]
@@ -140,7 +141,7 @@ class IdentifyRecordView(BaseView):
             if folder_id is None:
                 flash("Choose a folder.", "danger")
             else:
-                release, instance_id, warnings, problem = identify.collect(
+                release, instance_id, warnings, problem = collect.collect(
                     release_id, folder_id, values
                 )
                 for warning in warnings:
@@ -154,12 +155,12 @@ class IdentifyRecordView(BaseView):
                     return redirect(
                         url_for(
                             "UnitModelView.add",
-                            **identify.unit_add_params(
+                            **naming.unit_add_params(
                                 release,
                                 lot,
                                 matrix,
                                 instance_id=instance_id,
-                                grading=identify.grading_from(values),
+                                grading=collect.grading_from(values),
                                 notes=values.get("Notes", ""),
                             ),
                         )

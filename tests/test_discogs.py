@@ -5,7 +5,8 @@ import pytest
 from discogs_client.exceptions import HTTPError
 
 import fbc
-from fbc import db, discogs_client
+from fbc import db
+from fbc.discogs import client as discogs_client
 from fbc.models.discogs import DiscogsOAuthToken
 
 

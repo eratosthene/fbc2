@@ -19,6 +19,8 @@ from sqlalchemy.orm import relationship
 import re
 import json
 
+from fbc.discogs.naming import pressing_for, unit_name
+
 logger = logging.getLogger()
 
 
@@ -247,8 +249,6 @@ class DiscogsRelease(Model):
         from fbc.models.inventory import Unit
 
         discogs_master = self.discogs_master_key()
-        from fbc.identify import pressing_for, unit_name
-
         params = {
             "name": unit_name(self),
             "pressing": pressing_for(self),

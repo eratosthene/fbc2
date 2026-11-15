@@ -10,7 +10,14 @@ import pytest
 from fake_discogs import FakeAccount, FakeDiscogs, api_error, collection_item
 
 import fbc
-from fbc import discogs_client, identify
+from fbc.discogs import (
+    client as discogs_client,
+    collect,
+    identify,
+    naming,
+    samples,
+    saving,
+)
 from fbc.models.discogs import DiscogsRelease
 from fbc.models.inventory import PurchaseLot
 
@@ -58,7 +65,7 @@ def record(rid, country="US", matrices=(), year=1978):
 
 
 def _path(name, args, kwargs):
-    """The request a call to fbc.discogs_client stands for, to read tests by."""
+    """The request a call to fbc.discogs.client stands for, to read tests by."""
     if name == "search":
         return "/database/search?" + urlencode(kwargs)
     if name == "release":
@@ -122,7 +129,7 @@ def test_highlight_marks_the_shared_run_and_escapes():
 
 
 def test_ranking_orders_by_matrix_then_country():
-    ranked = identify.rank(identify.SAMPLE_CANDIDATES, "US", "sr1001a1re")
+    ranked = identify.rank(samples.SAMPLE_CANDIDATES, "US", "sr1001a1re")
     ids = [c["id"] for c in ranked]
     assert ids[0] == 1000001  # exact and US
     assert ids.index(1000001) < ids.index(1000002)  # same matrix, wrong country
@@ -277,7 +284,7 @@ def test_dev_mode_never_reaches_discogs(dev_mode, monkeypatch):
     )
     r = identify.search(artist="Band")
     assert not r["ok"] and r["dev_mode"] and "dev mode" in r["error"]
-    assert identify.save_release(5)[0] is None
+    assert saving.save_release(5)[0] is None
 
 
 def test_rate_limit_on_a_release_keeps_the_rest(monkeypatch):
@@ -432,7 +439,7 @@ def writes(account):
 
 def test_the_form_offers_the_account_folders_and_the_named_fields(monkeypatch):
     use_collection(monkeypatch)
-    form = identify.collection_form()
+    form = collect.collection_form()
     assert [f[1] for f in form["folders"]] == ["Uncategorized", "Records"]
     assert [f["name"] for f in form["fields"]] == [
         "Media Condition",
@@ -445,7 +452,7 @@ def test_the_form_offers_the_account_folders_and_the_named_fields(monkeypatch):
 
 def test_collect_adds_sets_fields_and_saves_the_instance(monkeypatch):
     fake = use_collection(monkeypatch)
-    release, instance_id, warnings, problem = identify.collect(
+    release, instance_id, warnings, problem = collect.collect(
         9,
         2,
         {
@@ -468,14 +475,14 @@ def test_collect_adds_sets_fields_and_saves_the_instance(monkeypatch):
 
 def test_a_field_that_fails_is_a_warning_and_the_copy_is_still_saved(monkeypatch):
     use_collection(monkeypatch, fail_field=3)
-    release, instance_id, warnings, problem = identify.collect(9, 1, {"Notes": "x"})
+    release, instance_id, warnings, problem = collect.collect(9, 1, {"Notes": "x"})
     assert problem is None and release and "Notes wasn't set" in warnings[0]
 
 
 def test_collect_refuses_a_folder_that_isnt_the_accounts(monkeypatch):
     fake = use_collection(monkeypatch)
-    assert identify.collect(9, 0, {})[3]
-    assert identify.collect(9, 77, {})[3]
+    assert collect.collect(9, 0, {})[3]
+    assert collect.collect(9, 77, {})[3]
     assert writes(fake) == []
 
 
@@ -483,13 +490,13 @@ def test_collect_never_reaches_discogs_in_dev_mode(dev_mode, monkeypatch):
     monkeypatch.setattr(
         discogs_client, "client", lambda: pytest.fail("reached Discogs")
     )
-    assert identify.collect(9, 1, {})[3]
-    assert not identify.collection_form()["ok"]
+    assert collect.collect(9, 1, {})[3]
+    assert not collect.collection_form()["ok"]
 
 
 def test_grading_comes_from_the_two_conditions():
     assert (
-        identify.grading_from(
+        collect.grading_from(
             {
                 "Media Condition": "Near Mint (NM or M-)",
                 "Sleeve Condition": "Very Good Plus (VG+)",
@@ -497,7 +504,7 @@ def test_grading_comes_from_the_two_conditions():
         )
         == "NM or M-/VG+"
     )
-    assert identify.grading_from({"Sleeve Condition": "Good (G)"}) == "G"
+    assert collect.grading_from({"Sleeve Condition": "Good (G)"}) == "G"
 
 
 def test_collect_page_posts_then_goes_to_add_unit(monkeypatch, client):
@@ -582,15 +589,13 @@ def test_pressing_is_country_year_and_original_or_reissue():
         formats = [{"name": "Vinyl", "descriptions": list(descriptions)}]
         return SimpleNamespace(country=country, year=year, formats=json.dumps(formats))
 
-    assert identify.pressing_for(release("US", 1970, "LP")) == "US 1970 Original"
+    assert naming.pressing_for(release("US", 1970, "LP")) == "US 1970 Original"
     assert (
-        identify.pressing_for(release("UK", 1990, "LP", "Reissue")) == "UK 1990 Reissue"
+        naming.pressing_for(release("UK", 1990, "LP", "Reissue")) == "UK 1990 Reissue"
     )
-    assert (
-        identify.pressing_for(release("Germany", 1985, "Repress")) == "DE 1985 Reissue"
-    )
-    assert identify.pressing_for(release("Wakanda", 1985)) == "Wakanda 1985 Original"
-    assert identify.pressing_for(release(None, None)) == "Original"
+    assert naming.pressing_for(release("Germany", 1985, "Repress")) == "DE 1985 Reissue"
+    assert naming.pressing_for(release("Wakanda", 1985)) == "Wakanda 1985 Original"
+    assert naming.pressing_for(release(None, None)) == "Original"
 
 
 def test_the_unit_is_named_with_the_master_year(monkeypatch):
@@ -601,9 +606,9 @@ def test_the_unit_is_named_with_the_master_year(monkeypatch):
         monkeypatch,
         FakeClient([], {9: rec, 77: {"year": 1970}}),
     )
-    release, problem = identify.save_release(9)
+    release, problem = saving.save_release(9)
     assert problem is None and release.master_year == 1970
-    params = identify.unit_add_params(release)
+    params = naming.unit_add_params(release)
     assert params["name"] == "Band, The - Band - Album (1970)"
     assert params["pressing"] == "UK 1990 Reissue"
 
@@ -617,7 +622,7 @@ def test_a_missing_master_falls_back_to_the_release_year(monkeypatch):
             fail=lambda u: RuntimeError("gone") if "/masters/" in u else None,
         ),
     )
-    release, _ = identify.save_release(9)
+    release, _ = saving.save_release(9)
     assert release.master_year == 1978
 
 

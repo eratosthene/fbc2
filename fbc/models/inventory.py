@@ -299,9 +299,9 @@ class Unit(Model):
     def _discogs_listing_link(self):
         """
         A link to the Unit's open Discogs listing, or to List on Discogs
-        when it can be listed (see fbc/discogs_listing.py problem_with).
+        when it can be listed (see fbc/discogs/listing.py problem_with).
         """
-        from fbc import discogs_listing
+        from fbc.discogs import listing as discogs_listing
 
         if not self.id or self.sold:
             return ""

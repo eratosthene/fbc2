@@ -7,10 +7,11 @@ from fake_discogs import FakeAccount, FakeDiscogs, api_error, collection_item, f
 
 import fbc
 from fbc import db
-from fbc import discogs_client as discogs_calls
+from fbc.discogs import client as discogs_calls
 from fbc.ebay import describe, oauth
 from fbc import shipping
-from fbc.discogs_client import DiscogsAuthError
+from fbc.discogs import removal
+from fbc.discogs.client import DiscogsAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsRelease
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import Unit
@@ -239,7 +240,7 @@ def test_discogs_plan_needs_the_unit_linked_to_an_instance(app):
     unit.discogs_instance_id = None
     db.session.commit()
 
-    instance, problem = shipping.discogs_plan(unit)
+    instance, problem = removal.discogs_plan(unit)
 
     assert instance is None
     assert "isn't linked to a Discogs instance" in problem
@@ -250,7 +251,7 @@ def test_discogs_plan_leaves_an_instance_shared_with_another_unit(app):
     db.session.add(Unit(name="Mislinked", discogs_instance_id=1002))
     db.session.commit()
 
-    instance, problem = shipping.discogs_plan(unit)
+    instance, problem = removal.discogs_plan(unit)
 
     assert instance is None
     assert "linked to other Units" in problem
@@ -259,7 +260,7 @@ def test_discogs_plan_leaves_an_instance_shared_with_another_unit(app):
 def test_remove_from_discogs_deletes_only_the_units_instance(app, discogs):
     order, unit = _order()
 
-    message, category = shipping.remove_from_discogs(unit)
+    message, category = removal.remove_from_discogs(unit)
 
     assert category == "success"
     assert discogs.deleted == [(7, 1, 1002)]
@@ -275,7 +276,7 @@ def test_remove_from_discogs_cleans_up_an_instance_already_gone(app, discogs):
     order, unit = _order()
     discogs.items = []
 
-    message, category = shipping.remove_from_discogs(unit)
+    message, category = removal.remove_from_discogs(unit)
 
     assert category == "success"
     assert "already gone" in message
@@ -287,7 +288,7 @@ def test_remove_from_discogs_keeps_fbc_as_is_when_discogs_fails(app, discogs):
     order, unit = _order()
     discogs.fail = failing("collection_items", api_error(500, "Server error"))
 
-    message, category = shipping.remove_from_discogs(unit)
+    message, category = removal.remove_from_discogs(unit)
 
     assert category == "danger"
     assert "Remove it by hand" in message
@@ -307,7 +308,7 @@ def test_remove_from_discogs_says_so_when_discogs_isnt_connected(app, monkeypatc
     order, unit = _order()
     _not_connected(monkeypatch)
 
-    message, category = shipping.remove_from_discogs(unit)
+    message, category = removal.remove_from_discogs(unit)
 
     assert category == "danger"
     assert "Connect fbc to Discogs first (Discogs > Connect Discogs). Remove" in message
