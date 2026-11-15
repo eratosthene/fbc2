@@ -486,7 +486,16 @@ def test_the_home_page_shows_discogs_sales_and_failed_endings(client, discogs):
     sales = index.marketplace_sales()
     html = client.get("/").get_data(as_text=True)
 
-    assert sales == [{"name": "Discogs", "receipts": 1, "gross": 19.0, "net": 22.08}]
+    assert sales == [
+        {"name": "eBay", "receipts": 0, "gross": 0.0, "net": 0.0, "no_order": False},
+        {
+            "name": "Discogs",
+            "receipts": 1,
+            "gross": 19.0,
+            "net": 22.08,
+            "no_order": False,
+        },
+    ]
     assert "Sales by marketplace" in html and "payment processing fee" in html
     assert "Sold twice?" in html
     assert client.get("/listingendmodelview/list/").status_code == 200
