@@ -6,7 +6,7 @@ import sqlalchemy as sa
 from markupsafe import Markup
 from flask_appbuilder.models.sqla.filters import get_field_setup_query
 from sqlalchemy import or_
-from wtforms.validators import Optional
+from wtforms.validators import Optional, ValidationError
 
 from fbc.ebay import mystery
 from fbc.core import localtime
@@ -86,6 +86,15 @@ def unit_names(units):
 def _lines_total(earnings):
     """eBay's lines' total as the earnings page shows it, to compare on POST."""
     return f"{sum(line['amount'] for line in earnings['lines']):.2f}"
+
+
+def not_both_marketplaces(form, field):
+    """A Sales Receipt is for one marketplace: not an eBay and a Discogs order."""
+    if field.data and form.ebay_orders.data:
+        raise ValidationError(
+            "A Sales Receipt can't have both an eBay order and a Discogs order."
+            " Clear one of them."
+        )
 
 
 class FilterHasNoOrder(BaseFilter):
@@ -176,6 +185,7 @@ class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
     ]
     edit_columns = add_columns
     search_columns = add_columns + ["archived"]
+    validators_columns = {"discogs_orders": [not_both_marketplaces]}
 
     def _init_properties(self):
         super()._init_properties()

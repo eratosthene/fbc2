@@ -12,7 +12,16 @@ from fbc.models.discogs import DiscogsOrder
 from fbc.models.ebay import EbayOrder
 from fbc.models.sales import SalesReceipt
 from fbc.sales import index
-from fbc.views.sales import FilterHasNoOrder, SalesReceiptModelView
+from types import SimpleNamespace
+
+import pytest
+from wtforms.validators import ValidationError
+
+from fbc.views.sales import (
+    FilterHasNoOrder,
+    SalesReceiptModelView,
+    not_both_marketplaces,
+)
 
 DAY = datetime.date(2026, 3, 1)
 LINK = "/salesreceiptmodelview/list/?archived=all&_flt_0_ebay_orders=1"
@@ -146,3 +155,36 @@ def test_discogs_orders_list_says_the_payment_fee_is_missing(app):
     client = signed_in_client(app)
     html = client.get("/discogsordermodelview/list/").get_data(as_text=True)
     assert "payment processing fee" in html
+
+
+def test_a_receipt_cant_have_both_an_ebay_and_a_discogs_order(app):
+    def form(ebay):
+        return SimpleNamespace(ebay_orders=SimpleNamespace(data=ebay))
+
+    with pytest.raises(ValidationError, match="both an eBay order"):
+        not_both_marketplaces(form(["e"]), SimpleNamespace(data=["d"]))
+    # One kind, or none, is fine.
+    not_both_marketplaces(form([]), SimpleNamespace(data=["d"]))
+    not_both_marketplaces(form(["e"]), SimpleNamespace(data=[]))
+    assert SalesReceiptModelView.validators_columns["discogs_orders"] == [
+        not_both_marketplaces
+    ]
+
+
+def test_the_add_form_refuses_both_kinds_of_order(app):
+    client = signed_in_client(app)
+    ebay = _receipt(ebay=True).ebay_orders[0]
+    discogs = _receipt(discogs=True).discogs_orders[0]
+    before = db.session.query(SalesReceipt).count()
+    page = client.post(
+        "/salesreceiptmodelview/add",
+        data={
+            "ebay_orders": [str(ebay.order_id)],
+            "discogs_orders": [str(discogs.order_id)],
+            "date": "2026-03-02",
+            "sold_price": "5",
+            "net_sold": "4",
+        },
+    )
+    assert "both an eBay order" in page.get_data(as_text=True)
+    assert db.session.query(SalesReceipt).count() == before

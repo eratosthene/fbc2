@@ -522,7 +522,8 @@ order of either kind, and shows only when there are some. Each row links to the
 Sales Receipts list filtered to it, archived ones included, as the table counts
 them. In the search those filters are "Has an order" under eBay Orders, "Has an
 order" under Discogs Orders and "Has no order" under eBay Orders. A Sales
-Receipt with both kinds of order counts under eBay.
+Receipt is for one marketplace: the form refuses one with both an eBay order
+and a Discogs order.
 
 ### Selling on both eBay and Discogs
 
