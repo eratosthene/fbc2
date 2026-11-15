@@ -205,6 +205,11 @@ class Unit(Model):
                 return receipt.unit_share(
                     self, sum(o.price or 0 for o in receipt.ebay_orders)
                 )
+            if receipt.discogs_orders:
+                return receipt.unit_share(
+                    self,
+                    sum(i.price or 0 for o in receipt.discogs_orders for i in o.items),
+                )
         if self.sold and self.ebay_listing_id:
             order = (
                 db.session.query(EbayOrder)
@@ -294,6 +299,8 @@ class Unit(Model):
             )
             if self.sales_receipt.ebay_orders:
                 ret = ret + self.sales_receipt.fmt_ebay_order(False)
+            if self.sales_receipt.discogs_orders:
+                ret = ret + self.sales_receipt.fmt_discogs_order(False)
         return Markup(ret)
 
     def _discogs_listing_link(self):

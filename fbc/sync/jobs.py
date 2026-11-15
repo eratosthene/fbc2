@@ -33,6 +33,7 @@ from fbc.ebay.listings import (
     save_renewals,
 )
 from fbc.ebay.orders import add_ebay_order
+from fbc.sync import ending
 
 logger = logging.getLogger()
 
@@ -185,8 +186,24 @@ def sync_discogs_orders(days=DISCOGS_ORDER_DAYS):
     for data in orders:
         logger.info("Saving Discogs order " + str(data["id"]))
         save_discogs_order(data)
+    _end_sold_elsewhere()
     state.record_finished(DISCOGS_ORDERS_SYNC, started)
     logger.info("Discogs orders sync finished.")
+
+
+def _end_sold_elsewhere():
+    """
+    End listings whose Unit has now sold on the other marketplace. A failure
+    here is kept as a task (see fbc/sync/ending.py) and never fails the
+    orders sync that has just saved the sale.
+    """
+    try:
+        ended = ending.end_sold_elsewhere()
+    except Exception:
+        logger.exception("Ending listings sold elsewhere failed")
+        return
+    for row in ended:
+        logger.info(str(row) + " " + (row.message or ""))
 
 
 def sync_ebay_listings():
@@ -277,5 +294,6 @@ def sync_ebay_orders(update, days, message):
         logging.error(e)
         logging.error(e.response.dict())
         return
+    _end_sold_elsewhere()
     state.record_finished(ORDERS_SYNC, started)
     logger.info("eBay orders sync finished.")

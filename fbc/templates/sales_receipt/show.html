@@ -10,6 +10,12 @@
 <p>This Sales Receipt has no earnings breakdown, so its fees, label and any
 refund are only known together, as Sold Price less Net Sold.</p>
 {% endif %}
+{% if discogs_note %}
+<p class="text-muted">Discogs's API gives an order's total and its selling fee but
+not its payment processing fee or what the shipping label cost. This receipt's
+earnings are the total less Discogs's fee unless Net Sold was corrected, and
+the difference is kept as a manual adjustment.</p>
+{% endif %}
 {% if shared_order %}
 <p class="text-warning">{{ shared_order }}</p>
 {% elif receipt.ebay_orders %}

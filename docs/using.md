@@ -59,6 +59,12 @@ work is done, so there is nothing to tick off:
 
 - **Orders to Ship**: eBay Orders that have no Sales Receipt yet. Use Ship This
   on each. Archived orders are left out.
+- **Discogs Orders to Ship**: Discogs Orders that aren't cancelled and have no
+  Sales Receipt yet. Use Ship This on each.
+- **Listings to End by Hand**: a listing fbc tried to end and couldn't, after its
+  Unit sold on the other marketplace (see "Selling on both eBay and Discogs").
+  The home page shows these in a red banner of their own. The task clears
+  when the listing is gone.
 - **Releases to Make Units**: Discogs Releases with more copies in your Discogs
   collection than unsold Units. Add a Unit for the new copy and price it. A
   copy that sold leaves the collection, so its sold Unit doesn't count.
@@ -313,12 +319,13 @@ and Discogs's selling fee. Press Sync on that list, run
   Unit (see Discogs Listings), so run the listings sync first for a new
   listing. An order of something you listed by hand has no Unit.
 - Discogs gives the total (items, shipping and any tax) and its selling fee,
-  but not what payment processing took, so the list can't show what you
-  earned. That is for a later change, with Ship This for Discogs orders.
+  but not what payment processing took or what the label cost, so fbc can't
+  know what you earned. Wherever a Discogs sale's earnings show (Ship This,
+  the Sales Receipt and the home page) they are the total less Discogs's fee,
+  and say so. Correct Net Sold to what you really kept.
+- The list has a Ship This link on each order not shipped yet, and a link to
+  its Sales Receipt after (see "Ship This for a Discogs order").
 - Old finished orders can be archived (see Archiving).
-- This slice only records orders. Ship This, Sales Receipts, the home page
-  and ending the other marketplace's listing when a Unit sells don't use
-  Discogs orders yet.
 
 ### List on Discogs
 
@@ -351,8 +358,9 @@ eBay. Nothing is posted until you press the button, and posting makes a
    Draft that is still a Draft on Discogs is changed.
 
 If a Unit has an eBay listing that is active, or an eBay Draft that hasn't
-been published, the form and listing page say so with a link. You can go on,
-but nothing stops the Unit selling on both, so end one by hand when it sells.
+been published, the form and listing page say so with a link. You can go on:
+fbc ends the other listing when the Unit sells (see "Selling on both eBay and
+Discogs").
 
 fbc won't list a Unit that:
 
@@ -466,6 +474,70 @@ for the package. Ship This shows what the buyer paid for shipping, what the
 label cost, and how much to refund on one of the orders on eBay to pass on
 the saving. Reload the page once it's refunded, so the refund is in the
 earnings.
+
+### Ship This for a Discogs order
+
+The Ship This link on a Discogs Order (the Discogs Orders list, or Discogs
+Orders to Ship) does for it what Ship This does for an eBay order, in one
+Sales Receipt for the order:
+
+- It finds the Units from the order's items. Every item must link to a Unit
+  that isn't sold yet; if not, it says which and links to adding the Sales
+  Receipt by hand. A cancelled order can't be shipped.
+- **Net Sold** starts as Discogs's total (items, shipping and any tax) less its
+  selling fee. Discogs's API has no payment processing fee or label cost, so
+  change it to what you really kept. The Sales Receipt shows the sale and
+  Discogs's fee as lines, and any difference as a manual adjustment.
+- Sold Price is the items' prices, without shipping, as for eBay.
+- It takes the supplies you used out of stock and can remove each Unit's own
+  copy from the Discogs collection, as for eBay.
+- It marks the Units sold. It does **not** change the order on Discogs:
+  invoice it and mark it shipped there, and the next sync shows the status.
+- Discogs orders aren't combined: Discogs already puts everything one buyer
+  bought in one order.
+- If a Unit on the order is still listed on the other marketplace (or fbc
+  couldn't end it), the page warns you at the top. The eBay Ship This page
+  does the same for a Discogs listing.
+
+Sales Receipts, the Sales Receipts list, a Unit's page and the home page's
+Sales by marketplace table all show Discogs sales next to eBay's. A Sales
+Receipt of a Discogs order has no Refresh Earnings: there is nothing more to
+ask Discogs.
+
+### Selling on both eBay and Discogs
+
+A Unit can be listed on eBay and Discogs at once. When it sells on one, fbc
+ends the other listing by itself, right after an orders sync saves the sale
+(the scheduler runs them every 10 minutes for eBay and 15 for Discogs):
+
+- **Sold on eBay**: the Unit's Discogs listing is deleted, whether it is For
+  Sale or a Draft.
+- **Sold on Discogs**: the Unit's eBay listing is ended, and an eBay Draft that
+  hasn't been published is deleted.
+- Every try is kept in the Ended Listings list (Sales menu): the Unit, the
+  order that sold it, what was ended and what happened. Ended Listings is
+  also where to look to see what fbc did.
+- It only counts a sale made while the other listing was up, so an old order
+  never ends a listing you made after a return. An order cancelled on Discogs
+  ends nothing.
+- A listing with several Units on it (an eBay listing with a quantity) is left
+  alone until every one of its Units has sold, since the order doesn't say
+  which Unit went. Mystery boxes pick their Units at Ship This, so they
+  aren't ended either.
+- If Discogs or eBay refuses, or fbc isn't connected, the sale is still
+  recorded as usual. The failure shows as a row in Ended Listings with
+  status failed, a red "Sold twice?" banner on the home page, and Listings to
+  End by Hand under Tasks. fbc tries again after every orders sync, and the
+  task clears once the listing is gone (ended by fbc, by you, or on its own).
+- A listing that is already gone counts as ended.
+- In Dev Mode nothing is ended, and the log says so.
+
+This can't be airtight. Both sites can sell the Unit between two syncs, so it
+shrinks the chance of selling a Unit twice and doesn't close it. If an eBay
+order comes in, run Sync on eBay Orders by hand, as before, to end the
+Discogs listing sooner. Discogs allows far more requests than the orders sync uses, so
+its interval can be cut with the scheduler settings in [Running fbc in production](production.md) if the
+window matters.
 
 ### Mystery boxes
 

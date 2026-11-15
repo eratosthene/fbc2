@@ -37,6 +37,10 @@ come from eBay and only take the label off once it's bought.</p>
 </form>
 {% endif %}
 
+{% for text, link in notes %}
+<div class="alert alert-warning">{{ text }}{% if link %} <a href="{{ link }}" target="_blank" rel="noopener">Open it</a>{% endif %}</div>
+{% endfor %}
+
 {% if fixed_units or not boxes %}
 <h4>Units</h4>
 <ul>

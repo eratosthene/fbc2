@@ -213,6 +213,8 @@ def test_counts_count_each_task():
 
     assert tasks.counts() == {
         "orders": 1,
+        "discogs_orders": 0,
+        "failed_endings": 0,
         "releases": 1,
         "units": 0,
         "drafts": 1,

@@ -196,3 +196,190 @@ def ship_order(orders, units, net_sold, supplies=None, lines=None, unit_prices=N
         + (", used " + stock.fmt_supplies(supplies) if supplies else "")
     )
     return receipt
+
+
+# Ship This for a Discogs order. A Discogs order is shipped whole: it can
+# hold several items, but orders aren't combined, since Discogs already puts a
+# buyer's items in one order.
+
+
+def discogs_shipment_units(order):
+    """
+    The Units a Discogs `order` sold, in item order, and []; or None and what
+    stops Ship This finding them, which is left to be done by hand. Every
+    item must be linked to a Unit that isn't sold yet.
+    """
+    from fbc import db
+    from fbc.models.inventory import Unit
+
+    if not order.items:
+        return None, ["Order " + order.order_id + " has no items in fbc."]
+    units = []
+    problems = []
+    for item in order.items:
+        unit = db.session.get(Unit, item.unit_id) if item.unit_id else None
+        if unit is None:
+            problems.append(
+                (item.title or "An item")
+                + " isn't linked to a Unit: its Discogs listing's Private"
+                " Comments aren't an fbc ID, or the listings sync hasn't seen it."
+            )
+        elif unit.sold or unit.sales_receipt_id:
+            problems.append(unit.name + " is already sold.")
+        elif unit in units:
+            problems.append(unit.name + " is on this order twice.")
+        else:
+            units.append(unit)
+    if problems:
+        return None, problems
+    return units, []
+
+
+def discogs_earnings(order):
+    """
+    The earnings lines for a Discogs `order`, as SalesReceiptLine's columns,
+    and what they add up to (None with no lines). Discogs's API gives the
+    order's total and its selling fee, and no payment processing fee or
+    shipping label cost, so these are the sale and the fee only. The
+    owner corrects Net Sold to what was really kept, and the difference
+    becomes a manual adjustment line.
+    """
+    from fbc.models.sales import DISCOGS_FEE, FEE
+
+    if order.total is None:
+        return [], None
+    lines = [
+        {
+            "kind": "SALE",
+            "label": "Sale, with shipping",
+            "amount": round(order.total, 2),
+            "transaction_date": order.created_time,
+        }
+    ]
+    if order.fee:
+        lines.append(
+            {
+                "kind": FEE,
+                "fee_type": DISCOGS_FEE,
+                "label": "Discogs selling fee",
+                "amount": -round(order.fee, 2),
+                "transaction_date": order.created_time,
+            }
+        )
+    return lines, round(sum(line["amount"] for line in lines), 2)
+
+
+def ship_discogs_order(order, units, net_sold, supplies=None, lines=None):
+    """
+    Record a Sales Receipt for a Discogs `order`, dated when it was placed,
+    with its earnings `lines` (see discogs_earnings) and a manual adjustment
+    if they don't add up to `net_sold`. Mark `units` sold with it, each at
+    the price of its item when there are several, and take `supplies`
+    ({supply: count}) out of stock. Returns the receipt.
+    """
+    from fbc import db
+    from fbc.models.sales import SalesReceipt
+    from fbc.models.supplies import SHIPPING
+
+    prices = {i.unit_id: i.price for i in order.items if i.unit_id}
+    sold_price = round(sum(i.price or 0 for i in order.items), 2)
+    receipt = SalesReceipt(
+        date=order.created_time.date(),
+        discogs_orders=[order],
+        sold_price=sold_price,
+        net_sold=net_sold,
+    )
+    receipt.set_lines(lines or [])
+    db.session.add(receipt)
+    db.session.flush()
+    for unit in units:
+        unit.sold = True
+        unit.sales_receipt_id = receipt.id
+        if len(units) > 1:
+            unit.sold_price = prices.get(unit.id)
+    for supply, count in (supplies or {}).items():
+        supply.use(count, SHIPPING, receipt=receipt)
+    db.session.commit()
+    logger.info(
+        "Shipped Discogs order "
+        + order.order_id
+        + ": unit"
+        + ("s " if len(units) > 1 else " ")
+        + ", ".join(str(u.id) for u in units)
+        + ", receipt "
+        + str(receipt.id)
+        + (", used " + stock.fmt_supplies(supplies) if supplies else "")
+    )
+    return receipt
+
+
+def other_marketplace_notes(units, here):
+    """
+    Notes (text, link or None) for Units of a shipment that are still listed
+    on the other marketplace than `here` ("eBay" or "Discogs"), or whose
+    ending there failed. fbc ends those listings when an orders sync sees the
+    sale, so this is for a sale not synced yet, or a refusal.
+    """
+    from flask import url_for
+
+    from fbc import db
+    from fbc.discogs import listing as discogs_listing
+    from fbc.models.ebay import EbayDraft
+    from fbc.models.sales import FAILED, ListingEnd
+
+    notes = []
+    for unit in units:
+        if here == "eBay":
+            listing = discogs_listing.open_listing(unit)
+            if listing:
+                notes.append(
+                    (
+                        unit.name
+                        + " still has a Discogs listing ("
+                        + str(listing.listing_id)
+                        + ", "
+                        + str(listing.status)
+                        + "). End it on Discogs before it sells twice.",
+                        listing.url,
+                    )
+                )
+        else:
+            ebay = unit.ebay_listing
+            if ebay and not ebay.ended:
+                notes.append(
+                    (
+                        unit.name
+                        + " still has an active eBay listing ("
+                        + ebay.item_id
+                        + "). End it on eBay before it sells twice.",
+                        ebay.url,
+                    )
+                )
+            draft = (
+                db.session.query(EbayDraft)
+                .filter_by(unit_id=unit.id, status="draft")
+                .first()
+            )
+            if draft:
+                notes.append(
+                    (
+                        unit.name + " still has an unpublished eBay Draft.",
+                        url_for("EbayDraftModelView.show", pk=draft.id),
+                    )
+                )
+        failed = (
+            db.session.query(ListingEnd).filter_by(unit_id=unit.id, status=FAILED).all()
+        )
+        for row in failed:
+            notes.append(
+                (
+                    "fbc couldn't end "
+                    + row.ended_on
+                    + " "
+                    + row.listing_ref
+                    + ": "
+                    + (row.message or ""),
+                    None,
+                )
+            )
+    return notes

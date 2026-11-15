@@ -32,11 +32,14 @@ area, and everything else is in a package by area (#157):
   mode sample data. Modules refer to each other by module name, as in `ebay/`.
 - `fbc/sync/`: syncing. `state.py` runs a sync in a thread and keeps its state
   in job files, `jobs.py` is what each sync does (the buttons and `flask sync`
-  call the same functions), `scheduler.py` is `flask scheduler`, and `notes.py`
-  is the "last synced" note on a list. A sync's state module is imported as
+  call the same functions), `ending.py` ends a Unit's listing on one
+  marketplace when it sells on the other (both orders syncs call it last; it
+  keeps each try as a `ListingEnd`, and only logs in dev mode), `scheduler.py`
+  is `flask scheduler`, and `notes.py` is the "last synced" note on a list. A sync's state module is imported as
   `state` (`from fbc.sync import state`).
 - `fbc/sales/`: what the owner does with stock and sales, using both eBay and
-  Discogs. `ship.py` is Ship This, `stock.py` is the supplies it takes out of
+  Discogs. `ship.py` is Ship This (eBay orders, and Discogs orders in `discogs_*`
+  functions), `stock.py` is the supplies it takes out of
   the Supply List, `combine.py` combines receipts, `archive.py`, `finance.py`
   (Purchase Lot money), `pricing.py` (what to ask), `tasks.py` and `index.py`
   (the home page), and `widgets.py` (the Supplies Used field).

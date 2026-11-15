@@ -65,3 +65,22 @@ def publish_draft(draft):
     logger.info("Published unit " + str(draft.unit_id) + " as " + item_id)
     summary["source"] = "publish"
     return summary
+
+
+def end_listing(item_id):
+    """
+    End an active fixed price listing on eBay because the Unit sold
+    elsewhere. Returns (True, message) when it's ended or eBay says it
+    already was, or (False, why not).
+    """
+    resp, summary = api._call(
+        "EndFixedPriceItem", {"ItemID": item_id, "EndingReason": "NotAvailable"}
+    )
+    if resp is not None and not summary["errors"]:
+        logger.info("Ended eBay listing " + item_id)
+        return True, "Ended on eBay."
+    errors = "; ".join(summary["errors"]) or "eBay gave no answer."
+    # eBay's error 1047: the listing has closed, which is what's wanted.
+    if "already been closed" in errors or "already ended" in errors.lower():
+        return True, "eBay says it had already ended."
+    return False, errors

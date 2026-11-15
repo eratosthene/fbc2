@@ -423,6 +423,11 @@ class DiscogsOrder(Model):
         cascade="all, delete-orphan",
         order_by="DiscogsOrderItem.id",
     )
+    sales_receipts = relationship(
+        "SalesReceipt",
+        secondary="sales_receipt_discogs_order",
+        back_populates="discogs_orders",
+    )
 
     def __unicode__(self):
         return self.__repr__()
@@ -458,6 +463,46 @@ class DiscogsOrder(Model):
         if len(self.items) > 1:
             title += " (+%d more)" % (len(self.items) - 1)
         return title
+
+    def is_cancelled(self):
+        """Discogs's own words: Cancelled (Non-Paying Buyer) and the like."""
+        return (self.status or "").startswith("Cancelled")
+
+    def net(self):
+        """What Discogs says the seller is left with: the total less its fee."""
+        if self.total is None:
+            return None
+        return round(self.total - (self.fee or 0), 2)
+
+    def unit_ids(self):
+        return [item.unit_id for item in self.items if item.unit_id]
+
+    def add_receipt_url(self):
+        """Add SR with this order filled in, for an order shipped by hand."""
+        return url_for(
+            "SalesReceiptModelView.add",
+            sold_price=round(sum(i.price or 0 for i in self.items), 2),
+            discogs_orders=self.order_id,
+            date=self.created_time.date(),
+        )
+
+    def links(self):
+        """Its Sales Receipt once it's shipped, and Ship This until then."""
+        if self.sales_receipts:
+            return Markup(
+                '<a href="'
+                + url_for(
+                    "SalesReceiptModelView.show", pk=str(self.sales_receipts[0].id)
+                )
+                + '">Sales&nbsp;Receipt</a>'
+            )
+        if self.is_cancelled():
+            return ""
+        return Markup(
+            '<a href="'
+            + url_for("DiscogsOrderModelView.ship", pk=self.order_id)
+            + '">Ship&nbsp;This</a>'
+        )
 
     def fmt_url(self):
         return Markup(

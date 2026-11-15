@@ -6,6 +6,11 @@ when it's done and there's no to-do table to keep in step:
 - a Discogs Release with more copies in the Discogs collection than unsold
   Units has copies that need a Unit made and priced. (A sold copy leaves the
   collection, so its sold Unit doesn't count.)
+- a Discogs Order that isn't cancelled and has no Sales Receipt is still to
+  ship (Ship This on the order makes it);
+- a failed attempt to end a listing because its Unit sold on the other
+  marketplace (fbc/sync/ending.py) is still to sort out, and clears when the
+  listing is gone;
 - an unsold Unit with no eBay Listing and no eBay Draft, priced over $2 (the
   rest go in the discount boxes), needs an eBay Draft;
 - an eBay Draft that isn't published yet needs pictures and a listing;
@@ -35,6 +40,24 @@ def ids_orders_to_ship():
     return sa.select(EbayOrder.order_id).where(
         EbayOrder.archived.is_(False), ~EbayOrder.sales_receipts.any()
     )
+
+
+def ids_discogs_orders_to_ship():
+    from fbc.models.discogs import DiscogsOrder
+
+    return sa.select(DiscogsOrder.order_id).where(
+        DiscogsOrder.archived.is_(False),
+        ~DiscogsOrder.sales_receipts.any(),
+        sa.or_(
+            DiscogsOrder.status.is_(None), DiscogsOrder.status.notlike("Cancelled%")
+        ),
+    )
+
+
+def ids_failed_endings():
+    from fbc.models.sales import FAILED, ListingEnd
+
+    return sa.select(ListingEnd.id).where(ListingEnd.status == FAILED)
 
 
 def ids_releases_needing_units():
@@ -127,6 +150,8 @@ def counts():
     """How many of each task there are, by key."""
     return {
         "orders": _count(ids_orders_to_ship()),
+        "discogs_orders": _count(ids_discogs_orders_to_ship()),
+        "failed_endings": _count(ids_failed_endings()),
         "releases": _count(ids_releases_needing_units()),
         "units": _count(ids_units_needing_drafts()),
         "drafts": _count(ids_drafts_to_list()),

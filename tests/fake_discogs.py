@@ -159,6 +159,9 @@ class FakeAccount(_Recording):
     def update_listing(self, listing_id, fields):
         self._record("update_listing", listing_id, fields)
 
+    def delete_listing(self, listing_id):
+        self._record("delete_listing", listing_id)
+
 
 class FakeDiscogs(_Recording):
     """fbc.discogs.client's functions. `account` is what discogs_client.account() gives."""

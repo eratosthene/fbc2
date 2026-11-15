@@ -14,7 +14,8 @@ from fbc.sales import tasks
 from fbc.sync.notes import DISCOGS_LISTINGS, EBAY_LISTINGS, SyncedViewMixin
 from fbc.views.discogs import DiscogsReleaseModelBaseView
 from fbc.views.inventory import UnitModelBaseView
-from fbc.views.sales import EbayOrderModelView
+from fbc.views.discogs import DiscogsOrderModelView
+from fbc.views.sales import EbayOrderModelView, ListingEndModelView
 
 
 class FilterInSelect(BaseFilter):
@@ -30,6 +31,18 @@ class OrdersToShipView(EbayOrderModelView):
     """eBay Orders with no Sales Receipt yet: use Ship This."""
 
     base_filters = [["order_id", FilterInSelect, tasks.ids_orders_to_ship]]
+
+
+class DiscogsOrdersToShipView(DiscogsOrderModelView):
+    """Discogs Orders with no Sales Receipt yet: use Ship This."""
+
+    base_filters = [["order_id", FilterInSelect, tasks.ids_discogs_orders_to_ship]]
+
+
+class FailedEndingsView(ListingEndModelView):
+    """Listings fbc couldn't end after their Unit sold on the other marketplace."""
+
+    base_filters = [["id", FilterInSelect, tasks.ids_failed_endings]]
 
 
 class ReleasesNeedingUnitsView(DiscogsReleaseModelBaseView):

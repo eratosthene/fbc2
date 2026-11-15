@@ -1,0 +1,92 @@
+{% extends "appbuilder/base.html" %}
+{% from "sales_receipt/lines.html" import lines_table, money %}
+{% block content %}
+<h3>Ship This (Discogs)</h3>
+<p>This records the sale in fbc. It doesn't change the order on Discogs: invoice
+it and mark it shipped there.</p>
+
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>Order</th><th>Date</th><th>Status</th><th>Items</th><th>Shipping paid</th><th>Total</th></tr>
+  <tr>
+    <td>{{ order.fmt_url() }}</td>
+    <td>{{ order.created_time | localtime }}</td>
+    <td>{{ order.status }}</td>
+    <td>{% for item in order.items %}{% if not loop.first %}<br>{% endif %}{{ item.title }}{% if item.price is not none %} ({{ money(item.price) }}){% endif %}{% endfor %}</td>
+    <td class="text-right">{{ order.fmt_shipping() }}</td>
+    <td class="text-right">{{ order.fmt_total() }}</td>
+  </tr>
+</table>
+<p>Buyer: {{ order.buyer }}</p>
+
+{% for text, link in notes %}
+<div class="alert alert-warning">{{ text }}{% if link %} <a href="{{ link }}" target="_blank" rel="noopener">Open it</a>{% endif %}</div>
+{% endfor %}
+
+<h4>Units</h4>
+<ul>
+  {% for unit in units %}
+  <li><a href="{{ url_for('UnitModelView.show', pk=unit.id) }}">{{ unit.name }}</a></li>
+  {% endfor %}
+</ul>
+
+<h4>Earnings</h4>
+<div class="alert alert-info">Discogs's API gives the order's total and its selling
+fee, but not its payment processing fee or what the shipping label cost. Net Sold
+starts as the total less Discogs's fee. Change it to what you really keep; the
+difference is saved as a manual adjustment line.</div>
+{% if lines %}
+{{ lines_table(lines, "Total less Discogs's fee", earned) }}
+{% endif %}
+
+<form method="post" action="{{ url_for('DiscogsOrderModelView.ship', pk=order.order_id) }}">
+  <div class="form-group" style="max-width: 200px">
+    <label for="net_sold">Net Sold</label>
+    <input type="text" id="net_sold" name="net_sold" class="form-control" required
+      value="{% if values is not none %}{{ values.get('net_sold', '') }}{% elif earned is not none %}{{ '%.2f'|format(earned) }}{% endif %}">
+  </div>
+  <h4>Supplies used</h4>
+  {% if supplies %}
+  <p>Filled in for a normal shipment of {% if units|length > 1 %}these {{ units|length }} Units{% else %}one Unit{% endif %};
+  change them for anything else. Count single uses, like labels, not rolls.</p>
+  <table class="table table-bordered table-condensed" style="width: auto">
+    <tr><th>Supply</th><th>In stock</th><th>Used</th></tr>
+    {% for supply, count in supplies %}
+    <tr>
+      <td><label for="supply-{{ supply.id }}">{{ supply.name }}</label></td>
+      <td>{{ supply.fmt_quantity() }}{% if count > supply.available() %}
+        <br><span class="text-danger">Not enough for this; <a
+          href="{{ url_for('ReconcileSuppliesView.reconcile', supply=supply.id, _anchor='supply-%d' % supply.id) }}"
+          >count what's on hand</a>.</span>{% endif %}</td>
+      <td><input type="number" min="0" step="1" id="supply-{{ supply.id }}"
+        name="supply-{{ supply.id }}" value="{{ values.get('supply-%d' % supply.id, count) if values is not none else count }}"
+        class="form-control input-sm" style="width: 6em"></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p>No supplies are set as Used For shipping, so none will be taken out of
+  stock. Set them on the <a href="{{ url_for('SupplyModelView.list') }}">Supply List</a>.</p>
+  {% endif %}
+  {% for unit, instance, problem in discogs %}
+  {% if instance %}
+  <div class="checkbox">
+    <label>
+      <input type="checkbox" name="remove_discogs-{{ unit.id }}" value="1"
+        {% if values is none or values.get('remove_discogs-%d' % unit.id) %}checked{% endif %}>
+      Remove {{ unit.discogs_release }} (instance {{ instance.instance_id }}) from the Discogs collection{% if dev_mode %}
+      (Dev Mode: from fbc only){% endif %}
+    </label>
+  </div>
+  {% elif problem %}
+  <div class="alert alert-warning">{% if units|length > 1 %}{{ unit.name }}: {% endif %}{{ problem }}</div>
+  {% endif %}
+  {% endfor %}
+  <p>Shipping records one Sales Receipt for Net Sold, with the sale and
+  Discogs's fee as its earnings lines (and a manual adjustment line if Net
+  Sold differs), marks {% if units|length > 1 %}the Units{% else %}the Unit{% endif %}
+  sold with it, takes the supplies used out of stock and removes only the
+  ticked Units' own copies from the Discogs collection.</p>
+  <button class="btn btn-primary">Ship</button>
+  <a href="{{ url_for('DiscogsOrderModelView.list') }}" class="btn btn-default">Cancel</a>
+</form>
+{% endblock %}
