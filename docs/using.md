@@ -517,11 +517,12 @@ text Notes field on its forms, its page and in the search, for what the receipt
 can't say itself, such as "sold in person to a friend".
 
 The home page's Sales by marketplace table always has eBay and Discogs rows,
-even with no sales. Its "In person or not linked to an order" row counts the
-Sales Receipts with no order of either kind, and shows only when there are some.
-Click it to open the Sales Receipts list filtered to them, archived ones
-included, as the table counts them. In the search, that filter is "Has no
-order", under eBay Orders.
+even with no sales. Its "Other" row counts the Sales Receipts with no
+order of either kind, and shows only when there are some. Each row links to the
+Sales Receipts list filtered to it, archived ones included, as the table counts
+them. In the search those filters are "Has an order" under eBay Orders, "Has an
+order" under Discogs Orders and "Has no order" under eBay Orders. A Sales
+Receipt with both kinds of order counts under eBay.
 
 ### Selling on both eBay and Discogs
 

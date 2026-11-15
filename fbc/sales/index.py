@@ -12,7 +12,7 @@ from fbc.ebay import insertions
 logger = logging.getLogger()
 
 
-NO_ORDER_NAME = "In person or not linked to an order"
+NO_ORDER_NAME = "Other"
 
 
 def marketplace_sales():

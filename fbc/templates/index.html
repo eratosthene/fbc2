@@ -94,8 +94,10 @@
       <td>
         {% if m.no_order %}
         <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_0_ebay_orders=1) }}">{{ m.name }}</a>
+        {% elif m.name == "eBay" %}
+        <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_1_ebay_orders=1) }}">{{ m.name }}</a>
         {% else %}
-        {{ m.name }}
+        <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_0_discogs_orders=1) }}">{{ m.name }}</a>
         {% endif %}
       </td>
       <td class="text-right">{{ m.receipts }}</td>
@@ -104,16 +106,6 @@
     </tr>
     {% endfor %}
   </table>
-  {% if marketplace_sales|selectattr("no_order")|list %}
-  <p class="text-muted">"In person or not linked to an order" is the Sales
-  Receipts you entered by hand, such as a sale in person. Click it to see them.
-  Add a note to a receipt to say what it was.</p>
-  {% endif %}
-  {% if marketplace_sales|selectattr("name", "equalto", "Discogs")|list %}
-  <p class="text-muted">Discogs's API gives an order's total and its selling fee
-  but not its payment processing fee or the label cost, so a Discogs sale's Net
-  Sold is the total less its fee until you correct it on its Sales Receipt.</p>
-  {% endif %}
   {% endif %}
 
   <h3>

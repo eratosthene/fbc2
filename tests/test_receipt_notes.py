@@ -108,7 +108,41 @@ def test_home_lists_ebay_and_discogs_at_zero_and_links_the_no_order_row(app):
 
     assert sales[index.NO_ORDER_NAME]["receipts"] == 1
     assert sales["Discogs"]["receipts"] == 0
-    assert "In person or not linked to an order" in html
-    assert "entered by hand" in html
-    assert ">Other<" not in html
+    assert ">Other</a>" in html
+    assert "In person or not linked" not in html
+    assert "payment processing fee" not in html
     assert "archived=all&amp;_flt_0_ebay_orders=1" in html
+    assert "archived=all&amp;_flt_1_ebay_orders=1" in html
+    assert "archived=all&amp;_flt_0_discogs_orders=1" in html
+
+
+def test_has_an_order_filters_keep_only_receipts_of_that_marketplace(app):
+    from fbc.views.sales import FilterHasDiscogsOrder, FilterHasEbayOrder
+
+    from fbc import db
+    from fbc.models.sales import SalesReceipt
+
+    ebay = _receipt(ebay=True)
+    other = _receipt(notes="friend")
+    view = SalesReceiptModelView()
+    query = db.session.query(SalesReceipt)
+
+    kept = FilterHasEbayOrder("ebay_orders", view.datamodel).apply(query, "1").all()
+    assert [r.id for r in kept] == [ebay.id]
+    assert other.id not in [r.id for r in kept]
+    assert (
+        FilterHasDiscogsOrder("discogs_orders", view.datamodel).apply(query, "1").all()
+        == []
+    )
+    # The home page links reach them by position.
+    ebay_filters = view._filters._search_filters["ebay_orders"]
+    assert isinstance(ebay_filters[1], FilterHasEbayOrder)
+    assert isinstance(
+        view._filters._search_filters["discogs_orders"][0], FilterHasDiscogsOrder
+    )
+
+
+def test_discogs_orders_list_says_the_payment_fee_is_missing(app):
+    client = signed_in_client(app)
+    html = client.get("/discogsordermodelview/list/").get_data(as_text=True)
+    assert "payment processing fee" in html
