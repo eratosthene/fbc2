@@ -2,6 +2,9 @@
 {% block page_title %}{{app_name}}{% if title is defined and title|length %}: {{title}}{% endif%}{% endblock %}
 {% block list_search %}
     {% include "crud/sync_line.html" %}
+    {% if view_note %}
+        <p class="text-muted">{{ view_note }}</p>
+    {% endif %}
     {% if archive_link %}
         <p class="text-muted">
             {{ archive_link[0] }}

@@ -42,8 +42,12 @@ class SyncedViewMixin:
     """For a ModelView of synced data: its list says when each sync last ran."""
 
     synced_by = ()
+    # A line of text above the list, under the sync lines.
+    view_note = None
 
     def render_template(self, template, **kwargs):
         if template == self.list_template and self.synced_by:
             kwargs["sync_lines"] = lines(self.synced_by)
+        if template == self.list_template and self.view_note:
+            kwargs["view_note"] = self.view_note
         return super().render_template(template, **kwargs)

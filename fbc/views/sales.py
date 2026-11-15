@@ -6,7 +6,7 @@ import sqlalchemy as sa
 from markupsafe import Markup
 from flask_appbuilder.models.sqla.filters import get_field_setup_query
 from sqlalchemy import or_
-from wtforms.validators import Optional
+from wtforms.validators import Optional, ValidationError
 
 from fbc.ebay import mystery
 from fbc.core import localtime
@@ -88,6 +88,15 @@ def _lines_total(earnings):
     return f"{sum(line['amount'] for line in earnings['lines']):.2f}"
 
 
+def not_both_marketplaces(form, field):
+    """A Sales Receipt is for one marketplace: not an eBay and a Discogs order."""
+    if field.data and form.ebay_orders.data:
+        raise ValidationError(
+            "A Sales Receipt can't have both an eBay order and a Discogs order."
+            " Clear one of them."
+        )
+
+
 class FilterHasNoOrder(BaseFilter):
     """
     Sales Receipts with no eBay order and no Discogs order: the ones sold in
@@ -111,6 +120,36 @@ class FilterHasNoOrder(BaseFilter):
         return query.filter(
             SalesReceipt.id.notin_(linked(sales_receipt_ebay_order)),
             SalesReceipt.id.notin_(linked(sales_receipt_discogs_order)),
+        )
+
+
+class FilterHasEbayOrder(BaseFilter):
+    """Sales Receipts of an eBay order, for the home page's eBay row."""
+
+    name = "Has an order"
+    arg_name = "has_ebay_order"
+
+    def apply(self, query, value):
+        from fbc.models.sales import sales_receipt_ebay_order
+
+        return query.filter(
+            SalesReceipt.id.in_(sa.select(sales_receipt_ebay_order.c.sales_receipt_id))
+        )
+
+
+class FilterHasDiscogsOrder(BaseFilter):
+    """Sales Receipts of a Discogs order, for the home page's Discogs row."""
+
+    name = "Has an order"
+    arg_name = "has_discogs_order"
+
+    def apply(self, query, value):
+        from fbc.models.sales import sales_receipt_discogs_order
+
+        return query.filter(
+            SalesReceipt.id.in_(
+                sa.select(sales_receipt_discogs_order.c.sales_receipt_id)
+            )
         )
 
 
@@ -146,14 +185,21 @@ class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
     ]
     edit_columns = add_columns
     search_columns = add_columns + ["archived"]
+    validators_columns = {"discogs_orders": [not_both_marketplaces]}
 
     def _init_properties(self):
         super()._init_properties()
-        # First, so the home page can link to it as _flt_0_ebay_orders.
+        # First, so the home page can link to them by position: Has no order
+        # is _flt_0_ebay_orders, Has an order is _flt_1_ebay_orders and
+        # _flt_0_discogs_orders.
         for table in (self._filters._search_filters, self._filters._all_filters):
             table["ebay_orders"] = [
-                FilterHasNoOrder("ebay_orders", self.datamodel)
+                FilterHasNoOrder("ebay_orders", self.datamodel),
+                FilterHasEbayOrder("ebay_orders", self.datamodel),
             ] + table["ebay_orders"]
+            table["discogs_orders"] = [
+                FilterHasDiscogsOrder("discogs_orders", self.datamodel)
+            ] + table["discogs_orders"]
 
     def _init_forms(self):
         super(CustomModelView, self)._init_forms()

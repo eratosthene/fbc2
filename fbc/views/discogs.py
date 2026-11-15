@@ -359,6 +359,12 @@ class DiscogsOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelVie
 
     # Items link to Units through listings, which the listings sync keeps.
     synced_by = [DISCOGS_ORDERS, DISCOGS_LISTINGS]
+    view_note = (
+        "Discogs's API gives an order's total and its selling fee but not its"
+        " payment processing fee or the label cost, so a Discogs sale's Net"
+        " Sold is the total less its fee until you correct it on its Sales"
+        " Receipt."
+    )
     datamodel = SQLAInterface(DiscogsOrder)
     base_permissions = [
         "can_list",

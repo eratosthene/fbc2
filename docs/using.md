@@ -17,18 +17,20 @@ range (`100-200`) or a mix (`5, 100-200`).
 ## The home page
 
 It has the alerts first (supplies to reorder, a To do banner, and free
-insertions close to or over the limit), then these sections:
+insertions close to or over the limit), then these sections, in order:
 
 - **Listings**: the active listings and this month's free insertions (see
   below).
+- **Stock**: the Units in stock.
+- **Sales by marketplace**: Sales Receipts, Sold Price and Net Sold for eBay,
+  Discogs and sales not linked to an order.
+- **Net profit** and the **breakeven price per Unit**, then **Profit Details**
+  to open: a table by Purchase Lot and one by Storage Box, each with its
+  Units, Units Sold and Stock.
 - **Other items**: shown once an Other Item has sold (see below): how many
   sold and their sales, and profit for those that have a cost. It's apart
   from everything else here.
-- **Stock**: the Units in stock.
-- **Money**: supply cost, other expenses, net profit and the breakeven price
-  per Unit, with Expense Details and Profit Details to open. Profit Details
-  has a table by Purchase Lot and one by Storage Box, each with its Units,
-  Units Sold and Stock.
+- **Money**: supply cost and other expenses, with Expense Details to open.
 
 Every page has the shop's name in small type at the bottom.
 
@@ -515,11 +517,13 @@ text Notes field on its forms, its page and in the search, for what the receipt
 can't say itself, such as "sold in person to a friend".
 
 The home page's Sales by marketplace table always has eBay and Discogs rows,
-even with no sales. Its "In person or not linked to an order" row counts the
-Sales Receipts with no order of either kind, and shows only when there are some.
-Click it to open the Sales Receipts list filtered to them, archived ones
-included, as the table counts them. In the search, that filter is "Has no
-order", under eBay Orders.
+even with no sales. Its "Other" row counts the Sales Receipts with no
+order of either kind, and shows only when there are some. Each row links to the
+Sales Receipts list filtered to it, archived ones included, as the table counts
+them. In the search those filters are "Has an order" under eBay Orders, "Has an
+order" under Discogs Orders and "Has no order" under eBay Orders. A Sales
+Receipt is for one marketplace: the form refuses one with both an eBay order
+and a Discogs order.
 
 ### Selling on both eBay and Discogs
 

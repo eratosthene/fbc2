@@ -496,7 +496,8 @@ def test_the_home_page_shows_discogs_sales_and_failed_endings(client, discogs):
             "no_order": False,
         },
     ]
-    assert "Sales by marketplace" in html and "payment processing fee" in html
+    assert "Sales by marketplace" in html
+    assert "payment processing fee" not in html
     assert "Sold twice?" in html
     assert client.get("/listingendmodelview/list/").status_code == 200
     assert client.get("/failedendingsview/list/").status_code == 200

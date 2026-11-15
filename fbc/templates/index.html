@@ -82,6 +82,9 @@
   </p>
   {% endif %}
 
+  <h2>Stock</h2>
+  <p>Units in stock: <strong>{{ stock_total }}</strong></p>
+
   {% if marketplace_sales %}
   <h2>Sales by marketplace</h2>
   <table class="table table-condensed" style="width: auto">
@@ -91,8 +94,10 @@
       <td>
         {% if m.no_order %}
         <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_0_ebay_orders=1) }}">{{ m.name }}</a>
+        {% elif m.name == "eBay" %}
+        <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_1_ebay_orders=1) }}">{{ m.name }}</a>
         {% else %}
-        {{ m.name }}
+        <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_0_discogs_orders=1) }}">{{ m.name }}</a>
         {% endif %}
       </td>
       <td class="text-right">{{ m.receipts }}</td>
@@ -101,59 +106,13 @@
     </tr>
     {% endfor %}
   </table>
-  {% if marketplace_sales|selectattr("no_order")|list %}
-  <p class="text-muted">"In person or not linked to an order" is the Sales
-  Receipts you entered by hand, such as a sale in person. Click it to see them.
-  Add a note to a receipt to say what it was.</p>
-  {% endif %}
-  {% if marketplace_sales|selectattr("name", "equalto", "Discogs")|list %}
-  <p class="text-muted">Discogs's API gives an order's total and its selling fee
-  but not its payment processing fee or the label cost, so a Discogs sale's Net
-  Sold is the total less its fee until you correct it on its Sales Receipt.</p>
-  {% endif %}
   {% endif %}
 
-  {% if other_sales.sold %}
-  <h2>Other items</h2>
-  <p>Other items: <strong>{{ other_sales.sold }}</strong> sold,
-  <strong>{{ "${:,.2f}".format(other_sales.gross|float) }}</strong> in sales,
-  <strong>{{ "${:,.2f}".format(other_sales.net|float) }}</strong> net{% if other_sales.profit is not none %};
-  profit <strong>{{ "${:,.2f}".format(other_sales.profit|float) }}</strong> on the
-  {{ other_sales.costed }} that have a cost{% endif %}.</p>
-  <p class="text-muted">Not records: these aren't in the stock, cost or profit figures,
-  and the shipping supplies they used{% if other_sales.supplies %}
-  ({{ "${:,.2f}".format(other_sales.supplies|float) }}){% endif %} aren't in the supply cost.</p>
-  {% endif %}
-
-  <h2>Stock</h2>
-  <p>Units in stock: <strong>{{ stock_total }}</strong></p>
-
-  <h2>Money</h2>
-  <p>Supply cost: <strong>{{ "${:,.2f}".format(supply_total|float) }}</strong></p>
-  <p>Other expenses: <strong>{{ "${:,.2f}".format(expense_total|float) }}</strong></p>
-  {% call lib.accordion_tag("expensedetails","Expense Details", False) %}
-  <table class="table table-bordered table-condensed table-hover" style="width: auto">
-    <tr>
-      <th>Category</th>
-      <th>Amount</th>
-    </tr>
-    {% for label, amount in expenses %}
-    <tr>
-      <td>{{ label }}</td>
-      <td>{{ "${:,.2f}".format(amount|float) }}</td>
-    </tr>
-    {% else %}
-    <tr>
-      <td colspan="2">No expenses yet.</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% endcall %}
-  <p>
+  <h3>
     Net profit:
     <strong>{% if (total_net_profit|float < 0) %}<span style="color: red">{% endif %}{{ "${:,.2f}".format(total_net_profit|float) }} ({{
     "{:,.2f}%".format(profit_margin|float) }} profit margin){% if (total_net_profit|float < 0) %}</span>{% endif %}</strong>
-  </p>
+  </h3>
   <p>
     Breakeven per unit, including supplies (a supply cost of {{ "${:,.2f}".format(supply_per_unit|float) }} per unit):
     <strong>{{ "${:,.2f}".format(breakeven_per_unit|float) }}</strong>
@@ -229,6 +188,40 @@
       <td>{{ "${:,.2f}".format(box_totals[box]['net']|float) }}</td>
       <td>{{ "${:,.2f}".format(box_totals[box]['profit']|float) }}</td>
       <td>{{ "{:,.2f}%".format(box_totals[box]['roi']|float) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endcall %}
+
+  {% if other_sales.sold %}
+  <h2>Other items</h2>
+  <p>Other items: <strong>{{ other_sales.sold }}</strong> sold,
+  <strong>{{ "${:,.2f}".format(other_sales.gross|float) }}</strong> in sales,
+  <strong>{{ "${:,.2f}".format(other_sales.net|float) }}</strong> net{% if other_sales.profit is not none %};
+  profit <strong>{{ "${:,.2f}".format(other_sales.profit|float) }}</strong> on the
+  {{ other_sales.costed }} that have a cost{% endif %}.</p>
+  <p class="text-muted">Not records: these aren't in the stock, cost or profit figures,
+  and the shipping supplies they used{% if other_sales.supplies %}
+  ({{ "${:,.2f}".format(other_sales.supplies|float) }}){% endif %} aren't in the supply cost.</p>
+  {% endif %}
+
+  <h2>Money</h2>
+  <p>Supply cost: <strong>{{ "${:,.2f}".format(supply_total|float) }}</strong></p>
+  <p>Other expenses: <strong>{{ "${:,.2f}".format(expense_total|float) }}</strong></p>
+  {% call lib.accordion_tag("expensedetails","Expense Details", False) %}
+  <table class="table table-bordered table-condensed table-hover" style="width: auto">
+    <tr>
+      <th>Category</th>
+      <th>Amount</th>
+    </tr>
+    {% for label, amount in expenses %}
+    <tr>
+      <td>{{ label }}</td>
+      <td>{{ "${:,.2f}".format(amount|float) }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="2">No expenses yet.</td>
     </tr>
     {% endfor %}
   </table>
