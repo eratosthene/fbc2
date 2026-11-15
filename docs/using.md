@@ -104,7 +104,8 @@ Old, finished records can be archived so the long lists leave them out. It
 only changes the lists. The home page, Purchase Lot figures and earnings
 totals still count archived records, so no money figure changes.
 
-The Units, eBay Listings, eBay Orders and Sales Receipts lists hide archived
+The Units, eBay Listings, eBay Orders, Discogs Orders and Sales Receipts lists
+hide archived
 records by default. Above each list, **Show archived** shows everything and
 **Hide archived** goes back. To see only the archived ones, search Archived
 equal to Yes. Related lists, such as the Units on a Purchase Lot, always
@@ -122,6 +123,8 @@ would do until you add `--apply`. Each age is in days in `config.py`
   return or refund open, from when the order was placed. An open return or
   dispute is read from the Sales Receipt's earnings lines (eBay holding the
   money back), so an order with no earnings lines counts as clear.
+- **Discogs Orders** whose status is Shipped, Refund Sent or Cancelled, from
+  when the order was placed.
 - **Sales Receipts**, from their date.
 
 To archive or unarchive by hand, select rows in a list and choose Archive or
@@ -312,6 +315,7 @@ and Discogs's selling fee. Press Sync on that list, run
 - Discogs gives the total (items, shipping and any tax) and its selling fee,
   but not what payment processing took, so the list can't show what you
   earned. That is for a later change, with Ship This for Discogs orders.
+- Old finished orders can be archived (see Archiving).
 - This slice only records orders. Ship This, Sales Receipts, the home page
   and ending the other marketplace's listing when a Unit sells don't use
   Discogs orders yet.

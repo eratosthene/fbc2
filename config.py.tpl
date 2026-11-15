@@ -176,12 +176,13 @@ APP_THEME = "cyborg.css" # not too bad
 # only the lists: the home page and every money figure still count them. Each
 # is how many days old a record must be: Units that are sold, eBay Listings
 # whose Units are all sold, shipped eBay Orders with no return or refund
-# open, and Sales Receipts. A missing key means 365; 0 or None turns that one
+# open, shipped, refunded or cancelled Discogs Orders, and Sales Receipts. A missing key means 365; 0 or None turns that one
 # off. See "Archiving" in docs/using.md.
 ARCHIVE_AFTER_DAYS = {
     'UNITS': 365,
     'EBAY_LISTINGS': 365,
     'EBAY_ORDERS': 365,
+    'DISCOGS_ORDERS': 365,
     'SALES_RECEIPTS': 365,
 }
 

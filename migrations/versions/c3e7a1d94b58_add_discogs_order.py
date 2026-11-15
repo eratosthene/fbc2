@@ -35,6 +35,7 @@ def upgrade():
         sa.Column("fee", sa.Float(), nullable=True),
         sa.Column("total", sa.Float(), nullable=True),
         sa.Column("currency", sa.String(length=3), nullable=True),
+        sa.Column("archived", sa.Boolean(), server_default=sa.false(), nullable=False),
         sa.PrimaryKeyConstraint("order_id"),
     )
     with op.batch_alter_table("discogs_order", schema=None) as batch_op:
@@ -42,6 +43,7 @@ def upgrade():
             batch_op.f("ix_discogs_order_created_time"), ["created_time"]
         )
         batch_op.create_index(batch_op.f("ix_discogs_order_status"), ["status"])
+        batch_op.create_index(batch_op.f("ix_discogs_order_archived"), ["archived"])
     op.create_table(
         "discogs_order_item",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),

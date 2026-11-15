@@ -23,7 +23,18 @@ from sqlalchemy import and_, exists, func, or_
 DEFAULT_DAYS = 365
 
 # The ARCHIVE_AFTER_DAYS keys, in the order the command reports them.
-MODELS = ("UNITS", "EBAY_LISTINGS", "EBAY_ORDERS", "SALES_RECEIPTS")
+MODELS = (
+    "UNITS",
+    "EBAY_LISTINGS",
+    "EBAY_ORDERS",
+    "DISCOGS_ORDERS",
+    "SALES_RECEIPTS",
+)
+
+# A Discogs order is finished when Discogs says so: shipped or refunded, or
+# cancelled (the status then carries the reason, as in "Cancelled (Non-Paying
+# Buyer)"). Orders are not on Sales Receipts yet, so the status is all there is.
+DISCOGS_FINISHED = ("Shipped", "Refund Sent")
 
 
 def cutoffs(config, now=None):
@@ -69,6 +80,7 @@ def candidates(db, cutoff):
     {model key: a query of the records that should be archived but aren't},
     for the keys in `cutoff` ({key: datetime}, from `cutoffs`).
     """
+    from fbc.models.discogs import DiscogsOrder
     from fbc.models.ebay import EbayListing, EbayOrder
     from fbc.models.inventory import Unit
     from fbc.models.sales import SalesReceipt, sales_receipt_ebay_order
@@ -127,6 +139,16 @@ def candidates(db, cutoff):
             EbayOrder.created_time < cutoff["EBAY_ORDERS"],
             EbayOrder.sales_receipts.any(),
             ~EbayOrder.order_id.in_(receipts),
+        )
+
+    if "DISCOGS_ORDERS" in cutoff:
+        found["DISCOGS_ORDERS"] = session.query(DiscogsOrder).filter(
+            DiscogsOrder.archived.is_(False),
+            DiscogsOrder.created_time < cutoff["DISCOGS_ORDERS"],
+            or_(
+                DiscogsOrder.status.in_(DISCOGS_FINISHED),
+                DiscogsOrder.status.like("Cancelled%"),
+            ),
         )
 
     if "SALES_RECEIPTS" in cutoff:

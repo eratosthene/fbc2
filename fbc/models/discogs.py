@@ -413,6 +413,10 @@ class DiscogsOrder(Model):
     # Items plus shipping (and tax), as Discogs works it out.
     total = Column(Float)
     currency = Column(String(3))
+    # Hidden from the list by default; see fbc/sales/archive.py.
+    archived = Column(
+        Boolean, nullable=False, default=False, server_default=false(), index=True
+    )
     items = relationship(
         "DiscogsOrderItem",
         back_populates="discogs_order",

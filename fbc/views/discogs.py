@@ -12,6 +12,7 @@ from fbc.sync.notes import (
     SyncedViewMixin,
 )
 from fbc.core.forms import CustomModelView
+from fbc.sales.archive import ArchivableViewMixin
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.sqla.filters import (
     get_field_setup_query,
@@ -370,7 +371,7 @@ class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
         return back
 
 
-class DiscogsOrderModelView(SyncedViewMixin, CustomModelView):
+class DiscogsOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
     """
     Discogs Marketplace orders as the last sync read them. Read only: an order
     is worked on (invoiced, marked shipped) on Discogs, and the sync picks the
@@ -381,7 +382,13 @@ class DiscogsOrderModelView(SyncedViewMixin, CustomModelView):
     # Items link to Units through listings, which the listings sync keeps.
     synced_by = [DISCOGS_ORDERS, DISCOGS_LISTINGS]
     datamodel = SQLAInterface(DiscogsOrder)
-    base_permissions = ["can_list", "can_show", "can_delete"]
+    base_permissions = [
+        "can_list",
+        "can_show",
+        "can_delete",
+        "can_archive",
+        "can_unarchive",
+    ]
     base_order = ("created_time", "desc")
     list_widget = DiscogsOrderListWidget
     formatters_columns = localtime.formatters("created_time", "last_activity")
@@ -394,7 +401,15 @@ class DiscogsOrderModelView(SyncedViewMixin, CustomModelView):
         "fmt_total",
         "fmt_fee",
     ]
-    search_columns = ["order_id", "buyer", "status", "total", "fee", "created_time"]
+    search_columns = [
+        "order_id",
+        "buyer",
+        "status",
+        "total",
+        "fee",
+        "created_time",
+        "archived",
+    ]
     show_columns = [
         "order_id",
         "created_time",
