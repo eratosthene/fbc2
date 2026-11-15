@@ -9,7 +9,7 @@ instance of the release from the Discogs collection.
 
 import logging
 
-from fbc import devmode
+from fbc.core import devmode
 
 logger = logging.getLogger()
 

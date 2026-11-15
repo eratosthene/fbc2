@@ -13,7 +13,8 @@ from collections import namedtuple
 
 from ebaysdk.exception import ConnectionError
 
-from fbc import devmode, discogs_client, sync
+from fbc import discogs_client, sync
+from fbc.core import devmode
 from fbc.listing import OAuthError, fetch_active_items, trading
 from fbc.util import (
     add_discogs_release,

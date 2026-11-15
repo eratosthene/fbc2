@@ -19,7 +19,7 @@ values in it:
   didn't set it. Uncomment the ones you want.
 - A setting only config.py has is kept, at the end or inside its dict.
 - The secrets (SECRET_KEY, the database URI, and the eBay and Discogs keys
-  fbc/devmode.py blanks) are blanked, and their values added to
+  fbc/core/devmode.py blanks) are blanked, and their values added to
   docker/.env. One already overridden there is only blanked.
 
 Comments in config.py that aren't in config.py.tpl are dropped. Before
@@ -46,12 +46,12 @@ import dump_for_dev  # noqa: E402
 
 Failed = dump_for_dev.Failed
 
-# fbc/settings.py's ENV_PREFIX, which this script can't import without the
+# fbc/core/settings.py's ENV_PREFIX, which this script can't import without the
 # app's packages.
 PREFIX = "FBC_CONFIG_"
 
 # The settings that move to docker/.env. The eBay and Discogs keys are the
-# ones fbc/devmode.py treats as secret.
+# ones fbc/core/devmode.py treats as secret.
 SECRETS = [
     ("SECRET_KEY",),
     ("SQLALCHEMY_DATABASE_URI",),

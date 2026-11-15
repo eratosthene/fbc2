@@ -84,3 +84,10 @@ def _log_time(seconds=None):
         time.time() if seconds is None else seconds, _zone
     )
     return when.timetuple()
+
+
+def naive_utc(when):
+    """A datetime from Discogs (with a zone, or none) as naive UTC, as fbc stores it."""
+    if when is None or when.tzinfo is None:
+        return when
+    return when.astimezone(UTC).replace(tzinfo=None)

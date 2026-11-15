@@ -19,7 +19,7 @@ import logging
 import re
 from xml.sax.saxutils import escape
 
-from fbc import devmode
+from fbc.core import devmode
 
 logger = logging.getLogger()
 

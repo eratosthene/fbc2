@@ -24,12 +24,15 @@ file is what they don't say.
 
 - `fbc/__init__.py` builds the app, the database and every view and menu
   entry **at import time**, from the top-level `config` module.
+- `fbc/core/`: settings, `devmode`, `localtime`, price formatting, the base
+  form and view classes and the widgets. It imports nothing from the other
+  areas. The areas are moving into packages (#157): eBay, Discogs, sync, sales.
 - `fbc/models/`: one module per area (inventory, discogs, ebay, sales,
   supplies). `fbc/views/` matches it.
 - `fbc/listing.py` (eBay drafts and listings), `fbc/shipping.py` (Ship This),
   `fbc/discogs_client.py` (every call to Discogs, and the only module that imports its
   library), `fbc/sync.py` (syncs run in a thread, their state in files, since
-  gunicorn workers don't share memory), `fbc/devmode.py`.
+  gunicorn workers don't share memory), `fbc/core/devmode.py`.
 - `migrations/`: Alembic, through Flask-Migrate. `flask setup-db` builds a new
   database from the models and stamps it, or migrates an existing one.
 - `scripts/`: one-off and admin scripts. `scripts/deprecated_*` is history;
@@ -48,11 +51,12 @@ file is what they don't say.
 - Dev mode (`DEV_MODE` in `config.py` or `FBC_DEV_MODE=1`) blanks the eBay and
   Discogs keys and refuses every request to their hosts. Anything new that
   reaches eBay or Discogs has to go through the guarded functions in
-  `fbc/devmode.py`'s docstring, or check `devmode` itself.
+  `fbc/core/devmode.py`'s docstring, or check `devmode` itself.
 - Tests of anything that uses Discogs fake `fbc.discogs_client` (`tests/fake_discogs.py`),
   not the library; only `tests/test_discogs_seam.py` fakes the library. New
   Discogs calls go in `fbc/discogs_client.py` (see `docs/development.md`).
-- Custom form fields and list widgets live in `fbc/widgets.py`. Menu entries
+- Custom form fields and list widgets live in `fbc/core/widgets.py`, and the
+  base `CustomModelView` and `CustomForm` in `fbc/core/forms.py`. Menu entries
   for a filtered list ("Units w/out Listings") are links built in
   `fbc/__init__.py` from filter dicts the views export, not cloned views.
 

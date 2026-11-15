@@ -3,9 +3,10 @@ import logging
 from flask import abort, flash, redirect, request, url_for
 from flask_appbuilder import expose, has_access
 
-from fbc import devmode, discogs_listing, localtime
+from fbc import discogs_listing
+from fbc.core import devmode, localtime
 from fbc.syncnote import DISCOGS, DISCOGS_LISTINGS, SyncedViewMixin
-from fbc.util import CustomModelView
+from fbc.core.forms import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.models.sqla.filters import (
     get_field_setup_query,
@@ -20,7 +21,7 @@ from fbc.models.discogs import (
     Genre,
     Style,
 )
-from fbc.widgets import (
+from fbc.core.widgets import (
     DiscogsListingListWidget,
     DiscogsReleaseListWidget,
 )

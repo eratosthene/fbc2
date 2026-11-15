@@ -4,6 +4,21 @@ How to work on the app: run it on this machine, test it, and try it against
 a copy of live data. For the live server, see
 [Running fbc in production](production.md).
 
+## How `fbc/` is laid out
+
+`fbc/` is being grouped into packages by area (#157). The packages that exist
+so far:
+
+- `fbc/core/`: what every area uses and that knows nothing about eBay or
+  Discogs. `settings.py`, `devmode.py`, `localtime.py`, `formatting.py` (price
+  and percent), `forms.py` (`CustomForm`, `CustomModelView` and
+  `FilterIdMatches`, the base classes for every view) and `widgets.py`.
+
+The rest is still loose modules in `fbc/`, and moves into `ebay/`, `discogs/`,
+`sync/` and `sales/` in later changes. Package `__init__.py` files are empty,
+so importing one module never imports its neighbours. `models/` may import
+`core/` and modules that import nothing from `fbc` but `core/`.
+
 ## Setting up
 
 The app reads its settings from `config.py`, which isn't in git. Copy
@@ -322,7 +337,7 @@ dropped, because it needs a credit card on file with USPS; the
 [Tracking 3.2 spec](https://developers.usps.com/sites/default/files/apidoc_specs/tracking-v3r2_7.yaml)
 is `POST /tracking/v3r2/tracking` with a list of tracking numbers, if that
 changes. Any such client would keep its state on `EbayOrder` and go through
-`fbc/devmode.py`'s guards.
+`fbc/core/devmode.py`'s guards.
 
 ## Active listings and free insertions
 
@@ -343,14 +358,14 @@ purpose: it must not change with the `TIMEZONE` setting.
 
 ## Times
 
-fbc stores naive UTC. `fbc/localtime.py` turns that into the `TIMEZONE`
+fbc stores naive UTC. `fbc/core/localtime.py` turns that into the `TIMEZONE`
 setting's zone (`America/Chicago` by default) for display, in one format:
 `2026-11-13 5:45 PM`, or `2026-11-13` for a date. Use it for anything new that
 shows a time:
 
 - templates: `{{ value | localtime }}` and `{{ value | localdate }}`;
 - a view's DateTime columns: `formatters_columns = localtime.formatters("col")`;
-- a form field on a UTC column: `fbc.widgets.LocalDateTimeField`, which shows
+- a form field on a UTC column: `fbc.core.widgets.LocalDateTimeField`, which shows
   local time and saves UTC;
 - code: `localtime.fmt_datetime` and `localtime.fmt_date`.
 

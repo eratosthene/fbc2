@@ -1,5 +1,5 @@
 from flask_appbuilder import Model
-from fbc import localtime
+from fbc.core import localtime
 from flask_appbuilder.models.decorators import renders
 import datetime
 import math

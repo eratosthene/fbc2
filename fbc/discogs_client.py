@@ -24,7 +24,7 @@ import datetime
 import logging
 from urllib.parse import urlencode
 
-from fbc import devmode
+from fbc.core import devmode
 
 logger = logging.getLogger()
 

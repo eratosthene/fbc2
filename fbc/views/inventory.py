@@ -1,5 +1,5 @@
 from fbc.archive import ArchivableViewMixin
-from fbc.util import CustomModelView
+from fbc.core.forms import CustomModelView
 from flask import flash, render_template, request, url_for
 from flask_appbuilder import expose
 from flask_appbuilder.security.decorators import has_access
@@ -9,8 +9,8 @@ from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.models.supplies import ADDING_UNIT
-from fbc.util import CustomForm
-from fbc.widgets import SuppliesUsedField
+from fbc.core.forms import CustomForm
+from fbc.core.widgets import SuppliesUsedField
 from markupsafe import Markup
 from wtforms import BooleanField, StringField
 from wtforms.validators import Length, Optional

@@ -1,25 +1,11 @@
 import logging
 import json
 import datetime
-from flask import request
-from flask_wtf import FlaskForm
-from flask_appbuilder import ModelView
-from flask_appbuilder.models.filters import BaseFilter
-from flask_appbuilder.models.sqla.filters import get_field_setup_query
-from sqlalchemy import or_
 
 from fbc import tracking
+from fbc.core.localtime import naive_utc
 
 logger = logging.getLogger()
-
-
-def fprice(num):
-    return "$" + f"{num:.2f}"
-
-
-def fpercent(num):
-    np = num * 100.0
-    return f"{np:.2f}" + "%"
 
 
 def add_ebay_listing(item):
@@ -196,13 +182,6 @@ def mark_ended_listings(remote_item_ids, previous_sync=None):
     return ended
 
 
-def _naive_utc(when):
-    """A datetime from Discogs (with a zone, or none) as naive UTC, as fbc stores it."""
-    if when is None or when.tzinfo is None:
-        return when
-    return when.astimezone(datetime.timezone.utc).replace(tzinfo=None)
-
-
 # Statuses a listing can't come back from. Discogs only lets For Sale, Draft
 # and Expired listings be edited, so those three are still ours to use.
 DISCOGS_ENDED_STATUSES = ("Sold", "Deleted", "Violation", "Suspended")
@@ -240,7 +219,7 @@ def save_discogs_listing(data, seen):
     row.sleeve_condition = data.get("sleeve_condition")
     row.status = data.get("status")
     row.posted = (
-        _naive_utc(parse_timestamp(data["posted"])) if data.get("posted") else None
+        naive_utc(parse_timestamp(data["posted"])) if data.get("posted") else None
     )
     row.url = data.get("uri")
     row.external_id = (data.get("external_id") or "")[:255] or None
@@ -548,90 +527,3 @@ def forget_discogs_instance(instance):
     logger.debug("Removing instance")
     db.session.delete(instance)
     db.session.commit()
-
-
-class CustomForm(FlaskForm):
-    """
-    A custom FlaskForm which reads data from request params
-    """
-
-    @classmethod
-    def refresh(cls, obj=None):
-        kw = dict(obj=obj)
-        if request.method == "GET":
-            kw["formdata"] = request.args
-            logger.info(request.args)
-        form = cls(**kw)
-        return form
-
-
-class CustomModelView(ModelView):
-    """
-    A custom ModelView which overrides the various CRUD templates
-    """
-
-    list_template = "crud/list.html"
-    edit_template = "crud/edit.html"
-    add_template = "crud/add.html"
-    show_template = "crud/show.html"
-
-    def _init_properties(self):
-        """
-        Makes every view searchable by its primary key. Flask-AppBuilder
-        leaves primary keys out of the default search, and views that list
-        their own search_columns mostly forgot the id. An integer id also
-        gets FilterIdMatches, so a range like 100-200 works.
-        """
-        super()._init_properties()
-        pk = self.datamodel.get_pk_name()
-        if not isinstance(pk, str) or pk not in self.datamodel.list_columns:
-            return
-        if pk not in self.search_columns:
-            self.search_columns = [pk] + list(self.search_columns)
-            self._filters = self.datamodel.get_filters(self.search_columns)
-        if self.datamodel.is_integer(pk):
-            # The tables hold filter instances, not classes.
-            mine = FilterIdMatches(pk, self.datamodel)
-            for table in (self._filters._search_filters, self._filters._all_filters):
-                table[pk] = [mine] + [
-                    f for f in table[pk] if not isinstance(f, FilterIdMatches)
-                ]
-
-
-class FilterIdMatches(BaseFilter):
-    """
-    Matches an integer id typed as "42", a range "100-200", or a
-    comma-separated mix of both ("5, 100-200"). Anything that doesn't parse
-    matches nothing, the same as Flask-AppBuilder's own integer filters.
-    """
-
-    name = "Matches id"
-    arg_name = "idm"
-
-    @staticmethod
-    def parse(text):
-        """Returns [(low, high), ...], or None if the text isn't valid."""
-        spans = []
-        for part in str(text).split(","):
-            bounds = [b.strip() for b in part.split("-")]
-            if len(bounds) > 2 or not all(b.isdigit() for b in bounds):
-                return None
-            low, high = int(bounds[0]), int(bounds[-1])
-            spans.append((min(low, high), max(low, high)))
-        return spans
-
-    def apply(self, query, value):
-        query, field = get_field_setup_query(query, self.model, self.column_name)
-        if isinstance(value, (list, tuple)):
-            value = value[0] if value else ""
-        spans = self.parse(value)
-        if not spans:
-            return query.filter(False)
-        return query.filter(
-            or_(
-                *[
-                    field == low if low == high else field.between(low, high)
-                    for low, high in spans
-                ]
-            )
-        )

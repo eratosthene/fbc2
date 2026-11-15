@@ -53,7 +53,8 @@ from difflib import SequenceMatcher
 
 from markupsafe import Markup, escape
 
-from fbc import devmode, discogs_client
+from fbc import discogs_client
+from fbc.core import devmode
 
 logger = logging.getLogger()
 
