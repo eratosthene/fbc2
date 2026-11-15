@@ -23,6 +23,8 @@ from fbc.sales.ship import (
     combinable_orders,
     combined_discount,
     order_receipt,
+    make_other_items,
+    other_item_candidates,
     other_items,
     other_marketplace_notes,
     shipment_units,
@@ -470,6 +472,26 @@ class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
         sold_items, item_problems = other_items(order)
         if sold_items:
             return self._ship_other_items(order, sold_items, item_problems, back)
+        candidates = other_item_candidates(order)
+        if candidates:
+            # Nothing says what this order is: offer to make Other Items of it.
+            if request.form.get("action") == "make_other":
+                made = make_other_items(order, candidates)
+                flash(
+                    "Made "
+                    + ", ".join(i.name for i in made)
+                    + " an Other Item"
+                    + ("" if len(made) == 1 else "s")
+                    + ". Ship it now.",
+                    "success",
+                )
+                return redirect(url_for("EbayOrderModelView.ship", pk=order.order_id))
+            return self.render_template(
+                "ebay_order/make_other.html",
+                title="Ship This",
+                order=order,
+                candidates=candidates,
+            )
         values = request.form if request.method == "POST" else None
         others = combinable_orders(order)
         combine = set((values or request.args).getlist("combine"))

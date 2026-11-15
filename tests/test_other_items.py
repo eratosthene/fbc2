@@ -593,3 +593,57 @@ def test_supplies_used_on_other_items_leave_the_record_supply_cost(app):
     assert totals["other_sales"]["supplies"] == 1.5
     assert totals["other_sales"]["profit"] == 13.5
     assert totals["supply_total"] == 18.5
+
+
+def test_ship_this_offers_to_make_an_other_item_of_an_order_with_no_units(
+    client, finances
+):
+    add_ebay_listing(_ebay_listing_payload("L9", title="Old stereo"))
+    order = _order()
+    url = "/ebayordermodelview/ship/" + order.order_id
+
+    page = client.get(url).get_data(as_text=True)
+    assert "Make Other Item and ship" in page
+    assert db.session.query(OtherItem).count() == 0
+
+    response = client.post(url, data={"action": "make_other"})
+    assert response.status_code == 302
+    item = db.session.query(OtherItem).one()
+    assert (item.ebay_listing_id, item.cost, item.sold) == ("L9", None, False)
+
+    client.post(url, data={"net_sold": "16.50"})
+    assert db.session.get(OtherItem, item.id).sold is True
+    assert db.session.query(SalesReceipt).one().net_sold == 16.5
+
+
+def test_ship_this_doesnt_offer_other_items_for_a_listing_with_a_unit(client, finances):
+    add_ebay_listing(_ebay_listing_payload("L9"))
+    _make_unit(ebay_listing_id="L9")
+    order = _order()
+
+    page = client.get(
+        "/ebayordermodelview/ship/" + order.order_id, follow_redirects=True
+    ).get_data(as_text=True)
+
+    assert "Make Other Item and ship" not in page
+    assert ship.other_item_candidates(order) == []
+
+
+def test_an_old_order_with_no_listing_gets_one_and_an_other_item(client, finances):
+    order = _order(item_id="GONE")
+    order.ebay_listing_id = None
+    db.session.commit()
+    url = "/ebayordermodelview/ship/" + order.order_id
+
+    assert ship.other_item_candidates(order) == [("GONE", "Transformers figure")]
+    client.post(url, data={"action": "make_other"})
+
+    listing = db.session.get(EbayListing, "GONE")
+    assert (listing.ended, listing.archived, listing.price) == (True, True, 25.0)
+    assert listing.end_time == order.created_time
+    item = db.session.query(OtherItem).one()
+    assert item.ebay_listing_id == "GONE"
+
+    client.post(url, data={"net_sold": "16.50"})
+    assert db.session.get(OtherItem, item.id).sold is True
+    assert index.home_totals()["other_sales"]["sold"] == 1
