@@ -48,6 +48,22 @@ circle. Package `__init__.py` files are empty, so importing one module never
 imports its neighbours. `models/` may import `core/` and modules that import
 nothing from `fbc` when they load (`discogs/naming.py`, `ebay/tracking.py`).
 
+`tests/test_layers.py` checks all of this, so an import that goes the wrong
+way fails the suite. Five imports do go up a layer, each inside a function,
+and the test names them: three list columns on a model that run a query
+(`PurchaseLot.figures`, `Unit._discogs_listing_link` and
+`EbayListing.fmt_boxes_available`), and two uses of `sync/state.py`'s `utcnow`
+and `last_finished` from `ebay/insertions.py` and `discogs/listing.py`. #164
+says how they could be removed.
+
+**Where new code goes.** Something that calls eBay is in `ebay/`, and
+something that calls Discogs is in `discogs/`; a new call to Discogs goes in
+`discogs/client.py` (see [Calling Discogs](#calling-discogs)). A new sync is a
+function in `sync/jobs.py`. A screen or report that uses both eBay and Discogs
+data is in `sales/`. A form field, filter or helper that doesn't know about
+either is in `core/`. A new table is a module in `models/`, with its screens
+in `views/`.
+
 ## Setting up
 
 The app reads its settings from `config.py`, which isn't in git. Copy
