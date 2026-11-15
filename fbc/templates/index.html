@@ -13,12 +13,23 @@
     <a href="{{ url_for('ReconcileSuppliesView.reconcile') }}">Reconcile Supplies</a>.
   </div>
   {% endif %}
-  {% set task_total = tasks.orders + tasks.releases + tasks.units + tasks.drafts + tasks.discogs_units + tasks.discogs_drafts %}
+  {% set task_total = tasks.orders + tasks.releases + tasks.units + tasks.drafts + tasks.discogs_units + tasks.discogs_drafts + tasks.discogs_orders %}
+  {% if tasks.failed_endings %}
+  <div class="alert alert-danger">
+    <strong>Sold twice?</strong>
+    <a href="{{ url_for('FailedEndingsView.list') }}">{{ tasks.failed_endings }}
+      listing{{ "" if tasks.failed_endings == 1 else "s" }}</a> couldn't be ended
+    after the Unit sold on the other marketplace. End
+    {{ "it" if tasks.failed_endings == 1 else "them" }} by hand now.
+  </div>
+  {% endif %}
   {% if task_total %}
   <div class="alert alert-info">
     <strong>To do:</strong>
     {% if tasks.orders %}<a href="{{ url_for('OrdersToShipView.list') }}">{{ tasks.orders }}
       eBay order{{ "" if tasks.orders == 1 else "s" }} to ship</a>{% endif %}
+    {% if tasks.discogs_orders %}<a href="{{ url_for('DiscogsOrdersToShipView.list') }}">{{ tasks.discogs_orders }}
+      Discogs order{{ "" if tasks.discogs_orders == 1 else "s" }} to ship</a>{% endif %}
     {% if tasks.releases %}<a href="{{ url_for('ReleasesNeedingUnitsView.list') }}">{{ tasks.releases }}
       Discogs release{{ "" if tasks.releases == 1 else "s" }} that need a Unit</a>{% endif %}
     {% if tasks.units %}<a href="{{ url_for('UnitsNeedingDraftsView.list') }}">{{ tasks.units }}
@@ -69,6 +80,26 @@
     to see how many listings are active and how many free insertions this
     month has used.
   </p>
+  {% endif %}
+
+  {% if marketplace_sales %}
+  <h2>Sales by marketplace</h2>
+  <table class="table table-condensed" style="width: auto">
+    <tr><th></th><th class="text-right">Sales Receipts</th><th class="text-right">Sold Price</th><th class="text-right">Net Sold</th></tr>
+    {% for m in marketplace_sales %}
+    <tr>
+      <td>{{ m.name }}</td>
+      <td class="text-right">{{ m.receipts }}</td>
+      <td class="text-right">{{ "${:,.2f}".format(m.gross|float) }}</td>
+      <td class="text-right">{{ "${:,.2f}".format(m.net|float) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% if marketplace_sales|selectattr("name", "equalto", "Discogs")|list %}
+  <p class="text-muted">Discogs's API gives an order's total and its selling fee
+  but not its payment processing fee or the label cost, so a Discogs sale's Net
+  Sold is the total less its fee until you correct it on its Sales Receipt.</p>
+  {% endif %}
   {% endif %}
 
   <h2>Stock</h2>

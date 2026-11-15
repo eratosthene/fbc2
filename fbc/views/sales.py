@@ -12,12 +12,13 @@ from fbc.core.forms import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from fbc.models.ebay import EbayListing, EbayOrder
-from fbc.models.sales import MANUAL, SalesReceipt
+from fbc.models.sales import MANUAL, ListingEnd, SalesReceipt
 from fbc.ebay.finances import shipment_earnings
 from fbc.sales.ship import (
     combinable_orders,
     combined_discount,
     order_receipt,
+    other_marketplace_notes,
     shipment_units,
     ship_order,
 )
@@ -76,10 +77,11 @@ class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
         "fmt_sold_price": "Sold Price",
         "fmt_net_sold": "Net Sold",
         "ebay_orders": "eBay Orders",
+        "discogs_orders": "Discogs Orders",
     }
-    show_columns = ["date", "ebay_orders", "sold_price", "net_sold"]
-    # Lines come from eBay (Ship This and Refresh Earnings), not the form.
-    add_columns = ["ebay_orders", "date", "sold_price", "net_sold"]
+    show_columns = ["date", "ebay_orders", "discogs_orders", "sold_price", "net_sold"]
+    # Lines come from eBay or Discogs (Ship This and Refresh Earnings), not the form.
+    add_columns = ["ebay_orders", "discogs_orders", "date", "sold_price", "net_sold"]
     edit_columns = add_columns
     search_columns = add_columns + ["archived"]
 
@@ -143,6 +145,7 @@ class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
             related_views=self._related_views,
             receipt=receipt,
             shared_order=SHARED_ORDER if receipt.order_receipts() > 1 else None,
+            discogs_note=bool(receipt.discogs_orders),
         )
 
     @expose("/earnings/<pk>", methods=["GET", "POST"])
@@ -468,9 +471,38 @@ class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
             known_items=known_items,
             discount=combined_discount(orders, earnings),
             discogs=discogs,
+            notes=other_marketplace_notes(units, "eBay"),
             supplies=supplies,
             values=values,
         )
+
+
+class ListingEndModelView(CustomModelView):
+    """
+    The listings fbc ended, or tried to end, because their Unit sold on the
+    other marketplace (see fbc/sync/ending.py). Read only: it's a log.
+    """
+
+    datamodel = SQLAInterface(ListingEnd)
+    base_permissions = ["can_list", "can_show"]
+    base_order = ("updated", "desc")
+    formatters_columns = localtime.formatters("created", "updated")
+    list_columns = [
+        "updated",
+        "unit",
+        "fmt_order",
+        "ended_on",
+        "fmt_listing",
+        "status",
+        "message",
+    ]
+    show_columns = list_columns + ["created"]
+    search_columns = ["unit", "sold_on", "ended_on", "listing_ref", "status"]
+    label_columns = {
+        "fmt_order": "Sold On",
+        "fmt_listing": "Listing",
+        "ended_on": "Ended On",
+    }
 
 
 class MysteryBoxesView(BaseView):

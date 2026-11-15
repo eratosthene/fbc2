@@ -3,7 +3,17 @@ import logging
 from flask import abort, flash, redirect, request, url_for
 from flask_appbuilder import expose, has_access
 
+from markupsafe import Markup
+
 from fbc.discogs import listing as discogs_listing
+from fbc.discogs.removal import discogs_plan, remove_from_discogs
+from fbc.sales.ship import (
+    discogs_earnings,
+    discogs_shipment_units,
+    other_marketplace_notes,
+    ship_discogs_order,
+)
+from fbc.sales.stock import fmt_supplies, stock_problems, supplies_plan, supply_counts
 from fbc.core import devmode, localtime
 from fbc.sync.notes import (
     DISCOGS,
@@ -373,9 +383,9 @@ class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
 
 class DiscogsOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
     """
-    Discogs Marketplace orders as the last sync read them. Read only: an order
-    is worked on (invoiced, marked shipped) on Discogs, and the sync picks the
-    change up. Rows can be deleted from fbc (only fbc's row), to clear out
+    Discogs Marketplace orders as the last sync read them. An order is worked
+    on (invoiced, marked shipped) on Discogs, and the sync picks the change
+    up; Ship This only records the sale in fbc. Rows can be deleted from fbc (only fbc's row), to clear out
     test data; the next sync brings back any that Discogs still has.
     """
 
@@ -388,6 +398,7 @@ class DiscogsOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelVie
         "can_delete",
         "can_archive",
         "can_unarchive",
+        "can_ship",
     ]
     base_order = ("created_time", "desc")
     list_widget = DiscogsOrderListWidget
@@ -400,6 +411,7 @@ class DiscogsOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelVie
         "status",
         "fmt_total",
         "fmt_fee",
+        "links",
     ]
     search_columns = [
         "order_id",
@@ -429,8 +441,102 @@ class DiscogsOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelVie
         "fmt_total": "Total",
         "fmt_fee": "Discogs Fee",
         "fmt_shipping": "Shipping",
+        "links": "Links",
     }
     description_columns = {
         "fmt_fee": "Discogs's selling fee. Its payment processing fee isn't in the API.",
         "fmt_total": "Items and shipping, as Discogs works it out.",
     }
+
+    def _order(self, pk):
+        order = self.datamodel.get(pk)
+        if not order:
+            abort(404)
+        return order
+
+    @expose("/ship/<pk>", methods=["GET", "POST"])
+    @has_access
+    def ship(self, pk):
+        """
+        Ship This for a Discogs order: record a Sales Receipt for it, mark its
+        Units sold, take the supplies used out of stock and remove the Units'
+        instances from the Discogs collection. It doesn't change the order on
+        Discogs: invoice it and mark it shipped there. GET shows what will
+        happen; POST does it.
+        """
+        order = self._order(pk)
+        back = redirect(url_for("DiscogsOrderModelView.list"))
+        if order.sales_receipts:
+            flash("This order already has a Sales Receipt.", "warning")
+            return back
+        if order.is_cancelled():
+            flash("This order was cancelled, so there's nothing to ship.", "warning")
+            return back
+        units, problems = discogs_shipment_units(order)
+        if units is None:
+            for problem in problems:
+                flash(problem, "warning")
+            flash(
+                Markup(
+                    "Ship This can't tell which Units these are, so ship it by"
+                    ' hand: mark the Units sold and <a href="{0}">add its Sales'
+                    " Receipt</a>."
+                ).format(order.add_receipt_url()),
+                "warning",
+            )
+            return back
+        values = request.form if request.method == "POST" else None
+        supplies = supplies_plan(units)
+        lines, earned = discogs_earnings(order)
+        if values is not None:
+            problems = []
+            try:
+                net_sold = float(values.get("net_sold", "").strip().lstrip("$"))
+            except ValueError:
+                problems.append("Enter Net Sold as a number of dollars.")
+            try:
+                used = supply_counts(values, [s for s, _ in supplies])
+                problems.extend(stock_problems(used))
+            except ValueError as e:
+                problems.append(str(e))
+            if not problems:
+                receipt = ship_discogs_order(order, units, net_sold, used, lines)
+                names = units[0].name if len(units) == 1 else str(len(units)) + " Units"
+                flash(
+                    "Recorded a Sales Receipt for $"
+                    + f"{net_sold:.2f}"
+                    + " and marked "
+                    + names
+                    + " sold.",
+                    "success",
+                )
+                for line in receipt.lines:
+                    if line.kind == "MANUAL":
+                        flash(
+                            "Net Sold differs from Discogs's total less its fee by "
+                            + line.fmt_amount()
+                            + ", so the Sales Receipt keeps that as a manual"
+                            " adjustment.",
+                            "info",
+                        )
+                if used:
+                    flash("Took " + fmt_supplies(used) + " out of supplies.", "success")
+                for unit in units:
+                    if values.get("remove_discogs-" + str(unit.id)):
+                        message, category = remove_from_discogs(unit)
+                        flash(message, category)
+                return back
+            for problem in problems:
+                flash(problem, "danger")
+        return self.render_template(
+            "discogs_order/ship.html",
+            title="Ship This",
+            order=order,
+            units=units,
+            earned=earned,
+            lines=lines,
+            notes=other_marketplace_notes(units, "Discogs"),
+            discogs=[(unit,) + discogs_plan(unit) for unit in units],
+            supplies=supplies,
+            values=values,
+        )

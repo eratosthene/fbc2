@@ -410,6 +410,15 @@ def test_reading_and_editing_a_listing(library):
     ) in lib.requests
 
 
+def test_deleting_a_listing(library):
+    lib = library({})
+    account = discogs_client.Account(lib)
+
+    account.delete_listing(7001)
+
+    assert ("DELETE", "/marketplace/listings/7001", None) in lib.requests
+
+
 # --- Timestamps ---
 
 

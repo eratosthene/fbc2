@@ -175,6 +175,7 @@ def test_earnings_totals_split_a_periods_receipts_by_kind_of_line(db):
         "net": 31.6,
         "sales": 25.3,
         "ebay_fees": -4.07,
+        "discogs_fees": 0.0,
         "ad_fees": -3.0,
         "labels": -4.63,
         "refunds": -5.0,

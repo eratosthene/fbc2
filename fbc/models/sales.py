@@ -17,6 +17,9 @@ from sqlalchemy.orm import relationship
 # SalesReceiptLine.kind is eBay's transactionType (SALE, SHIPPING_LABEL,
 # REFUND, NON_SALE_CHARGE...) for a whole transaction, or one of these.
 FEE = "FEE"  # one of eBay's fees, taken out of a sale
+# Discogs's selling fee. Its API gives no payment processing fee, so this is
+# the only Discogs fee a receipt can show until Net Sold is corrected by hand.
+DISCOGS_FEE = "DISCOGS_SELLING_FEE"
 MANUAL = "MANUAL"  # what's left when Net Sold differs from eBay's lines
 MANUAL_LABEL = "Manual adjustment"
 
@@ -24,6 +27,7 @@ MANUAL_LABEL = "Manual adjustment"
 CATEGORY_LABELS = {
     "sales": "Sales",
     "ebay_fees": "eBay fees",
+    "discogs_fees": "Discogs fees",
     "ad_fees": "Ad fees",
     "labels": "Shipping labels",
     "refunds": "Refunds",
@@ -61,6 +65,8 @@ SELLING_FEE_TYPES = {
 
 def line_category(kind, fee_type=None):
     """Which of CATEGORY_LABELS a line of `kind` and `fee_type` counts in."""
+    if fee_type == DISCOGS_FEE:
+        return "discogs_fees"
     if fee_type in AD_FEE_TYPES:
         return "ad_fees"
     if kind == "NON_SALE_CHARGE" and fee_type in SELLING_FEE_TYPES:
@@ -143,6 +149,28 @@ sales_receipt_ebay_order = Table(
 )
 
 
+# The Discogs orders a Sales Receipt covers. Ship This makes one receipt per
+# Discogs order, but the table matches the eBay one so a receipt can go on
+# covering more than one, as eBay's can.
+sales_receipt_discogs_order = Table(
+    "sales_receipt_discogs_order",
+    Model.metadata,
+    Column(
+        "sales_receipt_id",
+        Integer,
+        ForeignKey("sales_receipt.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "discogs_order_id",
+        String(30),
+        ForeignKey("discogs_order.order_id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    ),
+)
+
+
 class SalesReceipt(Model):
     __tablename__ = "sales_receipt"
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -152,6 +180,12 @@ class SalesReceipt(Model):
         secondary=sales_receipt_ebay_order,
         back_populates="sales_receipts",
         order_by="EbayOrder.created_time",
+    )
+    discogs_orders = relationship(
+        "DiscogsOrder",
+        secondary=sales_receipt_discogs_order,
+        back_populates="sales_receipts",
+        order_by="DiscogsOrder.created_time",
     )
     sold_price = Column(Float)
     net_sold = Column(Float)
@@ -169,7 +203,16 @@ class SalesReceipt(Model):
     )
 
     def order_ids(self):
+        """The eBay orders' ids, for eBay's earnings."""
         return [order.order_id for order in self.ebay_orders]
+
+    def marketplace(self):
+        """Where it sold: "eBay", "Discogs", or "" for a receipt with no order."""
+        if self.ebay_orders:
+            return "eBay"
+        if self.discogs_orders:
+            return "Discogs"
+        return ""
 
     def order_receipts(self):
         """
@@ -240,11 +283,13 @@ class SalesReceipt(Model):
 
     def __repr__(self):
         ret = str(self.date)
-        if self.ebay_orders:
-            first = self.ebay_orders[0]
-            ret = ret + " [" + first.order_id + "|" + (first.title or "")[:45]
-            if len(self.ebay_orders) > 1:
-                ret = ret + " +" + str(len(self.ebay_orders) - 1) + " more"
+        orders = self.ebay_orders or self.discogs_orders
+        if orders:
+            first = orders[0]
+            title = first.title if self.ebay_orders else first.fmt_title()
+            ret = ret + " [" + first.order_id + "|" + (title or "")[:45]
+            if len(orders) > 1:
+                ret = ret + " +" + str(len(orders) - 1) + " more"
             ret = ret + "] "
         ret = ret + " $" + f"{self.sold_price:.2f}" + "/$" + f"{self.net_sold:.2f}"
         return ret
@@ -269,8 +314,26 @@ class SalesReceipt(Model):
         else:
             return ret
 
+    def fmt_discogs_order(self, markup=True):
+        ret = "<br>".join(
+            '<a href="https://www.discogs.com/sell/order/'
+            + order.order_id
+            + '">Discogs:Order&nbsp;'
+            + order.fmt_total()
+            + "</a>"
+            for order in self.discogs_orders
+        )
+        if markup:
+            return Markup(ret)
+        else:
+            return ret
+
     def link_column(self, markup=True):
-        ret = self.fmt_ebay_order(False)
+        ret = "<br>".join(
+            part
+            for part in (self.fmt_ebay_order(False), self.fmt_discogs_order(False))
+            if part
+        )
         if markup:
             return Markup(ret)
         else:
@@ -376,3 +439,52 @@ def earnings_totals(start=None, end=None):
         key: round(value, 2) if isinstance(value, float) else value
         for key, value in totals.items()
     }
+
+
+# ListingEnd.status
+ENDED = "ended"
+FAILED = "failed"
+
+
+class ListingEnd(Model):
+    """
+    One time fbc ended (or tried to end) a Unit's listing on one marketplace
+    because the Unit sold on the other (see fbc/sync/ending.py). A row is
+    kept per listing: a failed end is tried again after each orders sync and
+    its row updated, so a failure that is still open is the one to look at.
+    """
+
+    __tablename__ = "listing_end"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    unit_id = Column(Integer, ForeignKey("unit.id"), nullable=False, index=True)
+    unit = relationship("Unit")
+    # "eBay" or "Discogs": where it sold, and where the listing was.
+    sold_on = Column(String(10), nullable=False)
+    ended_on = Column(String(10), nullable=False)
+    # The eBay item ID or Discogs listing ID of what was ended.
+    listing_ref = Column(String(30), nullable=False, index=True)
+    # The order that sold the Unit.
+    order_id = Column(String(30))
+    status = Column(String(10), nullable=False, index=True)
+    # What happened, in words for the owner.
+    message = Column(String(255))
+    # UTC. `created` is the first try, `updated` the latest.
+    created = Column(DateTime, nullable=False)
+    updated = Column(DateTime, nullable=False)
+
+    def __repr__(self):
+        return self.ended_on + " " + self.listing_ref + ": " + (self.status or "")
+
+    def fmt_listing(self):
+        if self.ended_on == "eBay":
+            return Markup(
+                '<a href="https://www.ebay.com/itm/{0}" target="_blank"'
+                ' rel="noopener">eBay {0}</a>'
+            ).format(self.listing_ref)
+        return Markup(
+            '<a href="https://www.discogs.com/sell/item/{0}" target="_blank"'
+            ' rel="noopener">Discogs {0}</a>'
+        ).format(self.listing_ref)
+
+    def fmt_order(self):
+        return (self.sold_on + " " + (self.order_id or "")).strip()

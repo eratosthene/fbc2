@@ -400,6 +400,14 @@ class Account:
         with _api_errors():
             self._c._post(_url(self._c, path), fields)
 
+    def delete_listing(self, listing_id):
+        """
+        Delete a listing, which ends it (Draft or For Sale). Discogs answers
+        404 when it's already gone, which is raised as ApiError.
+        """
+        with _api_errors():
+            self._c._delete(_url(self._c, "/marketplace/listings/%d" % int(listing_id)))
+
     def orders(self, created_after=None):
         """
         The seller's orders, newest first, as the JSON Discogs sent: every

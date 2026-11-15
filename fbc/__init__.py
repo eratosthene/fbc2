@@ -342,12 +342,15 @@ def _register_views():
     from fbc.views.sales import (
         EbayOrderModelView,
         EbayListingModelView,
+        ListingEndModelView,
         MysteryBoxesView,
         SalesReceiptModelView,
     )
     from fbc.views.listing import EbayDraftModelView, DRAFTS_TO_LIST_FILTERS
     from fbc.views.discogs import DISCOGS_DRAFTS_TO_LIST_FILTERS
     from fbc.views.tasks import (
+        DiscogsOrdersToShipView,
+        FailedEndingsView,
         OrdersToShipView,
         ReleasesNeedingUnitsView,
         UnitsNeedingDiscogsDraftsView,
@@ -412,12 +415,19 @@ def _register_views():
         )
         appbuilder.add_view(DiscogsOrderModelView, "Discogs Orders", category="Sales")
         appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
+        appbuilder.add_view(ListingEndModelView, "Ended Listings", category="Sales")
         drafts = appbuilder.add_view(
             EbayDraftModelView, "eBay Drafts", category="Sales"
         )
         appbuilder.add_view(MysteryBoxesView, "Mystery Boxes", category="Sales")
         appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Sales")
         appbuilder.add_view(OrdersToShipView, "Orders to Ship", category="Tasks")
+        appbuilder.add_view(
+            DiscogsOrdersToShipView, "Discogs Orders to Ship", category="Tasks"
+        )
+        appbuilder.add_view(
+            FailedEndingsView, "Listings to End by Hand", category="Tasks"
+        )
         appbuilder.add_view(
             ReleasesNeedingUnitsView, "Releases to Make Units", category="Tasks"
         )
