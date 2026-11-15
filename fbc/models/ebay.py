@@ -39,6 +39,10 @@ class EbayListing(Model):
     # When the listing renews next, from eBay's Time Left at the last
     # listings sync (UTC); see insertions.renewal_time.
     renews_at = Column(DateTime)
+    # eBay's category for the listing, read when it was synced: Music > Vinyl
+    # Records is 176985. None when it couldn't be read (yet), and then the
+    # listing is treated as a record's. See fbc/ebay/sorting.py.
+    category_id = Column(String(20))
     # A mystery box listing sells `pick_count` random Units from one Storage
     # Box with each sale, so none of those Units is linked to it. Columns,
     # not a SKU: fbc doesn't keep SKUs, and these show on the edit page.

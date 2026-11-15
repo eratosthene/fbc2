@@ -5,7 +5,7 @@ from flask import flash, jsonify, redirect, request, url_for
 from flask_appbuilder import IndexView, has_access
 from flask_appbuilder.views import expose
 
-from fbc.sales import tasks
+from fbc.sales import other, tasks
 from fbc.sync import jobs, state
 from fbc.ebay import insertions
 
@@ -18,19 +18,26 @@ NO_ORDER_NAME = "In person or not linked to an order"
 def marketplace_sales():
     """
     [{"name", "receipts", "gross", "net", "no_order"}] for eBay, Discogs and
-    receipts with no order (no_order is True for that one), from the Sales Receipts. Discogs's net is its total less
+    receipts with no order (no_order is True for that one), from the Sales
+    Receipts, except Other Items' (see other.sales). Discogs's net is its total less
     its fee unless corrected by hand: its API has no payment processing fee.
     """
     from fbc import db
+    from fbc.models import other as other_models
     from fbc.models.sales import SalesReceipt
 
     # eBay and Discogs are always listed, even at zero, so a marketplace
     # with no sales yet is still there. The row for receipts with no order
     # is only listed when there are some.
     rows = {name: [0, 0.0, 0.0] for name in ("eBay", "Discogs", "")}
-    for receipt in db.session.query(SalesReceipt).options(
-        sa.orm.selectinload(SalesReceipt.ebay_orders),
-        sa.orm.selectinload(SalesReceipt.discogs_orders),
+    # Other Items' sales have a line of their own, so they aren't in these.
+    for receipt in (
+        db.session.query(SalesReceipt)
+        .filter(SalesReceipt.id.notin_(other_models.receipt_ids()))
+        .options(
+            sa.orm.selectinload(SalesReceipt.ebay_orders),
+            sa.orm.selectinload(SalesReceipt.discogs_orders),
+        )
     ):
         row = rows[receipt.marketplace()]
         row[0] += 1
@@ -112,6 +119,9 @@ def home_totals():
     # Expenses on a Purchase Order are part of its price, and count as
     # expenses, not supplies.
     supply_total -= purchase_order_expense_total()
+    # Shipping supplies used on Other Items' sales are theirs, not the records'.
+    other_sales = other.sales()
+    supply_total -= other_sales["supplies"]
     for u in units:
         # A unit whose box no longer exists counts as having no box.
         box = box_totals[u.storage_box_id if u.storage_box_id in box_ids else 0]
@@ -215,6 +225,7 @@ def home_totals():
         "listings": insertions.listing_summary(),
         "tasks": tasks.counts(),
         "marketplace_sales": marketplace_sales(),
+        "other_sales": other_sales,
     }
 
 

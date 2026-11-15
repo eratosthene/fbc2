@@ -266,6 +266,21 @@ def fetch_active_items(page_size=200):
     return list(items.values())
 
 
+def item_category(item_id):
+    """
+    (eBay's category id for a listing, errors) from GetItem. The id is None
+    when eBay couldn't say, with what went wrong in `errors`.
+    """
+    resp, summary = _call("GetItem", {"ItemID": item_id})
+    if resp is None or summary["errors"]:
+        return None, summary["errors"] or ["No response."]
+    category = (resp.get("Item") or {}).get("PrimaryCategory") or {}
+    category_id = category.get("CategoryID")
+    if not category_id:
+        return None, ["eBay's reply had no category."]
+    return str(category_id), []
+
+
 def seller_profiles():
     """
     The seller's business policies from GetUserPreferences, as

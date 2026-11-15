@@ -14,6 +14,16 @@ def supplies_plan(units):
     return [(s, s.shipping_count(sizes)) for s in Supply.used_for_list(SHIPPING)]
 
 
+def other_supplies_plan():
+    """
+    [(supply, 0)] for every supply used for shipping, for an Other Item's
+    order: a record's size doesn't apply, so each is entered by hand.
+    """
+    from fbc.models.supplies import SHIPPING, Supply
+
+    return [(s, 0) for s in Supply.used_for_list(SHIPPING)]
+
+
 def supply_counts(form, supplies, prefix="supply-"):
     """
     {supply: count} from the `prefix`<id> fields of `form` for each of

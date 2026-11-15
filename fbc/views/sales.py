@@ -4,6 +4,8 @@ from flask_appbuilder.actions import action
 from flask_appbuilder.models.filters import BaseFilter
 import sqlalchemy as sa
 from markupsafe import Markup
+from flask_appbuilder.models.sqla.filters import get_field_setup_query
+from sqlalchemy import or_
 from wtforms.validators import Optional
 
 from fbc.ebay import mystery
@@ -14,17 +16,25 @@ from fbc.core.forms import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from fbc.models.ebay import EbayListing, EbayOrder
+from fbc.models.other import listing_ids as other_listing_ids
 from fbc.models.sales import MANUAL, ListingEnd, SalesReceipt
 from fbc.ebay.finances import shipment_earnings
 from fbc.sales.ship import (
     combinable_orders,
     combined_discount,
     order_receipt,
+    other_items,
     other_marketplace_notes,
     shipment_units,
     ship_order,
 )
-from fbc.sales.stock import fmt_supplies, stock_problems, supplies_plan, supply_counts
+from fbc.sales.stock import (
+    fmt_supplies,
+    other_supplies_plan,
+    stock_problems,
+    supplies_plan,
+    supply_counts,
+)
 from fbc.discogs.removal import discogs_plan, remove_from_discogs
 from fbc.core.widgets import (
     LocalDateTimeField,
@@ -33,6 +43,16 @@ from fbc.core.widgets import (
 )
 from fbc.views.inventory import UnitModelView
 from fbc.core.forms import CustomForm
+
+
+class FilterNotInSelect(BaseFilter):
+    name = "Filter view where field is not in a SELECT returned by a function"
+    arg_name = "not_in_sel"
+
+    def apply(self, query, func):
+        query, field = get_field_setup_query(query, self.model, self.column_name)
+        # NOT IN is never true for a NULL field, which should stay in the list.
+        return query.filter(or_(field.is_(None), field.notin_(func())))
 
 
 # Why a receipt whose eBay order is on other receipts gets no lines.
@@ -256,6 +276,8 @@ class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
 class EbayListingModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
     synced_by = [EBAY_LISTINGS]
     datamodel = SQLAInterface(EbayListing)
+    # Other Items' listings are on the Other Items list instead.
+    base_filters = [["item_id", FilterNotInSelect, other_listing_ids]]
     base_order = ("start_time", "desc")
     list_widget = EbayListingListWidget
     formatters_columns = localtime.formatters("start_time")
@@ -324,6 +346,9 @@ class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
     # An order links to its listing, which the listings sync keeps.
     synced_by = [EBAY_ORDERS, EBAY_LISTINGS]
     datamodel = SQLAInterface(EbayOrder)
+    # Orders for Other Items are on the Other Items list instead (and still on
+    # Orders to Ship, which has its own filter).
+    base_filters = [["ebay_listing_id", FilterNotInSelect, other_listing_ids]]
     base_order = ("created_time", "desc")
     list_widget = EbayOrderListWidget
     formatters_columns = localtime.formatters("created_time")
@@ -396,6 +421,9 @@ class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
         if order_receipt(order):
             flash("This order already has a Sales Receipt.", "warning")
             return back
+        sold_items, item_problems = other_items(order)
+        if sold_items:
+            return self._ship_other_items(order, sold_items, item_problems, back)
         values = request.form if request.method == "POST" else None
         others = combinable_orders(order)
         combine = set((values or request.args).getlist("combine"))
@@ -522,6 +550,73 @@ class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
             discount=combined_discount(orders, earnings),
             discogs=discogs,
             notes=other_marketplace_notes(units, "eBay"),
+            supplies=supplies,
+            values=values,
+        )
+
+    def _ship_other_items(self, order, items, problems, back):
+        """
+        Ship This for an order of Other Items: one Sales Receipt, the Items
+        marked sold, and the supplies typed in by hand. No Units, no
+        combining with other orders and no Discogs.
+        """
+        if problems:
+            for problem in problems:
+                flash(problem, "warning")
+            flash(
+                Markup(
+                    'Ship it by hand: <a href="{0}">add its Sales Receipt</a>.'
+                ).format(order.add_receipt_url()),
+                "warning",
+            )
+            return back
+        values = request.form if request.method == "POST" else None
+        supplies = other_supplies_plan()
+        earnings = shipment_earnings([order.order_id])
+        known_items = len(order.items) or 1
+        missing_items = earnings["items"] > known_items
+        if values is not None and not missing_items:
+            problems = []
+            try:
+                net_sold = float(values.get("net_sold", "").strip().lstrip("$"))
+            except ValueError:
+                problems.append("Enter Net Sold as a number of dollars.")
+            try:
+                used = supply_counts(values, [s for s, _ in supplies])
+                problems.extend(stock_problems(used))
+            except ValueError as e:
+                problems.append(str(e))
+            if not problems:
+                receipt = ship_order(
+                    [order],
+                    [],
+                    net_sold,
+                    used,
+                    earnings["lines"],
+                    other_items=items,
+                )
+                flash(
+                    "Recorded a Sales Receipt for $"
+                    + f"{net_sold:.2f}"
+                    + " and marked "
+                    + ", ".join(i.name for i in items)
+                    + " sold.",
+                    "success",
+                )
+                flash_adjustment(receipt)
+                if used:
+                    flash("Took " + fmt_supplies(used) + " out of supplies.", "success")
+                return back
+            for problem in problems:
+                flash(problem, "danger")
+        return self.render_template(
+            "ebay_order/ship_other.html",
+            title="Ship This",
+            order=order,
+            items=items,
+            earnings=earnings,
+            missing_items=missing_items,
+            known_items=known_items,
             supplies=supplies,
             values=values,
         )

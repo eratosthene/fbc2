@@ -1,0 +1,72 @@
+{% extends "appbuilder/base.html" %}
+{% from "sales_receipt/lines.html" import lines_table, money %}
+{% block content %}
+<h3>Ship This: Other Item</h3>
+<p>Buy the shipping label on eBay before shipping this here; the earnings below
+come from eBay and only take the label off once it's bought. An Other Item isn't
+a record, so it doesn't change stock, cost or profit for records.</p>
+
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>Order</th><th>Date</th><th>Items</th><th>Sold Price</th><th>Shipping paid</th></tr>
+  <tr>
+    <td>{{ order.fmt_url() }}</td>
+    <td>{{ order.created_time | localtime }}</td>
+    <td>{% for item in order.items %}{% if not loop.first %}<br>{% endif %}{{ item.title }}{% if item.quantity > 1 %} &times;{{ item.quantity }}{% endif %}{% else %}{{ order.title }}{% endfor %}</td>
+    <td class="text-right">{{ order.fmt_price() }}</td>
+    <td class="text-right">{% if order.shipping is not none %}{{ money(order.shipping) }}{% endif %}</td>
+  </tr>
+</table>
+<p>Buyer: {{ order.buyer }}</p>
+
+<h4>Other Items</h4>
+<ul>
+  {% for item in items %}
+  <li><a href="{{ url_for('OtherItemModelView.show', pk=item.id) }}">{{ item.name }}</a></li>
+  {% endfor %}
+</ul>
+
+<h4>Earnings</h4>
+{% for e in earnings.errors %}<div class="alert alert-danger">{{ e }}</div>{% endfor %}
+{% for w in earnings.warnings %}<div class="alert alert-warning">{{ w }}</div>{% endfor %}
+{% if missing_items %}
+<div class="alert alert-danger">eBay says this order has {{ earnings["items"] }}
+items, and fbc only knows of {{ known_items }}. Sync eBay orders to get every
+item, then try again.</div>
+{% endif %}
+{% if earnings.lines %}
+{{ lines_table(earnings.lines, "Earnings", earnings.net) }}
+{% endif %}
+
+<form method="post" action="{{ url_for('EbayOrderModelView.ship', pk=order.order_id) }}">
+  <div class="form-group" style="max-width: 200px">
+    <label for="net_sold">Net Sold</label>
+    <input type="text" id="net_sold" name="net_sold" class="form-control" required
+      value="{% if values is not none %}{{ values.get('net_sold', '') }}{% elif earnings.net is not none %}{{ '%.2f'|format(earnings.net) }}{% endif %}">
+  </div>
+  <h4>Supplies used</h4>
+  {% if supplies %}
+  <p>Enter how many of each were used; a record's size doesn't apply here, so
+  none is filled in. Count single uses, like labels, not rolls.</p>
+  <table class="table table-bordered table-condensed" style="width: auto">
+    <tr><th>Supply</th><th>In stock</th><th>Used</th></tr>
+    {% for supply, count in supplies %}
+    <tr>
+      <td><label for="supply-{{ supply.id }}">{{ supply.name }}</label></td>
+      <td>{{ supply.fmt_quantity() }}</td>
+      <td><input type="number" min="0" step="1" id="supply-{{ supply.id }}"
+        name="supply-{{ supply.id }}" value="{{ values.get('supply-%d' % supply.id, count) if values is not none else count }}"
+        class="form-control input-sm" style="width: 6em"></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p>No supplies are set as Used For shipping, so none will be taken out of
+  stock. Set them on the <a href="{{ url_for('SupplyModelView.list') }}">Supply List</a>.</p>
+  {% endif %}
+  <p>Shipping records one Sales Receipt for Net Sold, with eBay's earnings lines
+  (and a manual adjustment line if Net Sold differs from them), marks the Other
+  Item sold with it and takes the supplies used out of stock.</p>
+  <button name="action" value="ship" class="btn btn-primary" {% if missing_items %}disabled{% endif %}>Ship</button>
+  <a href="{{ url_for('EbayOrderModelView.list') }}" class="btn btn-default">Cancel</a>
+</form>
+{% endblock %}
