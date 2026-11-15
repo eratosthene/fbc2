@@ -24,10 +24,6 @@ from fbc.sync.notes import (
 from fbc.core.forms import CustomModelView
 from fbc.sales.archive import ArchivableViewMixin
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder.models.sqla.filters import (
-    get_field_setup_query,
-)
-from flask_appbuilder.models.filters import BaseFilter
 
 from fbc.models.discogs import (
     Artist,
@@ -47,28 +43,6 @@ from fbc.views.inventory import UnitModelView
 
 
 logger = logging.getLogger()
-
-
-class FilterNotInFunction(BaseFilter):
-    name = "Filter view where field is not in a list returned by a function"
-    arg_name = "not_inf"
-
-    def apply(self, query, func):
-        query, field = get_field_setup_query(query, self.model, self.column_name)
-        return query.filter(~field.in_(func()))
-
-
-def get_unit_releases():
-    from fbc.models.inventory import Unit
-    from fbc import db
-
-    releases = [
-        r.discogs_release_id
-        for r in db.session.query(Unit)
-        .filter(Unit.discogs_release_id.isnot(None))
-        .distinct()
-    ]
-    return releases
 
 
 # See UnitModelBaseView for why the Releases views share a base class rather
@@ -120,12 +94,6 @@ class DiscogsReleaseModelBaseView(SyncedViewMixin, CustomModelView):
 
 class DiscogsReleaseModelView(DiscogsReleaseModelBaseView):
     pass
-
-
-class DiscogsReleaseModelNoUnitView(DiscogsReleaseModelBaseView):
-    """Releases that no Unit has been created from yet."""
-
-    base_filters = [["release_id", FilterNotInFunction, get_unit_releases]]
 
 
 class ArtistModelView(SyncedViewMixin, CustomModelView):

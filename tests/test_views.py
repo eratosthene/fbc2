@@ -5,14 +5,11 @@ import pytest
 from werkzeug.datastructures import MultiDict
 
 import fbc
-from fbc.models.discogs import DiscogsRelease
-from fbc.models.ebay import EbayListing
 from fbc.models.expenses import Expense
-from fbc.models.inventory import PurchaseLot, Unit
+from fbc.models.inventory import Unit
 from fbc.models.supplies import PurchaseOrder, PurchaseOrderSupply, Supply, SupplyUse
 from fbc.views.discogs import ArtistModelView, DiscogsReleaseModelView, FolderModelView
 from fbc.views.inventory import (
-    UNITS_WITHOUT_LISTING_FILTERS,
     UNITS_WITHOUT_MASTER_FILTERS,
     UNSOLD_UNITS_OVER_2_FILTERS,
     PurchaseLotModelView,
@@ -146,15 +143,6 @@ def _menu_list(client, name):
     [
         (
             UnitModelView,
-            UNITS_WITHOUT_LISTING_FILTERS,
-            {
-                "ebay_listing": "FilterRelationOneToManyEqual",
-                "sold": "FilterNotEqual",
-                "retail_price": "FilterGreater",
-            },
-        ),
-        (
-            UnitModelView,
             UNITS_WITHOUT_MASTER_FILTERS,
             {"discogs_master": "FilterEqual"},
         ),
@@ -174,23 +162,30 @@ def test_menu_presets_pick_the_intended_filters(view_class, filters, expected):
     assert picked == expected
 
 
-def test_units_without_listings_menu_lists_unsold_unlisted_units_over_2(client):
-    fbc.db.session.add(
-        EbayListing(item_id="L1", title="T", price=9.99, url="https://x")
-    )
-    _units(
-        WantedUnit={"sold": False, "retail_price": 9.99},
-        ListedUnit={"sold": False, "retail_price": 9.99, "ebay_listing_id": "L1"},
-        SoldUnit={"sold": True, "retail_price": 9.99},
-        CheapUnit={"sold": False, "retail_price": 2.0},
-    )
+def _menu_names(category):
+    return [item.name for item in fbc.appbuilder.menu.find(category).childs]
 
-    html = _menu_list(client, "Units w/out Listings")
 
-    assert "WantedUnit" in html
-    assert "ListedUnit" not in html
-    assert "SoldUnit" not in html
-    assert "CheapUnit" not in html
+def test_sales_menu_is_in_the_owners_order():
+    assert _menu_names("Sales") == [
+        "Sales Receipts",
+        "Mystery Boxes",
+        "eBay Drafts",
+        "eBay Listings",
+        "eBay Orders",
+        "Discogs Listings",
+        "Discogs Orders",
+        "Ended Listings",
+    ]
+
+
+def test_connect_menu_holds_the_two_sign_ins():
+    assert _menu_names("Connect") == ["Connect eBay", "Connect Discogs"]
+
+
+def test_the_menus_no_longer_have_the_task_lists_as_entries():
+    assert "Units w/out Listings" not in _menu_names("Inventory")
+    assert "Releases w/out Units" not in _menu_names("Discogs")
 
 
 def test_units_without_master_menu_lists_units_with_an_empty_master(client):
@@ -514,21 +509,6 @@ def test_rebox_units_menu_lists_unsold_units_over_2(client):
     assert "WantedUnit" in html
     assert "SoldUnit" not in html
     assert "CheapUnit" not in html
-
-
-def test_releases_without_units_lists_only_releases_with_no_unit(client):
-    for release_id, title in [(1, "UnitedAlbum"), (2, "LoneAlbum")]:
-        fbc.db.session.add(
-            DiscogsRelease(release_id=release_id, title=title, year=2020, master_id=0)
-        )
-    lot = PurchaseLot(name="Lot", date=datetime.date(2020, 1, 1), price=1.0)
-    _units(SomeUnit={"discogs_release_id": 1, "purchase_lot": lot})
-
-    releases = _menu_list(client, "Releases")
-    without_units = _menu_list(client, "Releases w/out Units")
-
-    assert "UnitedAlbum" in releases and "LoneAlbum" in releases
-    assert "UnitedAlbum" not in without_units and "LoneAlbum" in without_units
 
 
 @pytest.mark.parametrize(

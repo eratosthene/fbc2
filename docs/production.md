@@ -15,7 +15,7 @@ credentials. Copy `config.py.tpl` to start one, and fill in:
 - `SQLALCHEMY_DATABASE_URI`: the MariaDB database.
 - `EBAY_SETTINGS` and `DISCOGS_SETTINGS`: the eBay and Discogs app keys,
   and the listing defaults. The comments there say where each one comes from.
-  Once the app is running, Sales > Connect eBay and Discogs > Connect Discogs
+  Once the app is running, Connect > Connect eBay and Connect > Connect Discogs
   sign in to each site, and keep the tokens in the database.
 - `TIMEZONE`: the timezone to show times in, as an IANA name such as
   `America/Chicago` (the default). Use the name, not "CST": it follows daylight
