@@ -25,7 +25,7 @@ def load(config, source="config"):
     environment."""
     config.from_object(source)
     # Nothing in the environment turns off dev mode that config.py turns on,
-    # just as FBC_DEV_MODE can't (fbc/devmode.py).
+    # just as FBC_DEV_MODE can't (fbc/core/devmode.py).
     dev_mode = bool(config.get("DEV_MODE"))
     config.from_prefixed_env(ENV_PREFIX)
     if dev_mode:

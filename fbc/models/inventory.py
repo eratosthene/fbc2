@@ -14,7 +14,7 @@ from sqlalchemy import (
     false,
 )
 from sqlalchemy.orm import relationship
-from fbc.util import fpercent, fprice
+from fbc.core.formatting import fpercent, fprice
 
 
 class PurchaseLot(Model):

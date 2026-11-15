@@ -2,7 +2,8 @@ import datetime
 
 import pytest
 
-from fbc import db, devmode, listing, skus
+from fbc import db, listing, skus
+from fbc.core import devmode
 from fbc.models.ebay import EbayListing
 from fbc.models.inventory import PurchaseLot, Unit
 

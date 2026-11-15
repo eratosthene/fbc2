@@ -1,4 +1,4 @@
-"""Times shown in the TIMEZONE setting (fbc/localtime.py)."""
+"""Times shown in the TIMEZONE setting (fbc/core/localtime.py)."""
 
 import datetime
 import logging
@@ -8,7 +8,7 @@ import pytest
 from werkzeug.datastructures import MultiDict
 
 import fbc
-from fbc import localtime
+from fbc.core import localtime
 from fbc.models.discogs import DiscogsListing
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.supplies import Supply, SupplyUse

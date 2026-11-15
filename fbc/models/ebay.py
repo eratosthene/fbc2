@@ -2,7 +2,7 @@ import json
 import logging
 
 from flask_appbuilder import Model
-from fbc import localtime
+from fbc.core import localtime
 from markupsafe import Markup
 from flask import url_for
 from sqlalchemy import (

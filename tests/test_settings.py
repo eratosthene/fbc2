@@ -3,7 +3,7 @@ import os
 
 from flask import Config
 
-from fbc import settings
+from fbc.core import settings
 
 
 class _Source:

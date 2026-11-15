@@ -14,7 +14,8 @@ devmode.on() first, so nothing is tried).
 import datetime
 import logging
 
-from fbc import devmode, discogs_client
+from fbc import discogs_client
+from fbc.core import devmode
 from fbc.listing import (
     build_item_specifics,
     default_weight,

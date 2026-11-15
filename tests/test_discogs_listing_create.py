@@ -7,7 +7,8 @@ import requests
 from fake_discogs import FakeDiscogs, api_error, failing
 
 import fbc
-from fbc import db, devmode, discogs_client, discogs_listing, syncjobs
+from fbc import db, discogs_client, discogs_listing, syncjobs
+from fbc.core import devmode
 from fbc.models.discogs import DiscogsInstance, DiscogsListing
 from fbc.models.ebay import EbayDraft, EbayListing
 from fbc.models.inventory import StorageBox

@@ -54,12 +54,12 @@ services:
       db:
         condition: service_healthy
     # As on the live server, any FBC_CONFIG_<KEY> in docker/.env overrides
-    # that setting in config.py (see fbc/settings.py).
+    # that setting in config.py (see fbc/core/settings.py).
     env_file: .env
     environment:
       # config.py uses this in place of its own SQLALCHEMY_DATABASE_URI.
       SQLALCHEMY_DATABASE_URI: mysql+pymysql://fbc:${FBC_DEV_DB_PASSWORD}@db/fbc
-      # Dev mode (see fbc/devmode.py), so a copy of live data can't reach the
+      # Dev mode (see fbc/core/devmode.py), so a copy of live data can't reach the
       # live eBay and Discogs accounts. FBC_DEV_MODE=0 in docker/.env turns it
       # off, unless config.py sets DEV_MODE = True.
       FBC_DEV_MODE: ${FBC_DEV_MODE:-1}

@@ -1,4 +1,4 @@
-from fbc.util import CustomModelView
+from fbc.core.forms import CustomModelView
 from flask import current_app
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget, Select2Widget
 from flask_appbuilder.models.sqla.interface import SQLAInterface

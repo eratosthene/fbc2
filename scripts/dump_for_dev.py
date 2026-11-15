@@ -45,7 +45,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
-# The app's override for config.py's database URI (see fbc/settings.py,
+# The app's override for config.py's database URI (see fbc/core/settings.py,
 # which this script can't import without the app's packages).
 URI_OVERRIDE = "FBC_CONFIG_SQLALCHEMY_DATABASE_URI"
 

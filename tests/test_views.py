@@ -867,7 +867,7 @@ def test_a_purchase_orders_price_cant_go_below_its_expenses(client):
 
 
 def _every_model_view():
-    from fbc.util import CustomModelView
+    from fbc.core.forms import CustomModelView
 
     return [v for v in fbc.appbuilder.baseviews if isinstance(v, CustomModelView)]
 
@@ -882,7 +882,7 @@ def test_every_model_view_searches_by_id():
 
 
 def test_integer_ids_get_the_range_filter_first():
-    from fbc.util import FilterIdMatches
+    from fbc.core.forms import FilterIdMatches
 
     for view in _every_model_view():
         pk = view.datamodel.get_pk_name()
@@ -894,7 +894,7 @@ def test_integer_ids_get_the_range_filter_first():
 
 
 def test_id_filter_parse():
-    from fbc.util import FilterIdMatches
+    from fbc.core.forms import FilterIdMatches
 
     parse = FilterIdMatches.parse
     assert parse("5") == [(5, 5)]
@@ -907,7 +907,7 @@ def test_id_filter_parse():
 
 def test_id_filter_applies():
     from fbc import db
-    from fbc.util import FilterIdMatches
+    from fbc.core.forms import FilterIdMatches
 
     view = _view(PurchaseLotModelView)
     model = view.datamodel.obj

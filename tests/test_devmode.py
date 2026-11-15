@@ -9,7 +9,8 @@ import requests
 from flask import Flask
 
 import fbc
-from fbc import db, devmode, discogs_client, listing, shipping
+from fbc import db, discogs_client, listing, shipping
+from fbc.core import devmode
 from fbc.discogs_client import DiscogsAuthError
 from fbc.listing import OAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsOAuthToken

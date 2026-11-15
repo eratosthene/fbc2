@@ -26,7 +26,8 @@ import logging
 import time
 from collections import namedtuple
 
-from fbc import db, devmode, sync, syncjobs
+from fbc import db, sync, syncjobs
+from fbc.core import devmode
 
 logger = logging.getLogger()
 

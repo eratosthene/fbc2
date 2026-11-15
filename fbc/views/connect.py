@@ -3,7 +3,7 @@ import secrets
 from flask import flash, redirect, request, session, url_for
 from flask_appbuilder import BaseView, expose, has_access
 
-from fbc import devmode
+from fbc.core import devmode
 from fbc.discogs_client import (
     DiscogsAuthError,
     authorize_url,

@@ -1,7 +1,8 @@
 from flask import flash, redirect, request, url_for
 from flask_appbuilder import BaseView, expose, has_access
 
-from fbc import db, devmode, identify
+from fbc import db, identify
+from fbc.core import devmode
 from fbc.models.inventory import PurchaseLot
 
 

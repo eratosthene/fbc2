@@ -1,6 +1,6 @@
 from wtforms import StringField
 
-from fbc.util import CustomForm
+from fbc.core.forms import CustomForm
 
 
 class _NameForm(CustomForm):

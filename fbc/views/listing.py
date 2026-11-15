@@ -7,7 +7,8 @@ from flask_appbuilder.models.sqla.interface import SQLAInterface
 from markupsafe import Markup
 from wtforms import TextAreaField
 
-from fbc import devmode, insertions
+from fbc import insertions
+from fbc.core import devmode
 from fbc.listing import (
     check_ready,
     describe_template,
@@ -23,8 +24,8 @@ from fbc.listing import (
     verify_draft,
 )
 from fbc.models.ebay import EbayDraft
-from fbc.util import CustomModelView
-from fbc.widgets import EbayDraftListWidget, TallTextAreaWidget
+from fbc.core.forms import CustomModelView
+from fbc.core.widgets import EbayDraftListWidget, TallTextAreaWidget
 
 logger = logging.getLogger()
 

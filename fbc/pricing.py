@@ -27,7 +27,7 @@ import threading
 import time
 from urllib.parse import quote_plus
 
-from fbc import devmode
+from fbc.core import devmode
 
 logger = logging.getLogger()
 

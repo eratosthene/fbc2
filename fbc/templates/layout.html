@@ -1,6 +1,6 @@
 {% extends 'appbuilder/baselayout.html' %}
 {# Every page's layout: Flask-AppBuilder's, with our stylesheet, a small footer in place of Flask-AppBuilder's (an empty
-three-column row under a rule) and a banner in dev mode (see fbc/devmode.py). #}
+three-column row under a rule) and a banner in dev mode (see fbc/core/devmode.py). #}
 {% block head_css %}
 {{ super() }}
 <link href="{{ url_for('static', filename='css/fbc.css') }}" rel="stylesheet">

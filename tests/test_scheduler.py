@@ -6,7 +6,8 @@ from collections import namedtuple
 
 import pytest
 
-from fbc import devmode, scheduler, sync, syncjobs
+from fbc import scheduler, sync, syncjobs
+from fbc.core import devmode
 
 NOW = datetime.datetime(2024, 6, 1, 12, 0)
 MIN = datetime.timedelta(minutes=1)

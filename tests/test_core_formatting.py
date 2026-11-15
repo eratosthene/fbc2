@@ -1,4 +1,4 @@
-from fbc.util import fpercent, fprice
+from fbc.core.formatting import fpercent, fprice
 
 
 def test_fprice_formats_integer_as_currency():

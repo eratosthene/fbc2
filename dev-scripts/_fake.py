@@ -66,14 +66,14 @@ LABELS = ["Fakeway Records", "Nowhere Sound", "Dev Null Music", "Placeholder"]
 
 
 def _settings():
-    """The app's settings, from fbc/settings.py loaded on its own: importing
-    it as fbc.settings would import the app first."""
+    """The app's settings, from fbc/core/settings.py loaded on its own: importing
+    it as fbc.core.settings would import the app first."""
     import importlib.util
 
     from flask import Config
 
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-    path = os.path.join(root, "fbc", "settings.py")
+    path = os.path.join(root, "fbc", "core", "settings.py")
     spec = importlib.util.spec_from_file_location("_fbc_settings", path)
     settings = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(settings)

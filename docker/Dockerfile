@@ -26,7 +26,7 @@ FROM python-base
 
 COPY --from=requirements /lock/requirements.txt /app/requirements.txt
 
-# The time zone database, for zoneinfo (fbc/localtime.py). Alpine has none.
+# The time zone database, for zoneinfo (fbc/core/localtime.py). Alpine has none.
 RUN apk add --no-cache tzdata
 
 # Install, build and remove the build dependencies in one layer so they don't

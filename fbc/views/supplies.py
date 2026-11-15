@@ -1,5 +1,5 @@
-from fbc import localtime
-from fbc.util import CustomModelView
+from fbc.core import localtime
+from fbc.core.forms import CustomModelView
 from flask import flash, redirect, request, url_for
 from flask_appbuilder import BaseView, expose, has_access
 from flask_appbuilder.fieldwidgets import Select2Widget
