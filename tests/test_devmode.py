@@ -9,10 +9,11 @@ import requests
 from flask import Flask
 
 import fbc
-from fbc import db, discogs_client, shipping
+from fbc import db, shipping
+from fbc.discogs import client as discogs_client, removal
 from fbc.ebay import api, drafts, oauth
 from fbc.core import devmode
-from fbc.discogs_client import DiscogsAuthError
+from fbc.discogs.client import DiscogsAuthError
 from fbc.ebay.oauth import OAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsOAuthToken
 from fbc.models.ebay import EbayDraft, EbayOAuthToken
@@ -408,7 +409,7 @@ def test_remove_from_discogs_only_removes_it_from_fbc_in_dev_mode(
     monkeypatch.setattr(discogs_client, "account", _fails)
     _, unit = _order()
 
-    message, category = shipping.remove_from_discogs(unit)
+    message, category = removal.remove_from_discogs(unit)
 
     assert category == "warning"
     assert message.startswith("Dev Mode is turned on, Discogs removal disabled.")

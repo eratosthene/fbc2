@@ -1,7 +1,7 @@
 """
-A stand-in for fbc/discogs_client.py's calls, for the tests of everything that uses
+A stand-in for fbc/discogs/client.py's calls, for the tests of everything that uses
 Discogs. Nothing here reaches Discogs, and nothing here fakes the library:
-only tests/test_discogs_seam.py does that, to check what fbc.discogs_client sends.
+only tests/test_discogs_seam.py does that, to check what fbc.discogs.client sends.
 
     fake = FakeDiscogs(releases={9: record}).install(monkeypatch)
     fake.account.items = [collection_item(9, instance_id=5)]
@@ -11,7 +11,7 @@ give `fail` a function of (name, args, kwargs) that returns an exception to
 raise, or None.
 """
 
-from fbc import discogs_client
+from fbc.discogs import client as discogs_client
 
 
 def api_error(status_code, message="Discogs said no"):
@@ -81,7 +81,7 @@ class _Recording:
 
 
 class FakeAccount(_Recording):
-    """fbc.discogs_client.Account, with the account's contents as attributes."""
+    """fbc.discogs.client.Account, with the account's contents as attributes."""
 
     def __init__(
         self,
@@ -155,7 +155,7 @@ class FakeAccount(_Recording):
 
 
 class FakeDiscogs(_Recording):
-    """fbc.discogs_client's functions. `account` is what discogs_client.account() gives."""
+    """fbc.discogs.client's functions. `account` is what discogs_client.account() gives."""
 
     def __init__(
         self,

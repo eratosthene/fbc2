@@ -14,12 +14,10 @@ from flask_appbuilder.models.sqla.interface import SQLAInterface
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.sales import MANUAL, SalesReceipt
 from fbc.shipping import (
-    discogs_plan,
     fmt_supplies,
     combinable_orders,
     combined_discount,
     order_receipt,
-    remove_from_discogs,
     shipment_earnings,
     shipment_units,
     ship_order,
@@ -27,6 +25,7 @@ from fbc.shipping import (
     supplies_plan,
     supply_counts,
 )
+from fbc.discogs.removal import discogs_plan, remove_from_discogs
 from fbc.core.widgets import (
     LocalDateTimeField,
     EbayListingListWidget,

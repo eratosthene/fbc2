@@ -1,7 +1,7 @@
 """
-What fbc.discogs_client sends, and what it makes of the answers. This is the one test
+What fbc.discogs.client sends, and what it makes of the answers. This is the one test
 file that fakes the Discogs library (at its _get, _post and _delete): every
-other test fakes fbc.discogs_client itself (tests/fake_discogs.py).
+other test fakes fbc.discogs.client itself (tests/fake_discogs.py).
 """
 
 import datetime
@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from discogs_client.exceptions import HTTPError
 
-from fbc import discogs_client
+from fbc.discogs import client as discogs_client
 
 BASE = "https://api.discogs.com"
 ME = BASE + "/users/me"
@@ -95,12 +95,13 @@ def paged(key, items, per_page=100, claimed=None):
 
 
 def test_no_other_module_imports_the_library():
-    fbc_folder = Path(discogs_client.__file__).parent
+    fbc_folder = Path(discogs_client.__file__).parent.parent
     imports_library = re.compile(r"^\s*(import|from) discogs_client\b", re.M)
     others = [
         path.relative_to(fbc_folder).as_posix()
         for path in fbc_folder.rglob("*.py")
-        if path.name != "discogs_client.py" and imports_library.search(path.read_text())
+        if path.relative_to(fbc_folder).as_posix() != "discogs/client.py"
+        and imports_library.search(path.read_text())
     ]
 
     assert others == []

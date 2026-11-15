@@ -7,14 +7,14 @@ Discogs's seller inventory. Two writes, each started by its own button:
   Discogs's site.
 - make_for_sale changes a Draft to For Sale, which makes it live.
 
-Both go through fbc.discogs_client, so dev mode refuses them (the views also check
+Both go through fbc.discogs.client, so dev mode refuses them (the views also check
 devmode.on() first, so nothing is tried).
 """
 
 import datetime
 import logging
 
-from fbc import discogs_client
+from fbc.discogs import client as discogs_client
 from fbc.core import devmode
 from fbc.ebay.api import listing_settings
 from fbc.ebay.describe import build_item_specifics, disc_count, split_grading

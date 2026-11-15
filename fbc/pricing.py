@@ -15,7 +15,7 @@ python3-discogs-client source; nothing here is a sold price from them):
   shut down in February 2025. The Browse API shows active listings, so those
   are asking prices. eBay's own sold-items search is offered as a link.
 
-Everything that reaches Discogs or eBay goes through fbc.discogs_client and
+Everything that reaches Discogs or eBay goes through fbc.discogs.client and
 oauth.oauth_token(), which refuse to run in dev mode; research() also checks
 devmode itself, so the page can say so plainly. Answers are kept for a few
 minutes so reloading the page doesn't repeat the calls.
@@ -96,7 +96,7 @@ def discogs_research(release_id):
     own, for the release and for its master if it has one, to help choose a
     Storage Box.
     """
-    from fbc import discogs_client
+    from fbc.discogs import client as discogs_client
 
     if devmode.on():
         return _failure("Not available in Dev Mode.")

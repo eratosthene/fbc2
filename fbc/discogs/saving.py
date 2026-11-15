@@ -1,9 +1,13 @@
 """Saving what Discogs sends us: listings, releases and collection instances."""
 
+import datetime
 import json
 import logging
 
+from fbc.core import devmode
 from fbc.core.localtime import naive_utc
+from fbc.discogs import client as discogs_client
+from fbc.discogs import identify
 
 logger = logging.getLogger()
 
@@ -25,7 +29,7 @@ def save_discogs_listing(data, seen):
     Returns the DiscogsListing.
     """
     from fbc import db
-    from fbc.discogs_client import parse_timestamp
+    from fbc.discogs.client import parse_timestamp
     from fbc.ebay.skus import unit_id_from_sku
     from fbc.models.discogs import DiscogsListing
     from fbc.models.inventory import Unit
@@ -97,7 +101,8 @@ def add_discogs_release(item):
         Genre,
         Style,
     )
-    from fbc import db, discogs_client
+    from fbc import db
+    from fbc.discogs import client as discogs_client
 
     logger.debug("add_discogs_release: " + str(item))
     info = item["basic_information"]
@@ -251,3 +256,101 @@ def forget_discogs_instance(instance):
     logger.debug("Removing instance")
     db.session.delete(instance)
     db.session.commit()
+
+
+def save_release(release_id):
+    """
+    Save a release found by search as a Release in fbc, without a copy in the
+    Discogs collection (Sync Discogs adds the copy later if the user puts one
+    in the collection). Returns (DiscogsRelease, None) or (None, why not).
+    Reads from Discogs only.
+    """
+    from fbc import db
+    from fbc.models.discogs import DiscogsRelease
+
+    if devmode.on():
+        return None, devmode.message("Discogs")
+    existing = db.session.get(DiscogsRelease, int(release_id))
+    if existing:
+        return existing, None
+    try:
+        record = identify._release_record(release_id)
+    except discogs_client.DiscogsAuthError as e:
+        return None, str(e)
+    except identify.RateLimited:
+        return None, "Discogs says too many requests; wait a minute and try again."
+    except discogs_client.ApiError as e:
+        return None, "Discogs said no: " + str(e)
+    except Exception as e:
+        logger.exception("Couldn't fetch release %s", release_id)
+        return None, "Couldn't reach Discogs: " + str(e)
+    return save_record(record, _master_year(record)), None
+
+
+def _master_year(record):
+    """The master's year, or None (the release's year is then used)."""
+    master_id = record.get("master_id")
+    if not master_id:
+        return None
+    try:
+        master = identify._cached(
+            ("master", int(master_id)),
+            lambda: identify._call(discogs_client.master, master_id),
+        )
+        return master.get("year") or None
+    except Exception as e:
+        logger.warning("Couldn't fetch master %s: %s", master_id, e)
+        return None
+
+
+def save_record(record, master_year=None):
+    """The DiscogsRelease for a Discogs release record (the API's JSON)."""
+    from fbc import db
+    from fbc.models.discogs import Artist, DiscogsRelease, Genre, Style
+
+    def get_or_make(model, **find):
+        obj = db.session.query(model).filter_by(**find).first()
+        if not obj:
+            obj = model(**find)
+            db.session.add(obj)
+        return obj
+
+    artists = []
+    for a in record.get("artists") or []:
+        artist = db.session.query(Artist).filter_by(artist_id=a["id"]).first()
+        if not artist:
+            name = a.get("name") or ""
+            artist = Artist(
+                artist_id=a["id"],
+                name=name,
+                sort_name=name.removeprefix("The ") + ", The"
+                if name.startswith("The ")
+                else "",
+            )
+            db.session.add(artist)
+        artists.append(artist)
+    release = DiscogsRelease(
+        release_id=record["id"],
+        title=record.get("title") or "",
+        year=record.get("year"),
+        artists=artists,
+        genres=[get_or_make(Genre, name=g) for g in record.get("genres") or []],
+        styles=[get_or_make(Style, name=s) for s in record.get("styles") or []],
+        master_id=record.get("master_id") or 0,
+        master_year=master_year or record.get("year"),
+        formats=json.dumps(record.get("formats") or []),
+        labels=json.dumps(
+            [
+                {"name": lb.get("name"), "catno": lb.get("catno")}
+                for lb in record.get("labels") or []
+            ]
+        ),
+        country=record.get("country"),
+        released=record.get("released"),
+        # DiscogsRelease.unit_add reads the notes as JSON.
+        notes="[]",
+        date_added=datetime.date.today(),
+    )
+    db.session.add(release)
+    db.session.commit()
+    return release

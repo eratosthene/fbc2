@@ -3,7 +3,7 @@ import logging
 from flask import abort, flash, redirect, request, url_for
 from flask_appbuilder import expose, has_access
 
-from fbc import discogs_listing
+from fbc.discogs import listing as discogs_listing
 from fbc.core import devmode, localtime
 from fbc.syncnote import DISCOGS, DISCOGS_LISTINGS, SyncedViewMixin
 from fbc.core.forms import CustomModelView

@@ -1,4 +1,4 @@
-"""Listing a Unit on Discogs (fbc/discogs_listing.py and its views): Discogs is faked."""
+"""Listing a Unit on Discogs (fbc/discogs/listing.py and its views): Discogs is faked."""
 
 import json
 
@@ -7,7 +7,8 @@ import requests
 from fake_discogs import FakeDiscogs, api_error, failing
 
 import fbc
-from fbc import db, discogs_client, discogs_listing, syncjobs
+from fbc import db, syncjobs
+from fbc.discogs import client as discogs_client, listing as discogs_listing
 from fbc.core import devmode
 from fbc.models.discogs import DiscogsInstance, DiscogsListing
 from fbc.models.ebay import EbayDraft, EbayListing

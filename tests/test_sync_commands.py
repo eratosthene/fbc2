@@ -7,7 +7,7 @@ import pytest
 from fake_discogs import FakeAccount, FakeDiscogs
 
 from fbc import sync, syncjobs
-from fbc.discogs_client import DiscogsAuthError
+from fbc.discogs.client import DiscogsAuthError
 from fbc.ebay.oauth import OAuthError
 
 

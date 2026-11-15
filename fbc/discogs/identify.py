@@ -18,7 +18,7 @@ What Discogs's API gives (checked against its docs and python3-discogs-client
 - A release is added to the collection by POST to
   /users/{name}/collection/folders/{folder}/releases/{id}. Discogs answers
   with the new copy's instance_id (the library's add_release throws it away,
-  so fbc.discogs_client posts itself). The copy's condition, notes and other custom fields
+  so fbc.discogs.client posts itself). The copy's condition, notes and other custom fields
   are then set one at a time, by POST to .../instances/{instance}/fields/{field}.
   Field ids are the account's own, so they're looked up by name.
 
@@ -27,9 +27,13 @@ through its own "Add to my Discogs collection" button and form; nothing else
 here writes. "Just add the Unit" saves the release in fbc as a Release with no
 collection copy.
 
-Everything that reaches Discogs goes through fbc.discogs_client, which refuses to
+Everything that reaches Discogs goes through fbc.discogs.client, which refuses to
 run in dev mode; search() also checks devmode itself, so the page can say
 so plainly. Searches and release fetches are kept for a few minutes.
+
+Saving the chosen release is in saving.py, adding it to the collection in
+collect.py, and the dev mode samples in samples.py. Names a release gives a Unit
+are in naming.py.
 
 How a matrix is scored: both sides are put in capitals with everything but
 letters and digits removed ("A-1 / ST-12345 " is "A1ST12345").
@@ -44,40 +48,64 @@ Exact scores 100. A matching country adds 30 and a matching colour 10.
 Higher scores come first.
 """
 
-import datetime
-import json
 import logging
 import threading
 import time
 from difflib import SequenceMatcher
-
 from markupsafe import Markup, escape
 
-from fbc import discogs_client
+from fbc.discogs import client as discogs_client
 from fbc.core import devmode
 
 logger = logging.getLogger()
 
+
 CACHE_SECONDS = 300
+
+
 MAX_CANDIDATES = 12
+
+
 # More when a matrix is given: it's what picks the release, so it's worth the calls.
 MAX_CANDIDATES_WITH_MATRIX = 20
+
+
 DEFAULT_COUNTRY = "US"
+
+
 # Discogs spells the country out in releases; the search filter takes either.
 COUNTRY_NAMES = {"US": "US", "USA": "US", "UNITED STATES": "US", "UK": "UK"}
 
+
 MIN_PARTIAL_RUN = 4
+
+
 MIN_PARTIAL_COVER = 0.6
+
+
 EXACT_SCORE = 100
+
+
 COUNTRY_SCORE = 30
+
+
 COLOR_SCORE = 10
+
+
 # What the Type field offers: (label, the word Discogs lists in a release's
 # format descriptions, or None for any vinyl). The first is the default.
 TYPES = [("LP", "LP"), ('7" (45 RPM)', '7"'), ('12"', '12"'), ("Any vinyl", None)]
+
+
 DEFAULT_TYPE = "LP"
+
+
 # Reissue: blank is either, so a record that might be either isn't hidden.
 REISSUE_CHOICES = [("", "Either"), ("yes", "Reissue"), ("no", "Not a reissue")]
+
+
 MISMATCH_SCORE = -30
+
 
 EXACT, PARTIAL, NOT_LISTED, MISMATCH, NOT_ASKED = (
     "exact",
@@ -86,6 +114,8 @@ EXACT, PARTIAL, NOT_LISTED, MISMATCH, NOT_ASKED = (
     "mismatch",
     "not asked",
 )
+
+
 MATRIX_LABELS = {
     EXACT: "Exact matrix match",
     PARTIAL: "Partial matrix match",
@@ -94,7 +124,10 @@ MATRIX_LABELS = {
     NOT_ASKED: "",
 }
 
+
 _cache = {}
+
+
 _lock = threading.Lock()
 
 
@@ -117,9 +150,6 @@ def _cached(key, fetch):
 
 class RateLimited(Exception):
     pass
-
-
-# --- Matrix matching -------------------------------------------------------
 
 
 def normalise(text):
@@ -259,9 +289,6 @@ def rank(candidates, country, matrix, color=""):
     # Stable: Discogs's own order breaks ties.
     ranked.sort(key=lambda c: -c["score"])
     return ranked
-
-
-# --- Discogs ---------------------------------------------------------------
 
 
 def _failure(message, **extra):
@@ -470,7 +497,11 @@ def search(
 # A master's versions come 100 to a page; a page or two covers most masters'
 # vinyl in one country, and this stops a huge master eating the rate limit.
 MAX_VERSION_PAGES = 5
+
+
 MASTER_BATCH = 20
+
+
 # With a matrix, batches are checked one after another until one has an exact
 # match, up to this many releases: under Discogs's 60 calls a minute, and short
 # enough for a page to load.
@@ -697,404 +728,3 @@ def _release_record(release_id):
         ("release", int(release_id)),
         lambda: _call(discogs_client.release, release_id),
     )
-
-
-# --- Picking ---------------------------------------------------------------
-
-
-def save_release(release_id):
-    """
-    Save a release found by search as a Release in fbc, without a copy in the
-    Discogs collection (Sync Discogs adds the copy later if the user puts one
-    in the collection). Returns (DiscogsRelease, None) or (None, why not).
-    Reads from Discogs only.
-    """
-    from fbc import db
-    from fbc.models.discogs import DiscogsRelease
-
-    if devmode.on():
-        return None, devmode.message("Discogs")
-    existing = db.session.get(DiscogsRelease, int(release_id))
-    if existing:
-        return existing, None
-    try:
-        record = _release_record(release_id)
-    except discogs_client.DiscogsAuthError as e:
-        return None, str(e)
-    except RateLimited:
-        return None, "Discogs says too many requests; wait a minute and try again."
-    except discogs_client.ApiError as e:
-        return None, "Discogs said no: " + str(e)
-    except Exception as e:
-        logger.exception("Couldn't fetch release %s", release_id)
-        return None, "Couldn't reach Discogs: " + str(e)
-    return save_record(record, _master_year(record)), None
-
-
-def _master_year(record):
-    """The master's year, or None (the release's year is then used)."""
-    master_id = record.get("master_id")
-    if not master_id:
-        return None
-    try:
-        master = _cached(
-            ("master", int(master_id)),
-            lambda: _call(discogs_client.master, master_id),
-        )
-        return master.get("year") or None
-    except Exception as e:
-        logger.warning("Couldn't fetch master %s: %s", master_id, e)
-        return None
-
-
-def save_record(record, master_year=None):
-    """The DiscogsRelease for a Discogs release record (the API's JSON)."""
-    from fbc import db
-    from fbc.models.discogs import Artist, DiscogsRelease, Genre, Style
-
-    def get_or_make(model, **find):
-        obj = db.session.query(model).filter_by(**find).first()
-        if not obj:
-            obj = model(**find)
-            db.session.add(obj)
-        return obj
-
-    artists = []
-    for a in record.get("artists") or []:
-        artist = db.session.query(Artist).filter_by(artist_id=a["id"]).first()
-        if not artist:
-            name = a.get("name") or ""
-            artist = Artist(
-                artist_id=a["id"],
-                name=name,
-                sort_name=name.removeprefix("The ") + ", The"
-                if name.startswith("The ")
-                else "",
-            )
-            db.session.add(artist)
-        artists.append(artist)
-    release = DiscogsRelease(
-        release_id=record["id"],
-        title=record.get("title") or "",
-        year=record.get("year"),
-        artists=artists,
-        genres=[get_or_make(Genre, name=g) for g in record.get("genres") or []],
-        styles=[get_or_make(Style, name=s) for s in record.get("styles") or []],
-        master_id=record.get("master_id") or 0,
-        master_year=master_year or record.get("year"),
-        formats=json.dumps(record.get("formats") or []),
-        labels=json.dumps(
-            [
-                {"name": lb.get("name"), "catno": lb.get("catno")}
-                for lb in record.get("labels") or []
-            ]
-        ),
-        country=record.get("country"),
-        released=record.get("released"),
-        # DiscogsRelease.unit_add reads the notes as JSON.
-        notes="[]",
-        date_added=datetime.date.today(),
-    )
-    db.session.add(release)
-    db.session.commit()
-    return release
-
-
-# Discogs spells countries out. These are the ones a shop sees most; any other
-# is used as Discogs spells it.
-COUNTRY_CODES = {
-    "US": "US", "UK": "UK", "Canada": "CA", "Germany": "DE", "Japan": "JP",
-    "France": "FR", "Netherlands": "NL", "Italy": "IT", "Australia": "AU",
-    "Europe": "EU", "Sweden": "SE", "Spain": "ES", "Brazil": "BR",
-    "Mexico": "MX", "Ireland": "IE", "Belgium": "BE", "Norway": "NO",
-    "Denmark": "DK", "Finland": "FI", "New Zealand": "NZ", "Jamaica": "JM",
-    "Argentina": "AR", "Russia": "RU", "Portugal": "PT", "Greece": "GR",
-}  # fmt: skip
-
-
-def pressing_for(release):
-    """
-    The Unit's Pressing from a release: "US 1970 Original" or "UK 1990
-    Reissue". Reissue if its formats say Reissue or Repress, else Original.
-    The country is left out if there isn't one, and the year too.
-    """
-    try:
-        formats = json.loads(release.formats or "[]")
-    except ValueError:
-        formats = []
-    words = {d for f in formats for d in (f.get("descriptions") or [])}
-    kind = "Reissue" if words & {"Reissue", "Repress"} else "Original"
-    country = release.country or ""
-    parts = [COUNTRY_CODES.get(country, country), release.year, kind]
-    return " ".join(str(p) for p in parts if p)
-
-
-def unit_name(release):
-    """ "Artist - Title (master year)": the master's year, else the release's."""
-    year = release.master_year or release.year
-    return "%s - %s (%s)" % (release.artist_rep(), release.title, year)
-
-
-def unit_add_params(
-    release, purchase_lot_id=None, matrix="", instance_id=None, grading="", notes=""
-):
-    """The Add Unit form's starting values for a release: like
-    DiscogsRelease.unit_add, but with no collection instance, and the Purchase
-    Lot and matrix the user gave."""
-    from fbc.models.inventory import Unit
-
-    master = release.discogs_master_key()
-    params = {
-        "name": unit_name(release),
-        "pressing": pressing_for(release),
-        "unit_type": '12" LP',
-        "discogs_release": release.release_id,
-        "discogs_master": master,
-    }
-    if instance_id:
-        params["discogs_instance"] = instance_id
-    if grading:
-        params["grading"] = grading
-    if (notes or "").strip():
-        params["notes"] = notes.strip()
-    if purchase_lot_id:
-        params["purchase_lot"] = purchase_lot_id
-    if (matrix or "").strip():
-        params["matrix"] = matrix.strip()
-    avg = Unit.average_sold_price(master)
-    if avg is not None:
-        params["retail_price"] = f"{avg:.2f}"
-    return params
-
-
-# --- Adding to the collection ----------------------------------------------
-
-# The collection fields the form offers, in order. They're matched by name
-# against the account's custom fields (Discogs numbers them per account).
-COLLECTION_FIELDS = [
-    "Media Condition",
-    "Sleeve Condition",
-    "Notes",
-    "Dust Jacket Condition",
-    "Extras Included",
-]
-
-
-def _grade(value):
-    """ "Near Mint (NM or M-)" -> "NM or M-", as Sync Discogs reads it."""
-    import re
-
-    m = re.search(r".*\((.*)\)", value or "")
-    return m.group(1) if m else ""
-
-
-def grading_from(values):
-    """The Unit's grading from the Media and Sleeve Condition chosen: "M-/VG+"."""
-    media = _grade(values.get("Media Condition"))
-    sleeve = _grade(values.get("Sleeve Condition"))
-    return "/".join(g for g in (media, sleeve) if g)
-
-
-def collection_form():
-    """
-    What the collect form offers, from the account: {"ok": True, "folders":
-    [(id, name)], "fields": [{"id", "name", "type", "options"}], "missing":
-    [names not set up on the account]} or {"ok": False, "error", "dev_mode"}.
-    """
-    if devmode.on():
-        return _failure("Not available in dev mode.", dev_mode=True)
-
-    def fetch():
-        try:
-            account = discogs_client.account()
-            folders = account.collection_folders()
-            fields = account.collection_fields()
-        except discogs_client.DiscogsAuthError as e:
-            return _failure(str(e))
-        except discogs_client.ApiError as e:
-            return _failure("Discogs said no: " + str(e))
-        except Exception as e:
-            logger.exception("Couldn't read the collection's folders and fields")
-            return _failure("Couldn't reach Discogs: " + str(e))
-        by_name = {f["name"].lower(): f for f in fields}
-        chosen = [by_name[n.lower()] for n in COLLECTION_FIELDS if n.lower() in by_name]
-        return {
-            "ok": True,
-            # Folder 0 is "All", which can't be added to.
-            "folders": [(f["id"], f["name"]) for f in folders if f["id"] != 0],
-            "fields": [
-                {
-                    "id": f["id"],
-                    "name": f["name"],
-                    "type": f.get("type"),
-                    "options": f.get("options") or [],
-                }
-                for f in chosen
-            ],
-            "missing": [n for n in COLLECTION_FIELDS if n.lower() not in by_name],
-        }
-
-    found = _cached(("collection-form",), fetch)
-    if not found["ok"]:
-        with _lock:
-            _cache.pop(("collection-form",), None)
-    return found
-
-
-def collect(release_id, folder_id, values):
-    """
-    Add a copy of the release to the Discogs collection folder `folder_id`,
-    set its custom fields from `values` ({field name: text}, blanks and
-    anything a dropdown doesn't offer left out), and save it in fbc like a
-    synced one. WRITES TO THE DISCOGS ACCOUNT. Returns (DiscogsRelease,
-    instance_id, warnings, None) or (None, None, [], why not). If the copy
-    is made but something after fails, the answer says so: the release is
-    then in Discogs and Sync Discogs will bring it in.
-    """
-    from fbc import db
-    from fbc.models.discogs import DiscogsRelease
-    from fbc.discogs.saving import add_discogs_release
-
-    if devmode.on():
-        return None, None, [], devmode.message("Discogs")
-    form = collection_form()
-    if not form["ok"]:
-        return None, None, [], form["error"]
-    if int(folder_id) not in {f[0] for f in form["folders"]}:
-        return None, None, [], "That isn't one of your Discogs folders."
-    release_id = int(release_id)
-    try:
-        account = discogs_client.account()
-        instance_id = account.add_to_collection(folder_id, release_id)
-    except discogs_client.DiscogsAuthError as e:
-        return None, None, [], str(e)
-    except discogs_client.ApiError as e:
-        if e.rate_limited:
-            return None, None, [], "Discogs says too many requests; try in a minute."
-        return None, None, [], "Discogs said no: " + str(e)
-    except Exception as e:
-        logger.exception("Couldn't add release %s to the collection", release_id)
-        return None, None, [], "Couldn't reach Discogs: " + str(e)
-    logger.info("Added release %s to Discogs as instance %s", release_id, instance_id)
-
-    warnings = []
-    for field in form["fields"]:
-        value = (values.get(field["name"]) or "").strip()
-        if not value:
-            continue
-        if field["type"] == "dropdown" and value not in field["options"]:
-            warnings.append(field["name"] + ": Discogs has no choice " + repr(value))
-            continue
-        try:
-            account.set_collection_field(
-                folder_id, release_id, instance_id, field["id"], value
-            )
-        except Exception as e:
-            logger.warning("Couldn't set %s: %s", field["name"], e)
-            warnings.append(field["name"] + " wasn't set: " + str(e))
-    try:
-        item = next(
-            i
-            for i in account.collection_items(release_id)
-            if int(i["instance_id"]) == int(instance_id)
-        )
-        add_discogs_release(item)
-    except Exception as e:
-        logger.exception("Added to Discogs but couldn't save in fbc")
-        db.session.rollback()
-        return (
-            None,
-            instance_id,
-            warnings,
-            "It was added to your Discogs collection (instance %s), but fbc"
-            " couldn't save it (%s). Run Sync Discogs to bring it in."
-            % (instance_id, e),
-        )
-    return db.session.get(DiscogsRelease, release_id), instance_id, warnings, None
-
-
-# --- Sample data -----------------------------------------------------------
-
-
-# For trying the ranking in dev mode, where Discogs isn't reachable.
-SAMPLE_CANDIDATES = [
-    {
-        "id": 1000001,
-        "title": "Sample Band - Sample Album",
-        "year": 1978,
-        "country": "US",
-        "formats": ["Vinyl, LP, Album"],
-        "labels": ["Sample Records"],
-        "catno": "SR-1001",
-        "thumb": None,
-        "images": [],
-        "matrices": ["SR-1001-A-1 RE", "SR-1001-B-2 RE"],
-        "format_text": "Red Translucent",
-    },
-    {
-        "id": 1000002,
-        "title": "Sample Band - Sample Album",
-        "year": 1978,
-        "country": "UK",
-        "formats": ["Vinyl, LP, Album"],
-        "labels": ["Sample Records"],
-        "catno": "SR 1001",
-        "thumb": None,
-        "images": [],
-        "matrices": ["SR-1001-A-1 RE", "SR-1001-B-2 RE"],
-    },
-    {
-        "id": 1000003,
-        "title": "Sample Band - Sample Album",
-        "year": 1984,
-        "country": "US",
-        "formats": ["Vinyl, LP, Album, Reissue"],
-        "labels": ["Sample Records"],
-        "catno": "SR-1001",
-        "thumb": None,
-        "images": [],
-        "matrices": ["SR-1001-A-1 RE STERLING", "SR-1001-B-1 RE STERLING"],
-    },
-    {
-        "id": 1000004,
-        "title": "Sample Band - Sample Album",
-        "year": 1990,
-        "country": "US",
-        "formats": ["Vinyl, LP, Album, Reissue"],
-        "labels": ["Other Records"],
-        "catno": "OR-9",
-        "thumb": None,
-        "images": [],
-        "matrices": ["ZZZ 99 X"],
-    },
-    {
-        "id": 1000005,
-        "title": "Sample Band - Sample Album",
-        "year": 1978,
-        "country": "US",
-        "formats": ["Vinyl, LP, Album"],
-        "labels": ["Sample Records"],
-        "catno": "SR-1001",
-        "thumb": None,
-        "images": [],
-        "matrices": [],
-    },
-]
-
-
-SAMPLE_IDS = {c["id"] for c in SAMPLE_CANDIDATES}
-
-
-def sample(country="", matrix="", color=""):
-    """Ranking of the sample candidates, shaped like search()'s answer. Dev
-    mode only, so it never looks like a real result."""
-    if not devmode.on():
-        return _failure("The sample data is only for Dev Mode.")
-    return {
-        "ok": True,
-        "candidates": rank(SAMPLE_CANDIDATES, country, matrix, color),
-        "searched": 0,
-        "note": "Sample data, not from Discogs.",
-        "total": len(SAMPLE_CANDIDATES),
-        "sample": True,
-    }

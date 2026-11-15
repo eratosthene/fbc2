@@ -34,11 +34,13 @@ file is what they don't say.
   specifics and item), `publish.py`, `pictures.py`, `vocab.py` (lookup tables),
   `skus.py`, `insertions.py`, `tracking.py`, `mystery.py`, and `listings.py`
   and `orders.py` (saving what a sync reads from eBay).
-- `fbc/discogs/`: Discogs. For now `saving.py` (what a sync reads from
-  Discogs); the rest of Discogs is moving in (#157).
+- `fbc/discogs/`: Discogs. `client.py` (every call to Discogs, and the only
+  module that imports its library), `identify.py` (Identify Record's search and
+  ranking), `collect.py`, `saving.py` (what a sync or Identify reads from
+  Discogs), `listing.py` (List on Discogs), `removal.py`, `naming.py` and
+  `samples.py`.
 - `fbc/shipping.py` (Ship This),
-  `fbc/discogs_client.py` (every call to Discogs, and the only module that imports its
-  library), `fbc/sync.py` (syncs run in a thread, their state in files, since
+  `fbc/sync.py` (syncs run in a thread, their state in files, since
   gunicorn workers don't share memory), `fbc/core/devmode.py`.
 - `migrations/`: Alembic, through Flask-Migrate. `flask setup-db` builds a new
   database from the models and stamps it, or migrates an existing one.
@@ -59,9 +61,9 @@ file is what they don't say.
   Discogs keys and refuses every request to their hosts. Anything new that
   reaches eBay or Discogs has to go through the guarded functions in
   `fbc/core/devmode.py`'s docstring, or check `devmode` itself.
-- Tests of anything that uses Discogs fake `fbc.discogs_client` (`tests/fake_discogs.py`),
+- Tests of anything that uses Discogs fake `fbc.discogs.client` (`tests/fake_discogs.py`),
   not the library; only `tests/test_discogs_seam.py` fakes the library. New
-  Discogs calls go in `fbc/discogs_client.py` (see `docs/development.md`).
+  Discogs calls go in `fbc/discogs/client.py` (see `docs/development.md`).
 - Custom form fields and list widgets live in `fbc/core/widgets.py`, and the
   base `CustomModelView` and `CustomForm` in `fbc/core/forms.py`. Menu entries
   for a filtered list ("Units w/out Listings") are links built in

@@ -260,7 +260,7 @@ def ensure_release_details(release):
     if not release or release.labels is not None:
         return
     from fbc import db
-    from fbc import discogs_client
+    from fbc.discogs import client as discogs_client
 
     try:
         r = discogs_client.release(release.release_id)
