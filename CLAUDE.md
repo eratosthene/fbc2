@@ -71,6 +71,9 @@ file is what they don't say.
 - Tests of anything that uses Discogs fake `fbc.discogs.client` (`tests/fake_discogs.py`),
   not the library; only `tests/test_discogs_seam.py` fakes the library. New
   Discogs calls go in `fbc/discogs/client.py` (see `docs/development.md`).
+- `tests/test_layers.py` keeps the package layers (see Layout): a new import
+  from a module in a higher layer fails it. Fix the import; the few exceptions
+  are named in the test, and #164 is about removing them.
 - Custom form fields and list widgets live in `fbc/core/widgets.py`, and the
   base `CustomModelView` and `CustomForm` in `fbc/core/forms.py`. Menu entries
   for a filtered list ("Units w/out Listings") are links built in
