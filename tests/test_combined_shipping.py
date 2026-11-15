@@ -7,7 +7,8 @@ import pytest
 from click.testing import CliRunner
 
 import fbc
-from fbc import combine, db, listing, shipping
+from fbc import combine, db, shipping
+from fbc.ebay import oauth
 from fbc.index import home_totals
 from fbc.models.ebay import EbayListing, EbayOrder, EbayOrderItem
 from fbc.models.inventory import PurchaseLot, Unit
@@ -108,7 +109,7 @@ def finances(monkeypatch):
     import requests
 
     monkeypatch.setattr(
-        listing, "oauth_token", lambda scope=listing.MEDIA_SCOPE: "access-token"
+        oauth, "oauth_token", lambda scope=oauth.MEDIA_SCOPE: "access-token"
     )
     state = SimpleNamespace(orders={}, asked=[])
 

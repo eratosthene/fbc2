@@ -9,6 +9,7 @@ from fbc.models.expenses import Expense
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.models.sales import SalesReceipt
 from fbc.models.supplies import PurchaseOrder, Supply
+from fbc.ebay import oauth
 
 
 def _lot(name="Lot 1", price=100.0):
@@ -283,10 +284,8 @@ def test_index_renders_with_no_sales(app):
 def test_ebay_sync_without_connect_ebay_says_what_to_do(
     app, monkeypatch, inline_sync, path
 ):
-    from fbc import listing
-
     monkeypatch.setitem(app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "")
-    monkeypatch.setattr(listing, "_oauth", {})
+    monkeypatch.setattr(oauth, "_oauth", {})
     client = signed_in_client(app)
 
     response = client.get(path, headers={"Accept": "application/json"})

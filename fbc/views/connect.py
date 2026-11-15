@@ -12,7 +12,7 @@ from fbc.discogs_client import (
     verifier_from,
 )
 from fbc.discogs_client import saved_oauth_token as saved_discogs_token
-from fbc.listing import (
+from fbc.ebay.oauth import (
     OAuthError,
     code_from,
     consent_url,

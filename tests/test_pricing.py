@@ -7,7 +7,8 @@ import requests
 from fake_discogs import FakeDiscogs, api_error, failing
 
 import fbc
-from fbc import discogs_client, listing, pricing
+from fbc import discogs_client, pricing
+from fbc.ebay import oauth
 
 
 def price(value, currency="USD"):
@@ -195,7 +196,7 @@ def ebay(monkeypatch):
         {"condition": "New", "price": {"value": "9.00", "currency": "EUR"}},
     ]
     response = FakeResponse(body={"itemSummaries": items})
-    monkeypatch.setattr(listing, "oauth_token", lambda scope=None: "tok")
+    monkeypatch.setattr(oauth, "oauth_token", lambda scope=None: "tok")
 
     def get(url, **kwargs):
         sent.append((url, kwargs))
@@ -243,9 +244,9 @@ def test_ebay_http_error_is_shown(ebay):
 
 def test_ebay_without_a_connection_says_so(monkeypatch):
     def refuse(scope=None):
-        raise listing.OAuthError("Connect fbc to eBay first.")
+        raise oauth.OAuthError("Connect fbc to eBay first.")
 
-    monkeypatch.setattr(listing, "oauth_token", refuse)
+    monkeypatch.setattr(oauth, "oauth_token", refuse)
 
     assert pricing.ebay_research("Carnaval") == {
         "ok": False,
@@ -265,7 +266,7 @@ def test_dev_mode_reaches_nothing(dev_mode, monkeypatch):
         raise AssertionError("reached out in dev mode")
 
     monkeypatch.setattr(discogs_client, "release", reached)
-    monkeypatch.setattr(listing, "oauth_token", reached)
+    monkeypatch.setattr(oauth, "oauth_token", reached)
     monkeypatch.setattr(requests, "get", reached)
 
     r = pricing.research(123, "456", "Carnaval")
@@ -327,7 +328,7 @@ def test_pricing_view_survives_both_sites_failing(client, monkeypatch):
         raise requests.ConnectionError("down")
 
     monkeypatch.setattr(discogs_client, "release", down)
-    monkeypatch.setattr(listing, "oauth_token", lambda scope=None: "tok")
+    monkeypatch.setattr(oauth, "oauth_token", lambda scope=None: "tok")
     monkeypatch.setattr(requests, "get", down)
 
     page = client.get("/unitmodelview/pricing?release=1&name=Carnaval")

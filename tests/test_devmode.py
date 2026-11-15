@@ -9,10 +9,11 @@ import requests
 from flask import Flask
 
 import fbc
-from fbc import db, discogs_client, listing, shipping
+from fbc import db, discogs_client, shipping
+from fbc.ebay import api, drafts, oauth
 from fbc.core import devmode
 from fbc.discogs_client import DiscogsAuthError
-from fbc.listing import OAuthError
+from fbc.ebay.oauth import OAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsOAuthToken
 from fbc.models.ebay import EbayDraft, EbayOAuthToken
 from test_listing import SETTINGS, _carnaval
@@ -185,10 +186,10 @@ def test_requests_to_ebay_and_discogs_are_refused(url, blocked):
 def test_no_ebay_token_is_used_in_dev_mode(app, dev_mode, monkeypatch):
     _saved_tokens()
     monkeypatch.setattr(
-        listing,
+        oauth,
         "_oauth",
         {
-            listing.MEDIA_SCOPE: {
+            oauth.MEDIA_SCOPE: {
                 "token": "minted-before",
                 "expires": datetime.datetime.utcnow() + datetime.timedelta(hours=1),
             }
@@ -196,11 +197,11 @@ def test_no_ebay_token_is_used_in_dev_mode(app, dev_mode, monkeypatch):
     )
 
     with pytest.raises(OAuthError, match="Dev Mode is turned on"):
-        listing.oauth_token()
+        oauth.oauth_token()
     with pytest.raises(OAuthError, match="Dev Mode is turned on"):
-        listing.trading()
+        api.trading()
     with pytest.raises(OAuthError, match="Dev Mode is turned on"):
-        listing.exchange_code("abc")
+        oauth.exchange_code("abc")
 
 
 def test_no_discogs_client_is_made_in_dev_mode(app, dev_mode):
@@ -236,7 +237,7 @@ def test_new_draft_skips_the_discogs_lookup_in_dev_mode(app, dev_mode, monkeypat
     unit = _carnaval()
     unit.discogs_release.labels = None
 
-    draft = listing.new_draft(unit)
+    draft = drafts.new_draft(unit)
 
     assert draft.title
     assert unit.discogs_release.labels is None

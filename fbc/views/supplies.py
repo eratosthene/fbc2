@@ -7,7 +7,7 @@ from flask_appbuilder.models.sqla.interface import SQLAInterface
 from wtforms import SelectField
 from wtforms.validators import NumberRange, Optional, ValidationError
 
-from fbc.listing import SIZES
+from fbc.ebay.vocab import SIZES
 from fbc.views.expenses import ExpenseModelView
 from fbc.models.supplies import (
     RECONCILE,

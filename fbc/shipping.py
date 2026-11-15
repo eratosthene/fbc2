@@ -154,10 +154,11 @@ def shipment_units(orders):
     The Units shipping `orders` together sells, and []; or None and what
     stops Ship This finding them, which is left to be done by hand. Each
     listing on the orders needs exactly as many unsold Units on it as were
-    bought. A mystery box's Units are picked at Ship This (see fbc/mystery.py),
+    bought. A mystery box's Units are picked at Ship This (see fbc/ebay/mystery.py),
     so it adds none here and is no problem.
     """
-    from fbc import db, mystery
+    from fbc import db
+    from fbc.ebay import mystery
     from fbc.models.inventory import Unit
 
     wanted = {}
@@ -268,7 +269,7 @@ def shipment_earnings(order_ids):
     """
     import requests
 
-    from fbc.listing import (
+    from fbc.ebay.oauth import (
         FINANCES_SCOPE,
         OAuthError,
         _rest_errors,
@@ -544,7 +545,7 @@ def supplies_plan(units):
     [(supply, count)] for every supply used for shipping: how many uses
     shipping `units` together normally takes (see Supply.shipping_count).
     """
-    from fbc.listing import record_size
+    from fbc.ebay.describe import record_size
     from fbc.models.supplies import SHIPPING, Supply
 
     sizes = [record_size(u) for u in units]

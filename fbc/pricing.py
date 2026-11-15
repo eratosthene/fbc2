@@ -16,7 +16,7 @@ python3-discogs-client source; nothing here is a sold price from them):
   are asking prices. eBay's own sold-items search is offered as a link.
 
 Everything that reaches Discogs or eBay goes through fbc.discogs_client and
-listing.oauth_token(), which refuse to run in dev mode; research() also checks
+oauth.oauth_token(), which refuse to run in dev mode; research() also checks
 devmode itself, so the page can say so plainly. Answers are kept for a few
 minutes so reloading the page doesn't repeat the calls.
 """
@@ -195,7 +195,7 @@ def ebay_research(query):
     """
     import requests
 
-    from fbc import listing
+    from fbc.ebay import oauth
 
     if devmode.on():
         return _failure("Not available in Dev Mode.")
@@ -205,7 +205,7 @@ def ebay_research(query):
 
     def fetch():
         try:
-            token = listing.oauth_token(listing.TRADING_SCOPE)
+            token = oauth.oauth_token(oauth.TRADING_SCOPE)
             r = requests.get(
                 BROWSE_URL,
                 headers={
@@ -221,9 +221,9 @@ def ebay_research(query):
                 timeout=30,
             )
             if r.status_code != 200:
-                return _failure("eBay said no: " + "; ".join(listing._rest_errors(r)))
+                return _failure("eBay said no: " + "; ".join(oauth._rest_errors(r)))
             items = r.json().get("itemSummaries") or []
-        except listing.OAuthError as e:
+        except oauth.OAuthError as e:
             return _failure(str(e))
         except requests.RequestException as e:
             return _failure("Couldn't reach eBay: " + str(e))

@@ -283,7 +283,7 @@ def scheduler_command():
 )
 def set_listing_skus(apply, overwrite, item, limit, csv_path):
     """Set fbc-<unit id> as the SKU on live listings that lack it."""
-    from fbc import skus
+    from fbc.ebay import skus
 
     # With the CSV on stdout, say everything else on stderr so it stays clean.
     to_stdout = csv_path == "-"

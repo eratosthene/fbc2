@@ -2,7 +2,8 @@ import datetime
 
 import pytest
 
-from fbc import db, listing, skus
+from fbc import db
+from fbc.ebay import api, skus
 from fbc.core import devmode
 from fbc.models.ebay import EbayListing
 from fbc.models.inventory import PurchaseLot, Unit
@@ -74,7 +75,7 @@ def item(item_id, sku=None):
 def ebay(monkeypatch):
     def install(items, failing=()):
         fake = FakeEbay(items, failing)
-        monkeypatch.setattr(listing, "_call", fake.call)
+        monkeypatch.setattr(api, "_call", fake.call)
         return fake
 
     return install

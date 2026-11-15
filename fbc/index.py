@@ -4,7 +4,8 @@ from flask import flash, jsonify, redirect, request, url_for
 from flask_appbuilder import IndexView, has_access
 from flask_appbuilder.views import expose
 
-from fbc import insertions, sync, syncjobs, tasks
+from fbc import sync, syncjobs, tasks
+from fbc.ebay import insertions
 
 logger = logging.getLogger()
 

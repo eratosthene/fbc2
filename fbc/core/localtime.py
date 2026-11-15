@@ -8,7 +8,7 @@ and the database is never changed. Typed `Date` columns (a receipt's, an
 expense's) are dates the owner chose, not times, so they are not converted.
 One format everywhere: `2026-11-13 5:45 PM`, or `2026-11-13` for a date.
 
-`fbc/insertions.py` does its own Pacific arithmetic, as eBay's free insertion
+`fbc/ebay/insertions.py` does its own Pacific arithmetic, as eBay's free insertion
 month runs on Pacific time; this module only changes what is displayed.
 """
 

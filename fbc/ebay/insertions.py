@@ -171,7 +171,7 @@ def count_insertions(listings, now, limit=DEFAULT_LIMIT, adjustment=0):
 
 
 def free_insertions_limit():
-    from fbc.listing import listing_settings
+    from fbc.ebay.api import listing_settings
 
     return int(listing_settings().get("FREE_INSERTIONS", DEFAULT_LIMIT))
 

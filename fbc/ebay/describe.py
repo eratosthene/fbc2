@@ -1,0 +1,326 @@
+"""
+Turning a Unit (and its Discogs release) into what eBay wants to show: the
+item specifics, the 80-character title and the description. No network.
+
+Item specifics are kept as plain text, one per line, in the form
+
+    Name: value | value
+
+so they can be read and edited in an ordinary textarea before publishing.
+"""
+
+import json
+import re
+
+
+from fbc.ebay import vocab
+
+
+def clean_name(name):
+    """Drop the " (2)" Discogs adds to tell same-named artists/labels apart."""
+    return re.sub(r"\s*\(\d+\)$", "", name or "").strip()
+
+
+def split_grading(grading):
+    """
+    Split Unit.grading ("VG+/VG+", "NM or M-/VG", "VG+") into
+    (record, sleeve) abbreviations; either may be None.
+    """
+    if not grading:
+        return None, None
+    parts = [p.strip() for p in grading.split("/", 1)]
+    record = parts[0] or None
+    sleeve = parts[1] if len(parts) > 1 and parts[1] else None
+    return record, sleeve
+
+
+def grade_name(abbrev):
+    if not abbrev:
+        return None
+    return vocab.GRADES.get(abbrev, abbrev)
+
+
+def _format_descriptions(release):
+    """Every Discogs format description and free-text note on the release."""
+    if not release or not release.formats:
+        return [], ""
+    try:
+        formats = json.loads(release.formats)
+    except ValueError:
+        return [], ""
+    descriptions = []
+    text = []
+    for f in formats:
+        descriptions.extend(f.get("descriptions") or [])
+        if f.get("text"):
+            text.append(f["text"])
+    return descriptions, " ".join(text)
+
+
+def _labels(release):
+    if not release or not release.labels:
+        return []
+    try:
+        return json.loads(release.labels)
+    except ValueError:
+        return []
+
+
+def parse_pressing(pressing):
+    """
+    (Edition values, Country of Origin or None) from Unit.pressing, e.g.
+    "US Original" -> (["First Edition", "First Pressing"], "United States").
+    Country is the pressing's leading country code (US, UK, JP...) or
+    leading capitalized word ("Germany Reissue"), without checking that the
+    word really is a country.
+    """
+    pressing = (pressing or "").strip()
+    editions = []
+    lowered = pressing.lower()
+    if "original" in lowered:
+        editions += ["First Edition", "First Pressing"]
+    if "reissue" in lowered:
+        editions.append("Reissue")
+    country = None
+    for name in vocab.TWO_WORD_COUNTRIES:
+        if lowered.startswith(name.lower()):
+            country = name
+            break
+    if country is None:
+        m = re.match(r"[A-Za-z]+", pressing)
+        word = m.group(0) if m else ""
+        if word in vocab.COUNTRIES:
+            # A code ("US", "JP") or adjective ("Japanese"), as written.
+            country = vocab.COUNTRIES[word]
+        elif (
+            len(word) > 2
+            and word[0].isupper()
+            and not word.isupper()
+            and word not in vocab.NOT_COUNTRIES
+        ):
+            # Any other capitalized word is taken to be a country's name.
+            country = word
+    return editions, country
+
+
+def parse_type(unit_type):
+    """
+    The eBay Type values in Unit.unit_type: '12" Double LP' -> ["LP"],
+    '12" 2xLP' -> ["LP"], '12" Maxi-Single' -> ["Maxi-Single"].
+    """
+    by_name = {t.lower(): t for t in vocab.TYPES}
+    found = []
+    for token in re.split(r"[\s/,+&]+", unit_type or ""):
+        token = re.sub(r"^\d*\s*[x×]", "", token).strip(" ()").lower()
+        if token in by_name:
+            found.append(by_name[token])
+    return list(dict.fromkeys(found))
+
+
+def record_size(unit):
+    """
+    `unit`'s record size, one of SIZES: from Discogs' format descriptions,
+    else its Unit Type, as a listing's Record Size is, else 12".
+    """
+    descriptions, _ = _format_descriptions(unit.discogs_release)
+    unit_type = unit.unit_type or ""
+    for size in vocab.SIZES:
+        if size in descriptions:
+            return size
+    for size in vocab.SIZES:
+        if unit_type.startswith(size):
+            return size
+    return '12"'
+
+
+def decade(year):
+    if not year:
+        return None
+    return str(year // 10 * 10) + "s"
+
+
+def build_item_specifics(unit, defaults=None):
+    """
+    The item specifics for `unit`, as an ordered dict of name -> list of
+    values. Anything fbc doesn't know is left out rather than guessed.
+    """
+    release = unit.discogs_release
+    specifics = {}
+
+    def put(name, *values):
+        values = [v for v in values if v]
+        if values and name not in specifics:
+            specifics[name] = list(dict.fromkeys(values))
+
+    if release:
+        put("Artist", *[clean_name(a.name) for a in release.artists])
+        put("Release Title", release.title)
+        labels = _labels(release)
+        put("Record Label", *[clean_name(label["name"]) for label in labels[:1]])
+        catnos = [
+            label["catno"]
+            for label in labels[:1]
+            if label.get("catno") and label["catno"].lower() != "none"
+        ]
+        put("Catalog Number", *catnos)
+        put("MPN", *catnos)
+        if release.year:
+            put("Release Year", str(release.year))
+        # Era (and the decade in Style) is when the music came out, so a
+        # reissue keeps its original's: the master release's year when
+        # Discogs has one.
+        original_year = release.year
+        if release.master_year and release.master_year > 0:
+            original_year = release.master_year
+        put("Era", decade(original_year))
+        genres = []
+        for g in release.genres:
+            genres.extend(vocab.GENRES.get(g.name, [g.name]))
+        put("Genre", *genres)
+        put("Style", decade(original_year), *[s.name for s in release.styles])
+    # Where the copy was pressed: Discogs' country for the release, else the
+    # Pressing's leading country.
+    editions, pressing_country = parse_pressing(unit.pressing)
+    discogs_country = release.country if release else None
+    put(
+        "Country of Origin",
+        vocab.COUNTRIES.get(discogs_country, discogs_country) or pressing_country,
+    )
+
+    descriptions, text = _format_descriptions(release)
+    unit_type = unit.unit_type or ""
+    put("Type", *record_types(unit))
+    put("Record Size", *[s for s in vocab.SIZES if s in descriptions])
+    put("Record Size", *[s for s in vocab.SIZES if unit_type.startswith(s)])
+    for d in descriptions:
+        m = re.match(r"(\d+)", d)
+        if m and "RPM" in d:
+            put("Speed", m.group(1) + " RPM")
+    if any(t.endswith("LP") for t in specifics.get("Type", [])):
+        put("Speed", "33 RPM")
+    put("Number of Audio Channels", *[c for c in vocab.CHANNELS if c in descriptions])
+    put("Color", *[c for c in vocab.COLORS if c.lower() in text.lower()])
+
+    put("Vinyl Matrix Number", unit.matrix)
+    put("Edition", *editions)
+    record, sleeve = split_grading(unit.grading)
+    put("Record Grading", grade_name(record))
+    put("Sleeve Grading", grade_name(sleeve))
+    put("Inlay Condition", grade_name(sleeve))
+
+    for name, values in (
+        defaults if defaults is not None else vocab.DEFAULT_SPECIFICS
+    ).items():
+        put(name, *values)
+    return specifics
+
+
+def format_specifics(specifics):
+    return "\n".join(
+        name + ": " + " | ".join(values) for name, values in specifics.items()
+    )
+
+
+def parse_specifics(text):
+    """The inverse of format_specifics. Blank and malformed lines are skipped."""
+    specifics = {}
+    for line in (text or "").splitlines():
+        if ":" not in line:
+            continue
+        name, values = line.split(":", 1)
+        name = name.strip()
+        values = [v.strip() for v in values.split("|") if v.strip()]
+        if name and values:
+            specifics[name] = values
+    return specifics
+
+
+def build_title(unit):
+    """
+    A title in the house style, e.g.
+    "Spyro Gyra - Carnaval 1980 First Edition Vinyl LP Fusion Jazz-Funk VG+"
+    for a "US Original" pressing, dropping styles and then the edition until
+    it fits in 80 characters.
+    """
+    release = unit.discogs_release
+    if release:
+        artist = " / ".join(clean_name(a.name) for a in release.artists)
+        head = (artist + " - " if artist else "") + release.title
+        year = str(release.year) if release.year else ""
+        styles = [s.name.replace(" ", "-") for s in release.styles]
+    else:
+        head = unit.name
+        year = ""
+        styles = []
+    kind = (record_types(unit) or [""])[0]
+    record, _ = split_grading(unit.grading)
+    # "First Edition" or "Reissue", as parsed for the Edition specific.
+    edition = (parse_pressing(unit.pressing)[0] or [""])[0]
+
+    def assemble(edition, styles):
+        parts = [head, year, edition, "Vinyl", kind] + styles + [record or ""]
+        return " ".join(p for p in parts if p)
+
+    while styles and len(assemble(edition, styles)) > vocab.TITLE_MAX:
+        styles = styles[:-1]
+    title = assemble(edition, styles)
+    if len(title) > vocab.TITLE_MAX:
+        title = assemble("", [])
+    return title[: vocab.TITLE_MAX].strip()
+
+
+def build_description(unit):
+    if not unit.description:
+        return ""
+    return "<p>" + unit.description + "</p>"
+
+
+def _discs_in_text(text):
+    """A disc count written in free text: "Double", "Triple", "2xLP", "2 x LP"."""
+    text = (text or "").lower()
+    if "triple" in text:
+        return 3
+    if "double" in text:
+        return 2
+    m = re.search(r"\b([2-9])\s*[x×]?\s*lp", text)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def disc_count(unit):
+    """
+    How many records the Unit is: the quantities of its Discogs Vinyl
+    formats ("2 x Vinyl, LP"), else a count in its Unit Type ("Double",
+    "Triple", "2xLP"), else 1.
+    """
+    release = unit.discogs_release
+    if release and release.formats:
+        try:
+            formats = json.loads(release.formats)
+        except ValueError:
+            formats = []
+        count = 0
+        for f in formats:
+            if f.get("name") == "Vinyl":
+                try:
+                    count += int(f.get("qty") or 1)
+                except ValueError:
+                    count += 1
+        if count:
+            return count
+    return _discs_in_text(unit.unit_type) or 1
+
+
+def record_types(unit):
+    """
+    The Type values for `unit`: from its Unit Type, else Discogs' format
+    descriptions, with an LP of 2 or 3 discs (see disc_count) made a
+    "Double LP" or "Triple LP".
+    """
+    descriptions, _ = _format_descriptions(unit.discogs_release)
+    types = parse_type(unit.unit_type) or [t for t in vocab.TYPES if t in descriptions]
+    multi = vocab.MULTI_DISC_TYPES.get(disc_count(unit))
+    if multi and types in ([], ["LP"]):
+        return [multi]
+    return types

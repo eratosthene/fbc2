@@ -2,7 +2,8 @@
 
 import random
 
-from fbc import db, mystery, shipping
+from fbc import db, shipping
+from fbc.ebay import mystery
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import StorageBox, Unit
 from fbc.models.sales import SalesReceipt

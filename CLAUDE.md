@@ -29,7 +29,11 @@ file is what they don't say.
   areas. The areas are moving into packages (#157): eBay, Discogs, sync, sales.
 - `fbc/models/`: one module per area (inventory, discogs, ebay, sales,
   supplies). `fbc/views/` matches it.
-- `fbc/listing.py` (eBay drafts and listings), `fbc/shipping.py` (Ship This),
+- `fbc/ebay/`: everything that talks to eBay or builds for it. `oauth.py`,
+  `api.py` (Trading API), `describe.py` and `drafts.py` (an eBay Draft's title,
+  specifics and item), `publish.py`, `pictures.py`, `vocab.py` (lookup tables),
+  `skus.py`, `insertions.py`, `tracking.py`, `mystery.py`.
+- `fbc/shipping.py` (Ship This),
   `fbc/discogs_client.py` (every call to Discogs, and the only module that imports its
   library), `fbc/sync.py` (syncs run in a thread, their state in files, since
   gunicorn workers don't share memory), `fbc/core/devmode.py`.

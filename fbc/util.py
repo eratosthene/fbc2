@@ -2,7 +2,7 @@ import logging
 import json
 import datetime
 
-from fbc import tracking
+from fbc.ebay import tracking
 from fbc.core.localtime import naive_utc
 
 logger = logging.getLogger()
@@ -41,7 +41,7 @@ def link_unit_by_sku(item):
     (SKU). Link such a listing to its Unit if the Unit has no listing yet.
     """
     from fbc import db
-    from fbc.listing import unit_id_from_sku
+    from fbc.ebay.skus import unit_id_from_sku
     from fbc.models.inventory import Unit
 
     unit_id = unit_id_from_sku(item.get("SKU"))
@@ -139,7 +139,8 @@ def relist_ebay_listing(old_listing, item):
 
 def save_renewals(items, fetched):
     """Save when each of eBay's active `items` renews, as read at `fetched`."""
-    from fbc import db, insertions
+    from fbc import db
+    from fbc.ebay import insertions
     from fbc.models.ebay import EbayListing
 
     for item in items:
@@ -154,7 +155,7 @@ def mark_ended_listings(remote_item_ids, previous_sync=None):
     """
     Mark every listing that isn't in eBay's active list as ended, and clear
     the flag on one that is back in it. Only call this after reading the
-    whole active list (listing.fetch_active_items checks that it did), since
+    whole active list (api.fetch_active_items checks that it did), since
     anything missing from `remote_item_ids` is taken as ended.
 
     A listing's end_time is when the previous successful sync last saw it
@@ -200,7 +201,7 @@ def save_discogs_listing(data, seen):
     """
     from fbc import db
     from fbc.discogs_client import parse_timestamp
-    from fbc.listing import unit_id_from_sku
+    from fbc.ebay.skus import unit_id_from_sku
     from fbc.models.discogs import DiscogsListing
     from fbc.models.inventory import Unit
 
