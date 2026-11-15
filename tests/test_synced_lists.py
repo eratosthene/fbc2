@@ -15,7 +15,6 @@ FINISHED = datetime.datetime(2026, 11, 13, 23, 45)
 # view path -> the syncs it shows, labelled.
 VIEWS = {
     "discogsreleasemodelview": ["Discogs collection"],
-    "discogsreleasemodelnounitview": ["Discogs collection"],
     "artistmodelview": ["Discogs collection"],
     "genremodelview": ["Discogs collection"],
     "stylemodelview": ["Discogs collection"],

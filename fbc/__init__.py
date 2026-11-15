@@ -363,7 +363,6 @@ def _register_views():
     # first, so these imports can't move to the top of the file.
     from fbc.views.discogs import (
         DiscogsReleaseModelView,
-        DiscogsReleaseModelNoUnitView,
         ArtistModelView,
         GenreModelView,
         StyleModelView,
@@ -406,18 +405,12 @@ def _register_views():
         StorageBoxModelView,
         UnitModelReboxView,
         UNSOLD_UNITS_OVER_2_FILTERS,
-        UNITS_WITHOUT_LISTING_FILTERS,
         UNITS_WITHOUT_MASTER_FILTERS,
     )
 
     with app.app_context():
         units = appbuilder.add_view(UnitModelView, "Units", category="Inventory")
         units_list = units.route_base + "/list/?"
-        appbuilder.add_link(
-            "Units w/out Listings",
-            href=units_list + urlencode(UNITS_WITHOUT_LISTING_FILTERS),
-            category="Inventory",
-        )
         rebox = appbuilder.add_view_no_menu(UnitModelReboxView)
         appbuilder.add_link(
             "Rebox Units",
@@ -433,28 +426,23 @@ def _register_views():
         appbuilder.add_view(IdentifyRecordView, "Identify Record", category="Inventory")
         appbuilder.add_view(StorageBoxModelView, "Storage Boxes", category="Inventory")
         appbuilder.add_view(DiscogsReleaseModelView, "Releases", category="Discogs")
-        appbuilder.add_view(
-            DiscogsReleaseModelNoUnitView, "Releases w/out Units", category="Discogs"
-        )
         appbuilder.add_view(ArtistModelView, "Artists", category="Discogs")
         appbuilder.add_view(GenreModelView, "Genres", category="Discogs")
         appbuilder.add_view(StyleModelView, "Styles", category="Discogs")
         appbuilder.add_view(FolderModelView, "Folders", category="Discogs")
-        appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Discogs")
         appbuilder.add_view(SalesReceiptModelView, "Sales Receipts", category="Sales")
+        appbuilder.add_view(MysteryBoxesView, "Mystery Boxes", category="Sales")
+        drafts = appbuilder.add_view(
+            EbayDraftModelView, "eBay Drafts", category="Sales"
+        )
         appbuilder.add_view(EbayListingModelView, "eBay Listings", category="Sales")
+        appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
         discogs_listings = appbuilder.add_view(
             DiscogsListingModelView, "Discogs Listings", category="Sales"
         )
         appbuilder.add_view(DiscogsOrderModelView, "Discogs Orders", category="Sales")
-        appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
-        appbuilder.add_view(ListingEndModelView, "Ended Listings", category="Sales")
-        drafts = appbuilder.add_view(
-            EbayDraftModelView, "eBay Drafts", category="Sales"
-        )
-        appbuilder.add_view(MysteryBoxesView, "Mystery Boxes", category="Sales")
         appbuilder.add_view(OtherItemModelView, "Other Items", category="Sales")
-        appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Sales")
+        appbuilder.add_view(ListingEndModelView, "Ended Listings", category="Sales")
         appbuilder.add_view(OrdersToShipView, "Orders to Ship", category="Tasks")
         appbuilder.add_view(
             DiscogsOrdersToShipView, "Discogs Orders to Ship", category="Tasks"
@@ -495,6 +483,8 @@ def _register_views():
         appbuilder.add_view_no_menu(PurchaseOrderSupplyModelView)
         appbuilder.add_view(SupplyUseModelView, "Supply Use", category="Supplies")
         appbuilder.add_view(ExpenseModelView, "Expenses", category="Supplies")
+        appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Connect")
+        appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Connect")
 
 
 if not SKIP_VIEWS:

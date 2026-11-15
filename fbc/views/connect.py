@@ -23,7 +23,7 @@ from fbc.ebay.oauth import (
 
 class ConnectEbayView(BaseView):
     """
-    Connect eBay, under Sales: the OAuth sign-in every eBay call fbc makes
+    Connect eBay, under Connect: the OAuth sign-in every eBay call fbc makes
     uses (syncing listings and orders, eBay Drafts, Ship This).
     """
 
@@ -91,7 +91,7 @@ class ConnectEbayView(BaseView):
 
 class ConnectDiscogsView(BaseView):
     """
-    Connect Discogs, under Discogs: the OAuth sign-in fbc uses for everything
+    Connect Discogs, under Connect: the OAuth sign-in fbc uses for everything
     it does with the collection (Sync, labels for listings, Ship This).
     """
 

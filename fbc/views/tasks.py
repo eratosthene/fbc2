@@ -1,7 +1,6 @@
 """
 The Tasks menu: lists of what needs doing next (see fbc/sales/tasks.py for what each
-means). Each is an existing list with a filter on it, the way "Releases w/out
-Units" is, so a task leaves the list when it's done. eBay Drafts and Discogs
+means). Each is an existing list with a filter on it, the way a filtered list is, so a task leaves the list when it's done. eBay Drafts and Discogs
 Drafts that aren't listed yet are filter links on those lists instead
 (DRAFTS_TO_LIST_FILTERS in fbc/views/listing.py, DISCOGS_DRAFTS_TO_LIST_FILTERS
 in fbc/views/discogs.py).
