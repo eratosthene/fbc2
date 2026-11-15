@@ -175,6 +175,7 @@ def test_sales_menu_is_in_the_owners_order():
         "eBay Orders",
         "Discogs Listings",
         "Discogs Orders",
+        "Other Items",
         "Ended Listings",
     ]
 
