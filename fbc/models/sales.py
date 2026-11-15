@@ -380,7 +380,7 @@ class SalesReceiptLine(Model):
         return self.label + " " + self.fmt_amount()
 
 
-def earnings_totals(start=None, end=None):
+def earnings_totals(start=None, end=None, other_items=False):
     """
     Sales Receipts' earnings totalled for the receipts dated from `start` to
     `end` (dates, both included; None for no limit), for reports. Returns a
@@ -393,12 +393,22 @@ def earnings_totals(start=None, end=None):
                        fees, labels and refunds can't be told apart
     The categories and not_broken_down add up to net, apart from receipts
     with lines whose sale isn't Sold Price (shipping charged, or taxes).
+    Other Items' receipts are left out, as they are of every record figure
+    (see fbc/models/other.py); `other_items=True` counts only those instead.
     """
     from sqlalchemy import func
 
     from fbc import db
+    from fbc.models.other import receipt_ids
+
+    others = receipt_ids()
 
     def in_period(query):
+        query = query.filter(
+            SalesReceipt.id.in_(others)
+            if other_items
+            else SalesReceipt.id.notin_(others)
+        )
         if start is not None:
             query = query.filter(SalesReceipt.date >= start)
         if end is not None:

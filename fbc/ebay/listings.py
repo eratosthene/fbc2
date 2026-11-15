@@ -8,8 +8,14 @@ import logging
 logger = logging.getLogger()
 
 
-def add_ebay_listing(item):
+def add_ebay_listing(item, category=None):
+    """
+    Add an item from eBay's active list if fbc hasn't got it. `category` is
+    its eBay category id (see fbc/ebay/sorting.py), which sorts it into a
+    record's listing or an Other Item; None keeps it a record's for now.
+    """
     from fbc import db
+    from fbc.ebay import sorting
     from fbc.models.ebay import EbayListing
 
     logger.debug(item)
@@ -28,6 +34,8 @@ def add_ebay_listing(item):
         )
         db.session.add(ebay_listing)
         link_unit_by_sku(item)
+        db.session.flush()
+        sorting.sort_listing(ebay_listing, category)
     else:
         logger.debug("Listing already exists!")
     db.session.commit()
@@ -64,8 +72,9 @@ def find_relisted_listing(item, remote_item_ids):
       - have the same title as the new item
       - no longer be present in eBay's current active listings (an item that
         is still active can't be the "old" side of a relist)
-      - still be linked to a Unit that hasn't sold (so it's genuinely
-        pending relist, not a stale/ended listing with no inventory tie)
+      - still be linked to a Unit or an Other Item that hasn't sold (so it's
+        genuinely pending relist, not a stale/ended listing with no inventory
+        tie)
 
     Returns the matching EbayListing, or None if there isn't exactly one
     unambiguous match.
@@ -73,6 +82,7 @@ def find_relisted_listing(item, remote_item_ids):
     from fbc import db
     from fbc.models.ebay import EbayListing
     from fbc.models.inventory import Unit
+    from fbc.models.other import OtherItem
 
     candidates = (
         db.session.query(EbayListing)
@@ -88,6 +98,9 @@ def find_relisted_listing(item, remote_item_ids):
         .filter_by(ebay_listing_id=c.item_id)
         .filter(Unit.sold.isnot(True))
         .first()
+        or db.session.query(OtherItem)
+        .filter_by(ebay_listing_id=c.item_id, sold=False)
+        .first()
     ]
     if len(matches) == 1:
         return matches[0]
@@ -102,7 +115,7 @@ def find_relisted_listing(item, remote_item_ids):
     return None
 
 
-def relist_ebay_listing(old_listing, item):
+def relist_ebay_listing(old_listing, item, category=None):
     """
     Record a relisted item under its new ItemID, re-point every model that
     referenced the old listing at the new one, and remove the old listing.
@@ -110,15 +123,24 @@ def relist_ebay_listing(old_listing, item):
     from fbc import db
     from fbc.models.ebay import EbayListing, EbayOrder, EbayOrderItem
     from fbc.models.inventory import Unit
+    from fbc.models.other import OtherItem
 
     old_item_id = old_listing.item_id
-    add_ebay_listing(item)
+    add_ebay_listing(item, category)
     new_item_id = item["ItemID"]
+    # An Other Item stays the one Item: the new listing's own is dropped.
+    old_other = db.session.query(OtherItem).filter_by(ebay_listing_id=old_item_id)
+    if old_other.first():
+        db.session.query(OtherItem).filter_by(ebay_listing_id=new_item_id).delete()
+        db.session.flush()
+        old_other.update({"ebay_listing_id": new_item_id})
 
     # A mystery box stays one: it has no Units to find it by.
     new_listing = db.session.get(EbayListing, new_item_id)
     new_listing.pick_from_box_id = old_listing.pick_from_box_id
     new_listing.pick_count = old_listing.pick_count
+    if new_listing.category_id is None:
+        new_listing.category_id = old_listing.category_id
 
     db.session.query(Unit).filter_by(ebay_listing_id=old_item_id).update(
         {"ebay_listing_id": new_item_id}

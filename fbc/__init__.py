@@ -48,6 +48,7 @@ SKIP_VIEWS_COMMANDS = {
     "backfill-earnings",
     "set-listing-skus",
     "archive",
+    "sort-other-items",
     "sync",
     "scheduler",
 }
@@ -65,6 +66,7 @@ if SKIP_VIEWS:
         "ebay",
         "expenses",
         "inventory",
+        "other",
         "sales",
         "supplies",
         "sync",
@@ -180,6 +182,36 @@ def archive(apply):
     archive_all(apply=apply, echo=click.echo)
     if not apply:
         click.echo("This was a dry run. Add --apply to archive them.")
+
+
+@app.cli.command("sort-other-items")
+@click.option("--apply", is_flag=True, help="Save the changes; without it, only show.")
+@click.option(
+    "--limit", type=int, help="Read the category of at most this many listings."
+)
+def sort_other_items(apply, limit):
+    """Make Other Items of the old eBay listings that aren't vinyl records."""
+    from fbc.ebay import sorting
+
+    counts = sorting.sort_existing(apply=apply, limit=limit, echo=click.echo)
+    click.echo(
+        ("Made " if apply else "Would make ")
+        + str(counts["other"])
+        + " Other Items. Records: "
+        + str(counts["records"])
+        + ", kept as records because they have a Unit: "
+        + str(counts["kept"])
+        + ", category unknown: "
+        + str(counts["unknown"])
+        + (
+            ", sold Other Items linked to their receipts: " + str(counts["claimed"])
+            if apply
+            else ""
+        )
+        + "."
+    )
+    if not apply:
+        click.echo("This was a dry run. Add --apply to save the changes.")
 
 
 @app.cli.group("sync")
@@ -346,6 +378,7 @@ def _register_views():
         MysteryBoxesView,
         SalesReceiptModelView,
     )
+    from fbc.views.other import OtherItemModelView
     from fbc.views.listing import EbayDraftModelView, DRAFTS_TO_LIST_FILTERS
     from fbc.views.discogs import DISCOGS_DRAFTS_TO_LIST_FILTERS
     from fbc.views.tasks import (
@@ -420,6 +453,7 @@ def _register_views():
             EbayDraftModelView, "eBay Drafts", category="Sales"
         )
         appbuilder.add_view(MysteryBoxesView, "Mystery Boxes", category="Sales")
+        appbuilder.add_view(OtherItemModelView, "Other Items", category="Sales")
         appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Sales")
         appbuilder.add_view(OrdersToShipView, "Orders to Ship", category="Tasks")
         appbuilder.add_view(

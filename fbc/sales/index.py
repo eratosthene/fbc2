@@ -5,7 +5,7 @@ from flask import flash, jsonify, redirect, request, url_for
 from flask_appbuilder import IndexView, has_access
 from flask_appbuilder.views import expose
 
-from fbc.sales import tasks
+from fbc.sales import other, tasks
 from fbc.sync import jobs, state
 from fbc.ebay import insertions
 
@@ -15,16 +15,22 @@ logger = logging.getLogger()
 def marketplace_sales():
     """
     [{"name", "receipts", "gross", "net"}] for eBay, Discogs and receipts
-    with no order, from the Sales Receipts. Discogs's net is its total less
+    with no order, from the Sales Receipts, except Other Items' (see other.sales). Discogs's net is its total less
     its fee unless corrected by hand: its API has no payment processing fee.
     """
     from fbc import db
+    from fbc.models import other as other_models
     from fbc.models.sales import SalesReceipt
 
     rows = {name: [0, 0.0, 0.0] for name in ("eBay", "Discogs", "")}
-    for receipt in db.session.query(SalesReceipt).options(
-        sa.orm.selectinload(SalesReceipt.ebay_orders),
-        sa.orm.selectinload(SalesReceipt.discogs_orders),
+    # Other Items' sales have a line of their own, so they aren't in these.
+    for receipt in (
+        db.session.query(SalesReceipt)
+        .filter(SalesReceipt.id.notin_(other_models.receipt_ids()))
+        .options(
+            sa.orm.selectinload(SalesReceipt.ebay_orders),
+            sa.orm.selectinload(SalesReceipt.discogs_orders),
+        )
     ):
         row = rows[receipt.marketplace()]
         row[0] += 1
@@ -203,6 +209,7 @@ def home_totals():
         "listings": insertions.listing_summary(),
         "tasks": tasks.counts(),
         "marketplace_sales": marketplace_sales(),
+        "other_sales": other.sales(),
     }
 
 

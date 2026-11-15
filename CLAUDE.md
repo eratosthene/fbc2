@@ -30,11 +30,14 @@ file is what they don't say.
   and `discogs`, `sync`, `sales`, then `views`; a module imports only from its
   own layer or lower (`docs/development.md` has the detail).
 - `fbc/models/`: one module per area (inventory, discogs, ebay, sales,
-  supplies). `fbc/views/` matches it.
+  supplies, other). Other Items (`other.py`) are non-record eBay sales and must
+  never reach record stock, cost or profit: anything that totals Sales Receipts
+  leaves out `other.receipt_ids()`. `fbc/views/` matches it.
 - `fbc/ebay/`: everything that talks to eBay or builds for it. `oauth.py`,
   `api.py` (Trading API), `describe.py` and `drafts.py` (an eBay Draft's title,
   specifics and item), `publish.py`, `pictures.py`, `vocab.py` (lookup tables),
-  `skus.py`, `insertions.py`, `tracking.py`, `mystery.py`, `finances.py`
+  `skus.py`, `insertions.py`, `tracking.py`, `mystery.py`, `sorting.py` (records
+  or Other Items, by eBay category), `finances.py`
   (Finances API), and `listings.py` and `orders.py` (saving what a sync reads
   from eBay).
 - `fbc/discogs/`: Discogs. `client.py` (every call to Discogs, and the only

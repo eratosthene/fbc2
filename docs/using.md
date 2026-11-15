@@ -17,10 +17,13 @@ range (`100-200`) or a mix (`5, 100-200`).
 ## The home page
 
 It has the alerts first (supplies to reorder, a To do banner, and free
-insertions close to or over the limit), then three sections:
+insertions close to or over the limit), then these sections:
 
 - **Listings**: the active listings and this month's free insertions (see
   below).
+- **Other items**: shown once an Other Item has sold (see below): how many
+  sold and their sales, and profit for those that have a cost. It's apart
+  from everything else here.
 - **Stock**: the Units in stock.
 - **Money**: supply cost, other expenses, net profit and the breakeven price
   per Unit, with Expense Details and Profit Details to open. Profit Details
@@ -574,6 +577,58 @@ their own, divided by the Units per sale, rounded down. eBay keeps selling as
 many boxes as the listing's quantity says, so lower the quantity on eBay when
 it runs out. fbc doesn't set it for you. Listings that have ended aren't on
 the Mystery Boxes page.
+
+### Other Items
+
+Not everything sold on eBay is a record: your own things and estate-sale finds
+sell there too. The eBay listings sync reads each listing's eBay category.
+Music > Vinyl Records is a record's, which gets a Unit as always. Any other
+category makes an **Other Item** (Sales > Other Items), with the listing's
+title as its name. Other Items are kept apart from records:
+
+- Their listings and orders leave the eBay Listings and eBay Orders lists. An
+  order for one still shows on Orders to Ship, until it's shipped.
+- They are never in record stock, cost or profit, or in the Sales by
+  marketplace table on the home page. The Other items line has what they sold:
+  how many, the Sold Price and Net Sold of their Sales Receipts, and a profit.
+- Cost is blank, and stays blank unless you enter it on the Item. With no cost
+  an Item has no profit. Enter a cost later and its sale joins the profit.
+  A Sales Receipt for several Items has a profit once every Item on it has a
+  cost.
+- Lot costs aren't split between records and Other Items. An Other Item can
+  also be added by hand.
+
+A listing that has a Unit, an eBay Draft or is a mystery box stays a record's
+whatever its category, so a record listed in the wrong category doesn't vanish.
+The sync only needs eBay's category for a new listing. If it can't be read, the
+listing stays a record's until `flask --app fbc sort-other-items` reads it.
+
+**Ship This** on an Other Item's order records its Sales Receipt, marks the
+Item sold and takes the supplies out of stock, with no Units and no Discogs
+step. It offers every supply set as Used For shipping (the label roll, packing
+tape), with none filled in: enter how many were used, since a record's size
+doesn't apply. Other packaging can be added as ordinary Supplies. An order that
+mixes records and Other Items can't be shipped this way: Ship This says so and
+links to adding the Sales Receipt by hand. Orders of Other Items aren't
+combined into one package.
+
+#### Sorting the listings already there
+
+Run this once after updating, and again if a listing couldn't be read:
+
+```bash
+flask --app fbc sort-other-items
+flask --app fbc sort-other-items --apply
+```
+
+It reads the category of each listing that has none (one eBay call each, so
+use `--limit` to do some at a time), and with `--apply` makes an Other Item
+for each one outside Vinyl Records. Orders for them are already in fbc, and
+now show on Other Items. An order that already has a Sales Receipt, made by
+hand, marks its Item sold with that receipt, unless a Unit is on the receipt
+too. Without `--apply` it only says what it would do. It is safe to run again:
+a listing that is sorted is skipped, and no listing gets two Items. It does
+nothing in Dev Mode, since it reaches eBay.
 
 ### Shipment tracking
 
