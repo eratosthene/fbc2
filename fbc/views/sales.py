@@ -1,8 +1,9 @@
 from flask import abort, flash, redirect, request, url_for
 from flask_appbuilder import BaseView, expose, has_access
 from flask_appbuilder.actions import action
-from markupsafe import Markup
 from flask_appbuilder.models.filters import BaseFilter
+import sqlalchemy as sa
+from markupsafe import Markup
 from flask_appbuilder.models.sqla.filters import get_field_setup_query
 from sqlalchemy import or_
 from wtforms.validators import Optional
@@ -87,6 +88,32 @@ def _lines_total(earnings):
     return f"{sum(line['amount'] for line in earnings['lines']):.2f}"
 
 
+class FilterHasNoOrder(BaseFilter):
+    """
+    Sales Receipts with no eBay order and no Discogs order: the ones sold in
+    person or entered by hand. Flask-AppBuilder has no "is empty" filter for
+    a many-to-many link, so this is one. It sits on the eBay Orders column and
+    ignores the value, which is only there because every filter has one.
+    """
+
+    name = "Has no order"
+    arg_name = "no_order"
+
+    def apply(self, query, value):
+        from fbc.models.sales import (
+            sales_receipt_discogs_order,
+            sales_receipt_ebay_order,
+        )
+
+        def linked(table):
+            return sa.select(table.c.sales_receipt_id)
+
+        return query.filter(
+            SalesReceipt.id.notin_(linked(sales_receipt_ebay_order)),
+            SalesReceipt.id.notin_(linked(sales_receipt_discogs_order)),
+        )
+
+
 class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
     datamodel = SQLAInterface(SalesReceipt)
     related_views = [UnitModelView]
@@ -100,11 +127,33 @@ class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
         "ebay_orders": "eBay Orders",
         "discogs_orders": "Discogs Orders",
     }
-    show_columns = ["date", "ebay_orders", "discogs_orders", "sold_price", "net_sold"]
+    show_columns = [
+        "date",
+        "ebay_orders",
+        "discogs_orders",
+        "sold_price",
+        "net_sold",
+        "notes",
+    ]
     # Lines come from eBay or Discogs (Ship This and Refresh Earnings), not the form.
-    add_columns = ["ebay_orders", "discogs_orders", "date", "sold_price", "net_sold"]
+    add_columns = [
+        "ebay_orders",
+        "discogs_orders",
+        "date",
+        "sold_price",
+        "net_sold",
+        "notes",
+    ]
     edit_columns = add_columns
     search_columns = add_columns + ["archived"]
+
+    def _init_properties(self):
+        super()._init_properties()
+        # First, so the home page can link to it as _flt_0_ebay_orders.
+        for table in (self._filters._search_filters, self._filters._all_filters):
+            table["ebay_orders"] = [
+                FilterHasNoOrder("ebay_orders", self.datamodel)
+            ] + table["ebay_orders"]
 
     def _init_forms(self):
         super(CustomModelView, self)._init_forms()

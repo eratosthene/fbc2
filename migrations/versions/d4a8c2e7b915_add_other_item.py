@@ -1,7 +1,7 @@
 """add other_item and ebay_listing.category_id
 
 Revision ID: d4a8c2e7b915
-Revises: a7d2c5e91f36
+Revises: b8e3a1d5c7f2
 Create Date: 2026-11-15 00:00:00.000000
 
 Only the tables and columns. Sorting the listings already in the database
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "d4a8c2e7b915"
-down_revision = "a7d2c5e91f36"
+down_revision = "b8e3a1d5c7f2"
 branch_labels = None
 depends_on = None
 

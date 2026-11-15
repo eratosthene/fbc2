@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
+    Text,
     false,
 )
 from sqlalchemy.orm import relationship
@@ -189,6 +190,9 @@ class SalesReceipt(Model):
     )
     sold_price = Column(Float)
     net_sold = Column(Float)
+    # Free text, for what the receipt can't say itself, such as "sold in
+    # person to a friend" on one with no order.
+    notes = Column(Text)
     # Hidden from the lists by default; see fbc/sales/archive.py.
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True

@@ -365,10 +365,11 @@ def test_other_items_sales_are_a_line_of_their_own_and_never_record_figures(app)
         "sold": 1,
         "gross": 25.0,
         "net": 20.0,
+        "supplies": 0.0,
         "costed": 0,
         "profit": None,
     }
-    assert totals["marketplace_sales"] == []
+    assert sum(m["receipts"] for m in totals["marketplace_sales"]) == 0
     assert earnings_totals()["receipts"] == 0
     assert earnings_totals(other_items=True)["receipts"] == 1
     assert totals["totals"]["gross"] == totals["totals"]["net"] == 0
@@ -394,6 +395,7 @@ def test_profit_counts_only_items_that_have_a_cost(app):
         "sold": 2,
         "gross": 40.0,
         "net": 32.0,
+        "supplies": 0.0,
         "costed": 1,
         "profit": 14.0,
     }
@@ -566,3 +568,28 @@ def test_the_migration_adds_the_table_and_column():
         with Operations.context(MigrationContext.configure(conn)):
             migration.downgrade()
         assert "other_item" not in sa.inspect(conn).get_table_names()
+
+
+def test_supplies_used_on_other_items_leave_the_record_supply_cost(app):
+    from fbc.models.supplies import SHIPPING, PurchaseOrder
+
+    item = _other()
+    label = Supply(name="Label", quantity=10, used_for="shipping", cost_per_use=0.5)
+    tape = Supply(name="Tape", quantity=10, used_for="shipping")
+    db.session.add_all(
+        [label, tape, PurchaseOrder(date=datetime.date(2026, 1, 1), price=20.0)]
+    )
+    receipt = SalesReceipt(date=datetime.date(2026, 10, 28), sold_price=25, net_sold=20)
+    db.session.add(receipt)
+    db.session.flush()
+    label.use(3, SHIPPING, receipt=receipt)
+    tape.use(1, SHIPPING, receipt=receipt)
+    item.sold, item.sales_receipt_id, item.cost = True, receipt.id, 5.0
+    db.session.commit()
+
+    totals = index.home_totals()
+
+    # Only the supply with a Cost Per Use is counted: 3 x $0.50.
+    assert totals["other_sales"]["supplies"] == 1.5
+    assert totals["other_sales"]["profit"] == 13.5
+    assert totals["supply_total"] == 18.5
