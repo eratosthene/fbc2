@@ -15,7 +15,7 @@ from flask_appbuilder import AppBuilder, Model
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate, stamp, upgrade
 from fbc.core import devmode, localtime, settings
-from fbc.index import MyIndexView
+from fbc.sales.index import MyIndexView
 
 logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -126,7 +126,7 @@ def setup_db():
 )
 def combine_receipts(apply, receipts):
     """Combine Sales Receipts that stand for one shipment."""
-    from fbc.combine import combine_all
+    from fbc.sales.combine import combine_all
 
     only = [int(i) for i in receipts.split(",")] if receipts else None
     count = combine_all(apply=apply, only=only, echo=click.echo)
@@ -147,7 +147,7 @@ def combine_receipts(apply, receipts):
 @click.option("--limit", type=int, help="At most this many receipts, newest first.")
 def backfill_earnings(apply, update_net, since, limit):
     """Give past Sales Receipts their earnings lines from eBay."""
-    from fbc.shipping import backfill_earnings
+    from fbc.ebay.finances import backfill_earnings
 
     counts = backfill_earnings(
         apply=apply,
@@ -175,7 +175,7 @@ def backfill_earnings(apply, update_net, since, limit):
 @click.option("--apply", is_flag=True, help="Save the changes; without it, only show.")
 def archive(apply):
     """Archive old, finished Units, listings, orders and receipts."""
-    from fbc.archive import archive_all
+    from fbc.sales.archive import archive_all
 
     archive_all(apply=apply, echo=click.echo)
     if not apply:

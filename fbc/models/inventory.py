@@ -41,12 +41,12 @@ class PurchaseLot(Model):
 
     def figures(self):
         """
-        This lot's money figures (see fbc.finance.lot_figures). The list
+        This lot's money figures (see fbc.sales.finance.lot_figures). The list
         view works them out once for every lot and leaves them in
         `flask.g` for that request, so a row doesn't query for its own.
         """
         from flask import g, has_app_context
-        from fbc import finance
+        from fbc.sales import finance
 
         cached = g.get("lot_figures") if has_app_context() else None
         if cached and self.id in cached:
@@ -167,7 +167,7 @@ class Unit(Model):
     # several. A receipt's prices are split between its Units by these
     # (see unit_weights).
     sold_price = Column(Float)
-    # Hidden from the lists by default; see fbc/archive.py.
+    # Hidden from the lists by default; see fbc/sales/archive.py.
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True
     )

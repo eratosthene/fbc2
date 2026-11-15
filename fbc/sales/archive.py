@@ -1,7 +1,7 @@
 """
 Archiving: old, finished records are marked `archived` so the lists leave
 them out by default. It changes nothing but those lists: the home page and
-fbc/finance.py never look at the column, so every money figure counts
+fbc/sales/finance.py never look at the column, so every money figure counts
 archived records too.
 
 Each model has an `archived` column. `archive_all` (flask archive) sets it
@@ -45,11 +45,11 @@ def cutoffs(config, now=None):
 def _held_below_zero(db):
     """
     Ids of the Sales Receipts eBay is still holding money for, because a
-    return or payment dispute is open (see fbc.shipping.held): their
+    return or payment dispute is open (see fbc.ebay.finances.held): their
     disputes less the holds released are below 0.
     """
     from fbc.models.sales import SalesReceiptLine
-    from fbc.shipping import HOLD_RELEASE
+    from fbc.ebay.finances import HOLD_RELEASE
 
     return (
         db.session.query(SalesReceiptLine.sales_receipt_id)

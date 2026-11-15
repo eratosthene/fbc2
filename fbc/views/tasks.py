@@ -1,5 +1,5 @@
 """
-The Tasks menu: lists of what needs doing next (see fbc/tasks.py for what each
+The Tasks menu: lists of what needs doing next (see fbc/sales/tasks.py for what each
 means). Each is an existing list with a filter on it, the way "Releases w/out
 Units" is, so a task leaves the list when it's done. eBay Drafts and Discogs
 Drafts that aren't listed yet are filter links on those lists instead
@@ -10,7 +10,7 @@ in fbc/views/discogs.py).
 from flask_appbuilder.models.filters import BaseFilter
 from flask_appbuilder.models.sqla.filters import get_field_setup_query
 
-from fbc import tasks
+from fbc.sales import tasks
 from fbc.sync.notes import DISCOGS_LISTINGS, EBAY_LISTINGS, SyncedViewMixin
 from fbc.views.discogs import DiscogsReleaseModelBaseView
 from fbc.views.inventory import UnitModelBaseView

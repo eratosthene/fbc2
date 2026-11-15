@@ -3,8 +3,8 @@ import datetime
 import pytest
 
 import fbc
-from fbc import archive, finance
-from fbc.index import home_totals
+from fbc.sales import archive, finance
+from fbc.sales.index import home_totals
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.models.sales import SalesReceipt, SalesReceiptLine, earnings_totals

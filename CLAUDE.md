@@ -26,14 +26,17 @@ file is what they don't say.
   entry **at import time**, from the top-level `config` module.
 - `fbc/core/`: settings, `devmode`, `localtime`, price formatting, the base
   form and view classes and the widgets. It imports nothing from the other
-  areas. The areas are moving into packages (#157): eBay, Discogs, sync, sales.
+  areas. The areas are packages, lowest layer first: `core`, `models`, `ebay`
+  and `discogs`, `sync`, `sales`, then `views`; a module imports only from its
+  own layer or lower (`docs/development.md` has the detail).
 - `fbc/models/`: one module per area (inventory, discogs, ebay, sales,
   supplies). `fbc/views/` matches it.
 - `fbc/ebay/`: everything that talks to eBay or builds for it. `oauth.py`,
   `api.py` (Trading API), `describe.py` and `drafts.py` (an eBay Draft's title,
   specifics and item), `publish.py`, `pictures.py`, `vocab.py` (lookup tables),
-  `skus.py`, `insertions.py`, `tracking.py`, `mystery.py`, and `listings.py`
-  and `orders.py` (saving what a sync reads from eBay).
+  `skus.py`, `insertions.py`, `tracking.py`, `mystery.py`, `finances.py`
+  (Finances API), and `listings.py` and `orders.py` (saving what a sync reads
+  from eBay).
 - `fbc/discogs/`: Discogs. `client.py` (every call to Discogs, and the only
   module that imports its library), `identify.py` (Identify Record's search and
   ranking), `collect.py`, `saving.py` (what a sync or Identify reads from
@@ -43,8 +46,9 @@ file is what they don't say.
   gunicorn workers don't share memory), `jobs.py` (what each sync does, shared
   by the buttons and `flask sync`), `scheduler.py` and `notes.py` (the "last
   synced" note on a list).
-- `fbc/shipping.py` (Ship This), and the sales modules still loose in `fbc/`
-  until they move into `fbc/sales/` (#157).
+- `fbc/sales/`: `ship.py` (Ship This) and `stock.py` (the supplies it uses),
+  `combine.py`, `archive.py`, `finance.py`, `pricing.py`, `tasks.py`,
+  `index.py` (the home page) and `widgets.py`.
 - `migrations/`: Alembic, through Flask-Migrate. `flask setup-db` builds a new
   database from the models and stamps it, or migrates an existing one.
 - `scripts/`: one-off and admin scripts. `scripts/deprecated_*` is history;

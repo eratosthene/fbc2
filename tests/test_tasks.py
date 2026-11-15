@@ -5,7 +5,8 @@ import datetime
 import pytest
 
 import fbc
-from fbc import db, tasks
+from fbc import db
+from fbc.sales import tasks
 from fbc.models.discogs import DiscogsInstance, DiscogsListing, DiscogsRelease
 from fbc.models.ebay import EbayDraft, EbayOrder
 from fbc.models.inventory import Unit

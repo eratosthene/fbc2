@@ -47,7 +47,7 @@ class EbayListing(Model):
     pick_from_box_id = Column(Integer, ForeignKey("storage_box.id"), index=True)
     pick_from_box = relationship("StorageBox")
     pick_count = Column(Integer)
-    # Hidden from the lists by default; see fbc/archive.py.
+    # Hidden from the lists by default; see fbc/sales/archive.py.
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True
     )
@@ -109,7 +109,7 @@ class EbayOrder(Model):
     # The first item's title and listing; every item is in items.
     title = Column(String(100))
     ebay_listing_id = Column(String(20), ForeignKey("ebay_listing.item_id"))
-    # Hidden from the lists by default; see fbc/archive.py.
+    # Hidden from the lists by default; see fbc/sales/archive.py.
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True
     )

@@ -240,7 +240,7 @@ COMPARED = [
 
 
 def _snapshot():
-    from fbc.index import home_totals
+    from fbc.sales.index import home_totals
 
     totals = home_totals()
     return {

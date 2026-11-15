@@ -1,16 +1,16 @@
-from fbc.archive import ArchivableViewMixin
+from fbc.sales.archive import ArchivableViewMixin
 from fbc.core.forms import CustomModelView
 from flask import flash, render_template, request, url_for
 from flask_appbuilder import expose
 from flask_appbuilder.security.decorators import has_access
-from fbc import pricing
+from fbc.sales import pricing
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.models.supplies import ADDING_UNIT
 from fbc.core.forms import CustomForm
-from fbc.core.widgets import SuppliesUsedField
+from fbc.sales.widgets import SuppliesUsedField
 from markupsafe import Markup
 from wtforms import BooleanField, StringField
 from wtforms.validators import Length, Optional
@@ -213,7 +213,7 @@ class PurchaseLotModelView(CustomModelView):
         # per row. They live in g, so for this request only, and the rows
         # are read from them as the page renders, after this returns.
         from flask import g
-        from fbc import finance
+        from fbc.sales import finance
 
         g.lot_figures = finance.lot_figures()
         return super()._get_list_widget(*args, **kwargs)

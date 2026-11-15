@@ -2,7 +2,8 @@
 
 import random
 
-from fbc import db, shipping
+from fbc import db
+from fbc.sales import ship
 from fbc.ebay import mystery
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.inventory import StorageBox, Unit
@@ -200,7 +201,7 @@ def test_a_buyers_earlier_records_are_not_picked_again(client):  # noqa: F811
     _mystery(box)
     earlier = Unit.query.order_by(Unit.id).limit(2).all()
     first = _order("O-0", [("900", 1, 25.0)])
-    shipping.ship_order(first, earlier, 20.0)
+    ship.ship_order(first, earlier, 20.0)
     _order("O-1", [("900", 1, 25.0)])
 
     page = client.get("/ebayordermodelview/ship/O-1").get_data(as_text=True)

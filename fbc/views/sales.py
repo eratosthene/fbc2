@@ -6,25 +6,22 @@ from wtforms.validators import Optional
 
 from fbc.ebay import mystery
 from fbc.core import localtime
-from fbc.archive import ArchivableViewMixin
+from fbc.sales.archive import ArchivableViewMixin
 from fbc.sync.notes import EBAY_LISTINGS, EBAY_ORDERS, SyncedViewMixin
 from fbc.core.forms import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
 from fbc.models.ebay import EbayListing, EbayOrder
 from fbc.models.sales import MANUAL, SalesReceipt
-from fbc.shipping import (
-    fmt_supplies,
+from fbc.ebay.finances import shipment_earnings
+from fbc.sales.ship import (
     combinable_orders,
     combined_discount,
     order_receipt,
-    shipment_earnings,
     shipment_units,
     ship_order,
-    stock_problems,
-    supplies_plan,
-    supply_counts,
 )
+from fbc.sales.stock import fmt_supplies, stock_problems, supplies_plan, supply_counts
 from fbc.discogs.removal import discogs_plan, remove_from_discogs
 from fbc.core.widgets import (
     LocalDateTimeField,
@@ -109,7 +106,7 @@ class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
         doesn't find by itself.
         """
         from fbc import db
-        from fbc.combine import combine_receipts
+        from fbc.sales.combine import combine_receipts
 
         if not isinstance(items, list) or len(items) < 2:
             flash("Select two or more Sales Receipts to combine.", "warning")

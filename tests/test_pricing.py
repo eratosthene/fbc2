@@ -7,7 +7,7 @@ import requests
 from fake_discogs import FakeDiscogs, api_error, failing
 
 import fbc
-from fbc import pricing
+from fbc.sales import pricing
 from fbc.discogs import client as discogs_client
 from fbc.ebay import oauth
 

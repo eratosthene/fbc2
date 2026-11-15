@@ -7,9 +7,11 @@ import pytest
 from click.testing import CliRunner
 
 import fbc
-from fbc import combine, db, shipping
+from fbc import db
+from fbc.ebay import finances as ebay_finances
+from fbc.sales import combine, ship
 from fbc.ebay import oauth
-from fbc.index import home_totals
+from fbc.sales.index import home_totals
 from fbc.models.ebay import EbayListing, EbayOrder, EbayOrderItem
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.models.sales import SalesReceipt, SalesReceiptLine, unit_weights
@@ -222,7 +224,7 @@ def test_an_order_of_several_units_finds_them_all(app):
     _listing("222", 8.0, units=2)
     order = _order("O-1", [("111", 1, 10.0), ("222", 2, 8.0)])
 
-    units, problems = shipping.shipment_units([order])
+    units, problems = ship.shipment_units([order])
 
     assert problems == []
     assert sorted(u.name for u in units) == [
@@ -237,7 +239,7 @@ def test_units_must_match_how_many_were_bought(app):
     _listing("222", 8.0, units=3)
     order = _order("O-1", [("111", 1, 10.0), ("222", 2, 8.0)])
 
-    units, problems = shipping.shipment_units([order])
+    units, problems = ship.shipment_units([order])
 
     assert units is None
     assert problems == [
@@ -258,7 +260,7 @@ def test_an_order_synced_before_items_were_kept_uses_its_listing(app):
     db.session.add(order)
     db.session.commit()
 
-    assert shipping.order_unit(order).name == "Record 111"
+    assert ship.order_unit(order).name == "Record 111"
 
 
 def test_combinable_orders_are_the_buyers_others_without_a_receipt(app):
@@ -269,10 +271,10 @@ def test_combinable_orders_are_the_buyers_others_without_a_receipt(app):
     _order("O-3", [("3", 1, 5.0)], buyer="someone else")
     _order("O-4", [("4", 1, 5.0)], when=WHEN + datetime.timedelta(days=30))
     shipped = _order("O-5", [("5", 1, 5.0)])
-    shipping.ship_order(shipped, shipping.shipment_units([shipped])[0], 4.0)
+    ship.ship_order(shipped, ship.shipment_units([shipped])[0], 4.0)
 
-    assert shipping.combinable_orders(first) == [second]
-    assert shipping.combinable_orders(second) == [first]
+    assert ship.combinable_orders(first) == [second]
+    assert ship.combinable_orders(second) == [first]
 
 
 def test_ship_this_offers_the_buyers_other_orders(client):  # noqa: F811
@@ -351,7 +353,7 @@ def test_shipment_earnings_add_up_every_orders(app, finances):
         "O-2": [_sale("O-2", 8.50)],
     }
 
-    earnings = shipping.shipment_earnings(["O-1", "O-2"])
+    earnings = ebay_finances.shipment_earnings(["O-1", "O-2"])
 
     assert finances.asked == ["O-1", "O-2"]
     assert earnings["net"] == 15.67
@@ -365,7 +367,7 @@ def test_shipment_earnings_need_a_sale_on_every_order(app, finances):
     _two_orders()
     finances.orders = {"O-1": [_sale("O-1", 12.30), _label("O-1", 5.13)]}
 
-    earnings = shipping.shipment_earnings(["O-1", "O-2"])
+    earnings = ebay_finances.shipment_earnings(["O-1", "O-2"])
 
     assert earnings["net"] is None
     assert "doesn't show a sale for order O-2" in earnings["warnings"][0]
@@ -377,9 +379,9 @@ def test_combined_discount_is_shipping_paid_less_the_label_and_refunds(app, fina
         "O-1": [_sale("O-1", 12.30), _label("O-1", 5.13)],
         "O-2": [_sale("O-2", 8.50)],
     }
-    earnings = shipping.shipment_earnings(["O-1", "O-2"])
+    earnings = ebay_finances.shipment_earnings(["O-1", "O-2"])
 
-    assert shipping.combined_discount([first, second], earnings) == {
+    assert ship.combined_discount([first, second], earnings) == {
         "paid": 8.74,
         "label": 5.13,
         "refunded": 0,
@@ -387,9 +389,9 @@ def test_combined_discount_is_shipping_paid_less_the_label_and_refunds(app, fina
     }
 
     finances.orders["O-2"].append(_refund("O-2", 3.61))
-    earnings = shipping.shipment_earnings(["O-1", "O-2"])
-    assert shipping.combined_discount([first, second], earnings)["discount"] == 0
-    assert shipping.combined_discount([first], earnings) is None
+    earnings = ebay_finances.shipment_earnings(["O-1", "O-2"])
+    assert ship.combined_discount([first, second], earnings)["discount"] == 0
+    assert ship.combined_discount([first], earnings) is None
 
 
 def test_shipping_two_orders_together_records_one_receipt(client, finances):  # noqa: F811
@@ -429,8 +431,8 @@ def test_shipping_two_orders_together_records_one_receipt(client, finances):  # 
 
 def test_refresh_earnings_asks_about_every_order_on_the_receipt(client, finances):  # noqa: F811
     first, second = _two_orders()
-    units = shipping.shipment_units([first, second])[0]
-    receipt = shipping.ship_order([first, second], units, 15.67)
+    units = ship.shipment_units([first, second])[0]
+    receipt = ship.ship_order([first, second], units, 15.67)
     finances.orders = {
         "O-1": [_sale("O-1", 12.30), _label("O-1", 5.13)],
         "O-2": [_sale("O-2", 8.50), _refund("O-2", 3.61)],
@@ -446,14 +448,14 @@ def test_refresh_earnings_asks_about_every_order_on_the_receipt(client, finances
 
 def test_backfill_earnings_fills_in_a_receipt_of_several_orders(app, finances):
     first, second = _two_orders()
-    units = shipping.shipment_units([first, second])[0]
-    receipt = shipping.ship_order([first, second], units, 15.67)
+    units = ship.shipment_units([first, second])[0]
+    receipt = ship.ship_order([first, second], units, 15.67)
     finances.orders = {
         "O-1": [_sale("O-1", 12.30), _label("O-1", 5.13)],
         "O-2": [_sale("O-2", 8.50)],
     }
 
-    counts = shipping.backfill_earnings(apply=True, echo=lambda _: None)
+    counts = ebay_finances.backfill_earnings(apply=True, echo=lambda _: None)
 
     assert counts["saved"] == 1
     db.session.expire_all()
@@ -492,7 +494,7 @@ def test_home_page_splits_a_receipt_by_what_each_unit_sold_for(app):
     _listing("111", 30.0, lot=lot)
     _listing("222", 10.0, lot=other_lot)
     order = _order("O-1", [("111", 1, 20.0), ("222", 1, 5.0)])
-    receipt = shipping.ship_order(order, shipping.shipment_units([order])[0], 20.0)
+    receipt = ship.ship_order(order, ship.shipment_units([order])[0], 20.0)
 
     totals = home_totals()
 
