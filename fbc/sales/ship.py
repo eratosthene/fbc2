@@ -120,6 +120,73 @@ def other_items(order):
     return found, problems
 
 
+def other_item_candidates(order):
+    """
+    [(listing id, name)] for the listings of `order` that Ship This could make
+    Other Items of, when the order is clearly not for records: none of its
+    listings has a Unit, an eBay Draft or is a mystery box. A listing fbc no
+    longer has (an old one) counts: make_other_items brings it back. [] for any
+    other order.
+    """
+    from fbc import db
+    from fbc.ebay import sorting
+    from fbc.models.ebay import EbayListing
+
+    listings = order.listing_ids()
+    if not listings:
+        return []
+    titles = {i.ebay_listing_id: i.title for i in order.items}
+    found = []
+    for listing_id in listings:
+        listing = db.session.get(EbayListing, listing_id)
+        if listing is not None and sorting.is_record_listing(listing):
+            return []
+        title = (
+            titles.get(listing_id)
+            or (order.title if len(listings) == 1 else None)
+            or (listing.title if listing else None)
+        )
+        found.append((listing_id, title or listing_id))
+    return found
+
+
+def make_other_items(order, candidates):
+    """
+    Make an Other Item for each of `candidates` (see other_item_candidates). A
+    listing fbc doesn't have is added, ended and archived, as it was for an old
+    order: only what the order says (title, price, date) is known.
+    """
+
+    from fbc import db
+    from fbc.models.ebay import EbayListing
+    from fbc.models.other import OtherItem
+
+    prices = {i.ebay_listing_id: i.price for i in order.items}
+    items = []
+    for listing_id, name in candidates:
+        if db.session.get(EbayListing, listing_id) is None:
+            when = order.created_time
+            db.session.add(
+                EbayListing(
+                    item_id=listing_id,
+                    title=name[:100],
+                    price=prices.get(listing_id) or order.price,
+                    url="https://www.ebay.com/itm/" + listing_id,
+                    start_time=when,
+                    # Ended when it was ordered, so it counts in no month's
+                    # free insertions now.
+                    ended=True,
+                    end_time=when,
+                    archived=True,
+                )
+            )
+            db.session.flush()
+        items.append(OtherItem(name=name[:100], ebay_listing_id=listing_id, sold=False))
+    db.session.add_all(items)
+    db.session.commit()
+    return items
+
+
 # How far apart a buyer's orders can be and still be offered for shipping
 # together. Ship This lets you choose which go in the package.
 COMBINE_DAYS = 7

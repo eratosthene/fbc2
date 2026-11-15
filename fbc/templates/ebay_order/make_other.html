@@ -1,0 +1,21 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h3>Ship This: not a record?</h3>
+<p>No Units are linked to {% if candidates|length > 1 %}these listings{% else %}this listing{% endif %}
+and {% if candidates|length > 1 %}they aren't{% else %}it isn't{% endif %} a mystery box
+or an eBay Draft (an old listing fbc no longer has is added again, ended), so this order may be for something that isn't a record.</p>
+<ul>
+  {% for listing_id, name in candidates %}
+  <li>{{ name }} (<a href="https://www.ebay.com/itm/{{ listing_id }}" target="_blank" rel="noopener">{{ listing_id }}</a>)</li>
+  {% endfor %}
+</ul>
+<p>If it isn't a record, make {% if candidates|length > 1 %}Other Items{% else %}an Other Item{% endif %}
+of it, with no cost, and then ship it: the sale goes on the home page's Other
+items line and never counts in record stock, cost or profit. If it's a record,
+ship it by hand instead.</p>
+<form method="post" action="{{ url_for('EbayOrderModelView.ship', pk=order.order_id) }}">
+  <button name="action" value="make_other" class="btn btn-primary">Make Other Item and ship</button>
+  <a href="{{ order.add_receipt_url() }}" class="btn btn-default">It's a record: add its Sales Receipt by hand</a>
+  <a href="{{ url_for('EbayOrderModelView.list') }}" class="btn btn-default">Cancel</a>
+</form>
+{% endblock %}
