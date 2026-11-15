@@ -62,6 +62,12 @@ jobs:
           sudo apt-get install -y mariadb-client
           mariadb-dump --version
 
+      # Newer MariaDB clients insist on TLS, and the mariadb:10.11 service
+      # container doesn't offer it. The script's own calls read this too.
+      - name: Let the client connect without TLS
+        run: |
+          printf '[client]\nskip-ssl\n' > ~/.my.cnf
+
       - name: Use config.py.tpl as config.py
         run: cp config.py.tpl config.py
 
