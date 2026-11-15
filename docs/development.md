@@ -167,14 +167,16 @@ the button call the same function in `fbc/sync/jobs.py`, so they do the same
 thing. A new sync goes there too, with a command beside the others in
 `fbc/__init__.py`.
 
-| Command                           | Button                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------- |
-| `flask sync discogs`              | Sync Discogs                                                                    |
-| `flask sync discogs-listings`     | Sync on the Discogs Listings list (reads the Marketplace inventory)             |
-| `flask sync ebay-listings`        | Sync eBay listings                                                              |
-| `flask sync ebay-orders`          | Sync eBay orders (adds new orders, and checks ones without items or tracking)   |
-| `flask sync ebay-orders --update` | Sync eBay orders with `?doupdate=True`, which also refreshes the orders fbc has |
-| `flask sync ebay-orders --deep`   | Deep sync, looking back 88 days, not 10                                         |
+| Command                            | Button                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------- |
+| `flask sync discogs`               | Sync Discogs                                                                    |
+| `flask sync discogs-listings`      | Sync on the Discogs Listings list (reads the Marketplace inventory)             |
+| `flask sync discogs-orders`        | Sync on the Discogs Orders list (reads the Marketplace orders)                  |
+| `flask sync discogs-orders --deep` | Deep Sync on that list: every order, not the last 30 days                       |
+| `flask sync ebay-listings`         | Sync eBay listings                                                              |
+| `flask sync ebay-orders`           | Sync eBay orders (adds new orders, and checks ones without items or tracking)   |
+| `flask sync ebay-orders --update`  | Sync eBay orders with `?doupdate=True`, which also refreshes the orders fbc has |
+| `flask sync ebay-orders --deep`    | Deep sync, looking back 88 days, not 10                                         |
 
 ```bash
 pipenv run flask --app fbc sync ebay-orders --deep
@@ -196,7 +198,7 @@ same folder to see each other, so run commands in the same container as the
 web server.
 
 Each sync records when it last finished successfully: `discogs`,
-`discogs-listings`, `ebay-orders` (either order sync) and `ebay-listings`, in the `sync_record`
+`discogs-listings`, `discogs-orders` (either Discogs order sync), `ebay-orders` (either eBay order sync) and `ebay-listings`, in the `sync_record`
 table. `sync.last_finished(name)` reads it. A sync that fails records
 nothing.
 
@@ -227,8 +229,8 @@ stays a manual job.
 
 The settings are in `config.py.tpl`: `SCHEDULER` (`False` turns it off), and
 `SCHEDULER_EBAY_ORDERS_MINUTES`, `SCHEDULER_EBAY_LISTINGS_MINUTES`,
-`SCHEDULER_DISCOGS_MINUTES`, `SCHEDULER_DISCOGS_LISTINGS_MINUTES` and
-`SCHEDULER_RETRY_MINUTES`. In dev mode it logs
+`SCHEDULER_DISCOGS_MINUTES`, `SCHEDULER_DISCOGS_LISTINGS_MINUTES`,
+`SCHEDULER_DISCOGS_ORDERS_MINUTES` and `SCHEDULER_RETRY_MINUTES`. In dev mode it logs
 that scheduled syncs are off and exits, so it never reaches eBay or Discogs,
 and `docker/compose.dev.yml` runs `flask run`, so it doesn't start one at all.
 To try it by hand, run `flask scheduler` with a short interval in a throwaway
@@ -248,6 +250,7 @@ included (`MyIndexView` in `fbc/sales/index.py`, whose routes use `has_access`;
 Flask-AppBuilder's own home page is public). Signed out, they redirect to the
 login page and start nothing. Each route is a permission on `MyIndexView`
 (`can_index`, `can_syncdiscogs`, `can_syncdiscogslistings`,
+`can_syncdiscogsorders`, `can_syncdiscogsordersdeep`,
 `can_syncebaylistings`, `can_syncebayorders`, `can_syncebayordersdeep`,
 `can_syncjob`, `can_calibrateinsertions`). Admin gets them on the next start;
 give them to any other role that needs the home page or the buttons. In tests,
@@ -333,6 +336,17 @@ Deleted, Violation or Suspended is ended too (`saving.DISCOGS_ENDED_STATUSES`):
 Discogs lets only For Sale, Draft and Expired listings be edited. It only
 reads, and it goes through `fbc/discogs/client.py`, so dev mode stops it. The `sync_record` name is `discogs-listings`. There's no Task for it
 yet.
+
+**Orders.** `sync_discogs_orders` reads `GET /marketplace/orders` through
+`Account.orders` (every page, 100 a page, newest first, checked against
+Discogs's count; `created_after` limits it to the last 30 days unless the sync
+is deep) and saves each with `saving.save_discogs_order` as a `DiscogsOrder` and
+its `DiscogsOrderItem`s. An order's fields are rewritten on every sync, since its
+status moves on; its items are written once. An item's `unit_id` comes from its
+listing's. Money is stored in the order's currency (`fee`, `total`, `shipping`).
+The name is `discogs-orders` in `sync_record`, one job for both the plain and
+deep syncs. Nothing writes to Discogs. Not built yet, for slice 4: Ship This,
+Sales Receipts, the home page, and ending the other marketplace's listing.
 
 **Listing a Unit.** `fbc/discogs/listing.py` holds the only writes to Discogs's
 Marketplace, and `DiscogsListingModelView` (`from_unit`, `make_for_sale`) has

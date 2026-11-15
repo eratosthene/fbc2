@@ -89,6 +89,7 @@ class FakeAccount(_Recording):
         fields=(),
         items=(),
         inventory=(),
+        orders=(),
         next_instance_id=555,
         fail=None,
     ):
@@ -97,6 +98,7 @@ class FakeAccount(_Recording):
         self.fields = list(fields)
         self.items = list(items)
         self.inventory_items = list(inventory)
+        self.order_items = list(orders)
         self.next_instance_id = next_instance_id
         self.listings = {}
         self.created_listing_id = 7001
@@ -131,6 +133,10 @@ class FakeAccount(_Recording):
     def inventory(self):
         self._record("inventory")
         return list(self.inventory_items)
+
+    def orders(self, created_after=None):
+        self._record("orders", created_after)
+        return list(self.order_items)
 
     def newest_inventory(self, count):
         self._record("newest_inventory", count)

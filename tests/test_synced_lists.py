@@ -22,6 +22,7 @@ VIEWS = {
     "foldermodelview": ["Discogs collection"],
     "releasesneedingunitsview": ["Discogs collection"],
     "discogslistingmodelview": ["Discogs listings"],
+    "discogsordermodelview": ["Discogs orders", "Discogs listings"],
     "ebaylistingmodelview": ["eBay listings"],
     "unitsneedingdraftsview": ["eBay listings"],
     "ebayordermodelview": ["eBay orders", "eBay listings"],
@@ -31,6 +32,7 @@ VIEWS = {
 NAMES = {
     "Discogs collection": jobs.DISCOGS_SYNC,
     "Discogs listings": jobs.DISCOGS_LISTINGS_SYNC,
+    "Discogs orders": jobs.DISCOGS_ORDERS_SYNC,
     "eBay listings": state.LISTINGS_SYNC,
     "eBay orders": jobs.ORDERS_SYNC,
 }

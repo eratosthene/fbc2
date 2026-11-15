@@ -333,6 +333,35 @@ def test_an_empty_inventory_is_empty(library):
     assert discogs_client.Account(lib).inventory() == []
 
 
+def test_orders_are_read_from_the_marketplace_newest_first(library):
+    items = [{"id": "1-%d" % i} for i in range(1, 151)]
+    lib = library({"/marketplace/orders": paged("orders", items)})
+
+    got = discogs_client.Account(lib).orders(datetime.datetime(2026, 10, 1, 12, 30, 5))
+
+    assert got == items
+    gets = [q for m, p, q in lib.requests if m == "GET"]
+    assert [q["page"] for q in gets] == ["1", "2"]
+    assert all(q["created_after"] == "2026-10-01T12:30:05Z" for q in gets)
+    assert all(q["sort"] == "created" and q["sort_order"] == "desc" for q in gets)
+
+
+def test_all_orders_ask_for_no_start_date(library):
+    lib = library({"/marketplace/orders": paged("orders", [])})
+
+    assert discogs_client.Account(lib).orders() == []
+
+    [(_, _, query)] = [r for r in lib.requests if r[0] == "GET"]
+    assert "created_after" not in query
+
+
+def test_orders_that_came_back_short_are_an_error(library):
+    lib = library({"/marketplace/orders": paged("orders", [{"id": "1-1"}], claimed=3)})
+
+    with pytest.raises(discogs_client.IncompleteRead):
+        discogs_client.Account(lib).orders()
+
+
 def test_the_newest_items_are_one_page_sorted_by_listed_date(library):
     lib = library({"/users/me/inventory": {"listings": [{"id": 1}, {"id": 2}]}})
 

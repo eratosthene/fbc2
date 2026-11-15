@@ -19,6 +19,7 @@ from sqlalchemy.orm import relationship
 import re
 import json
 
+from fbc.core import localtime
 from fbc.discogs.naming import pressing_for, unit_name
 
 logger = logging.getLogger()
@@ -381,3 +382,109 @@ class DiscogsListing(Model):
         return Markup('<a href="{}" target="_blank" rel="noopener">Listing</a>').format(
             self.url
         )
+
+
+class DiscogsOrder(Model):
+    """
+    An order on the Discogs Marketplace, as the Discogs orders sync last read
+    it (fbc/sync/jobs.py). The sync only reads: nothing here is sent back to
+    Discogs, and the order's status is Discogs's own.
+
+    Discogs gives the order's fee (its selling fee) and total (items, shipping
+    and any tax the buyer paid) but not the payment processing fee, so the
+    earnings can't be worked out from here alone.
+    """
+
+    __tablename__ = "discogs_order"
+    # Discogs's own ID, like "1-1234567".
+    order_id = Column(String(30), primary_key=True, autoincrement=False)
+    # UTC, as Discogs sends it.
+    created_time = Column(DateTime, index=True)
+    last_activity = Column(DateTime)
+    # Discogs's word: New Order, Invoice Sent, Payment Received, Shipped,
+    # Cancelled (Non-Paying Buyer) and so on.
+    status = Column(String(60), index=True)
+    buyer = Column(String(60))
+    # What the buyer paid for shipping.
+    shipping = Column(Float)
+    shipping_method = Column(String(100))
+    # Discogs's selling fee, which it takes from the seller.
+    fee = Column(Float)
+    # Items plus shipping (and tax), as Discogs works it out.
+    total = Column(Float)
+    currency = Column(String(3))
+    items = relationship(
+        "DiscogsOrderItem",
+        back_populates="discogs_order",
+        cascade="all, delete-orphan",
+        order_by="DiscogsOrderItem.id",
+    )
+
+    def __unicode__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        ret = localtime.fmt_date(self.created_time) + " " + self.order_id
+        title = self.fmt_title()
+        if title:
+            ret = ret + " [" + title[:45] + "]"
+        return ret + ": " + (self.buyer or "") + " " + self.fmt_total()
+
+    def _money(self, amount):
+        if amount is None:
+            return ""
+        return ("$" if self.currency in (None, "USD") else self.currency + " ") + (
+            f"{amount:.2f}"
+        )
+
+    def fmt_total(self):
+        return self._money(self.total)
+
+    def fmt_fee(self):
+        return self._money(self.fee)
+
+    def fmt_shipping(self):
+        return self._money(self.shipping)
+
+    def fmt_title(self):
+        """The first item's title, and how many more there are."""
+        if not self.items:
+            return ""
+        title = self.items[0].title or ""
+        if len(self.items) > 1:
+            title += " (+%d more)" % (len(self.items) - 1)
+        return title
+
+    def fmt_url(self):
+        return Markup(
+            '<a href="https://www.discogs.com/sell/order/{0}" target="_blank"'
+            ' rel="noopener">{0}</a>'
+        ).format(self.order_id)
+
+
+class DiscogsOrderItem(Model):
+    """One item on a Discogs order: a listing that was bought."""
+
+    __tablename__ = "discogs_order_item"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    discogs_order_id = Column(
+        String(30),
+        ForeignKey("discogs_order.order_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    discogs_order = relationship("DiscogsOrder", back_populates="items")
+    # Not a foreign key: the order sync keeps an item even when its listing
+    # isn't in fbc.
+    listing_id = Column(BigInteger, index=True)
+    release_id = Column(Integer)
+    title = Column(String(255))
+    price = Column(Float)
+    media_condition = Column(String(30))
+    sleeve_condition = Column(String(30))
+    # The Unit the listing is linked to, when it is.
+    unit_id = Column(Integer, ForeignKey("unit.id"), index=True)
+    unit = relationship("Unit")
+
+    def __repr__(self):
+        return self.title or str(self.listing_id or "")

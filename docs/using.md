@@ -251,7 +251,7 @@ other or the form. In Dev Mode the block says "Not available in Dev Mode."
 
 ## Sales
 
-eBay listings and orders, and Discogs listings, synced in. eBay Drafts turn a Unit into a listing,
+eBay listings and orders, and Discogs listings and orders, synced in. eBay Drafts turn a Unit into a listing,
 and Ship This turns an order into a Sales Receipt.
 
 ### Discogs Listings
@@ -290,6 +290,31 @@ too. A listing made by hand on the Discogs site shows up as well.
 - Pictures can't be sent to Discogs from fbc. Add them on the Discogs site
   (Add Photos on the listing). See "The Discogs Marketplace" in
   `docs/development.md`.
+
+### Discogs Orders
+
+The Discogs Orders list (Sales menu) shows what has been bought from you on
+the Discogs Marketplace, as fbc last read it: when, the order number (a link
+to the order on Discogs), the first item's title, the buyer, Discogs's status
+for it (New Order, Invoice Sent, Payment Received, Shipped and so on), the total
+and Discogs's selling fee. Press Sync on that list, run
+`flask sync discogs-orders`, or let the scheduler do it every 15 minutes.
+
+- The sync only reads from Discogs. You invoice the buyer, mark the order
+  shipped and message them on the Discogs site; the next sync shows the new
+  status.
+- A plain sync reads the last 30 days of orders and brings each up to date,
+  since Discogs changes the status as you work through an order. **Deep Sync**
+  (or `flask sync discogs-orders --deep`) reads every order Discogs has.
+- Each item links to its Unit when its listing is one fbc has linked to a
+  Unit (see Discogs Listings), so run the listings sync first for a new
+  listing. An order of something you listed by hand has no Unit.
+- Discogs gives the total (items, shipping and any tax) and its selling fee,
+  but not what payment processing took, so the list can't show what you
+  earned. That is for a later change, with Ship This for Discogs orders.
+- This slice only records orders. Ship This, Sales Receipts, the home page
+  and ending the other marketplace's listing when a Unit sells don't use
+  Discogs orders yet.
 
 ### List on Discogs
 

@@ -39,12 +39,14 @@ TICK_SECONDS = 60
 # something to ship; Discogs changes least.
 DEFAULT_INTERVALS = {
     jobs.ORDERS_SYNC: 15,
+    jobs.DISCOGS_ORDERS_SYNC: 15,
     state.LISTINGS_SYNC: 30,
     jobs.DISCOGS_SYNC: 120,
     jobs.DISCOGS_LISTINGS_SYNC: 30,
 }
 INTERVAL_SETTINGS = {
     jobs.ORDERS_SYNC: "SCHEDULER_EBAY_ORDERS_MINUTES",
+    jobs.DISCOGS_ORDERS_SYNC: "SCHEDULER_DISCOGS_ORDERS_MINUTES",
     state.LISTINGS_SYNC: "SCHEDULER_EBAY_LISTINGS_MINUTES",
     jobs.DISCOGS_SYNC: "SCHEDULER_DISCOGS_MINUTES",
     jobs.DISCOGS_LISTINGS_SYNC: "SCHEDULER_DISCOGS_LISTINGS_MINUTES",
@@ -55,6 +57,7 @@ DEFAULT_RETRY_MINUTES = 10
 # they're the most urgent.
 JOBS = {
     jobs.ORDERS_SYNC: jobs.ebay_orders_job,
+    jobs.DISCOGS_ORDERS_SYNC: jobs.discogs_orders_job,
     state.LISTINGS_SYNC: jobs.ebay_listings_job,
     jobs.DISCOGS_SYNC: jobs.discogs_job,
     jobs.DISCOGS_LISTINGS_SYNC: jobs.discogs_listings_job,

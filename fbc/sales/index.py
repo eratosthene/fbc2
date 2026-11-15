@@ -263,6 +263,20 @@ class MyIndexView(IndexView):
             jobs.discogs_listings_job(), "/discogslistingmodelview/list/"
         )
 
+    @expose("/syncdiscogsorders")
+    @has_access
+    def syncdiscogsorders(self):
+        return self._start_sync(
+            jobs.discogs_orders_job(), "/discogsordermodelview/list/"
+        )
+
+    @expose("/syncdiscogsordersdeep")
+    @has_access
+    def syncdiscogsordersdeep(self):
+        return self._start_sync(
+            jobs.discogs_orders_job(deep=True), "/discogsordermodelview/list/"
+        )
+
     @expose("/syncebaylistings")
     @has_access
     def syncebaylistings(self):

@@ -236,6 +236,17 @@ def sync_discogs_listings_command():
     _run_sync(jobs.discogs_listings_job())
 
 
+@sync_group.command("discogs-orders")
+@click.option(
+    "--deep", is_flag=True, help="Read every order, not just the last 30 days."
+)
+def sync_discogs_orders_command(deep):
+    """Sync Discogs Marketplace orders (read only)."""
+    from fbc.sync import jobs
+
+    _run_sync(jobs.discogs_orders_job(deep=deep))
+
+
 @sync_group.command("ebay-listings")
 def sync_ebay_listings_command():
     """Sync eBay's active listings."""
@@ -326,6 +337,7 @@ def _register_views():
         StyleModelView,
         FolderModelView,
         DiscogsListingModelView,
+        DiscogsOrderModelView,
     )
     from fbc.views.sales import (
         EbayOrderModelView,
@@ -398,6 +410,7 @@ def _register_views():
         discogs_listings = appbuilder.add_view(
             DiscogsListingModelView, "Discogs Listings", category="Sales"
         )
+        appbuilder.add_view(DiscogsOrderModelView, "Discogs Orders", category="Sales")
         appbuilder.add_view(EbayOrderModelView, "eBay Orders", category="Sales")
         drafts = appbuilder.add_view(
             EbayDraftModelView, "eBay Drafts", category="Sales"

@@ -399,3 +399,22 @@ class Account:
         path = "/marketplace/listings/%d" % int(listing_id)
         with _api_errors():
             self._c._post(_url(self._c, path), fields)
+
+    def orders(self, created_after=None):
+        """
+        The seller's orders, newest first, as the JSON Discogs sent: every
+        order, or those created after `created_after` (a datetime, UTC).
+        Orders are on the Marketplace, not under the account's address.
+        Raises IncompleteRead if fewer came back than Discogs says there are.
+        """
+        after = None
+        if created_after is not None:
+            after = created_after.replace(microsecond=0).isoformat() + "Z"
+        return _read_all(
+            self._c,
+            "/marketplace/orders",
+            "orders",
+            created_after=after,
+            sort="created",
+            sort_order="desc",
+        )
