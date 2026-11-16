@@ -906,3 +906,37 @@ accountant.
 
 The home page takes expenses off the total net profit, with a total per
 category. Its total supply cost leaves out the Expenses on Purchase Orders.
+
+## Reports
+
+The Reports menu shows money for a chosen period, where the home page shows
+all time. It's being built in slices (issue #69); so far there is Profit &
+Loss.
+
+### The period
+
+Pick a preset (this month, last month, quarter to date, year to date, last
+year, last 12 months or all time) or a From and To date, both included, and
+group the columns by month or quarter. The period is in the page's address
+(`?period=ytd`, or `?from=2026-01-01&to=2026-06-30&group=quarter`), so a
+report can be bookmarked. The year is the calendar year. A date that isn't
+understood falls back to year to date, with a note.
+
+### Profit & Loss
+
+- **Sales** for the period, split into eBay, Discogs and Other (Sales Receipts
+  with no order): how many, Sold For, Fees, Fee % and Net Sold, and the cost
+  of the Units sold.
+- **Profit**, worked out two ways side by side. **Cost of goods** is Net Sold
+  less the cost of the Units sold in the period (each Unit's share of its
+  Purchase Lot's price, shared evenly), supplies and Expenses. It leads,
+  because it asks whether what sold, sold at a profit, so buying a big Lot in
+  December doesn't make the year look like a loss. **Cash** is Net Sold less
+  Purchase Lots bought, supplies bought and Expenses, each on its own date.
+  Over all time, cash profit is the home page's net profit.
+- **Expenses** by category, and the figures **by month or quarter**.
+- **Other Items** are never in the record figures. Their sales are shown apart,
+  with a profit only for those that have a cost.
+
+A Unit's cost is recomputed from its Lot as it is now, so adding a Unit to an
+old Lot changes the past periods' cost of goods. Archived records count.

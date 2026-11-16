@@ -1,0 +1,96 @@
+{% extends "appbuilder/base.html" %}
+{% macro money(x) %}{% if x < 0 %}-${{ '%.2f'|format(-x) }}{% else %}${{ '%.2f'|format(x) }}{% endif %}{% endmacro %}
+{% macro mp_name(name) %}{{ name or 'Other' }}{% endmacro %}
+{% block content %}
+<h2>Profit &amp; Loss <small>{{ period.label() }}</small></h2>
+{% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
+<p>
+  {% for key, label in presets %}
+  <a class="btn btn-xs {{ 'btn-primary' if period.preset == key else 'btn-default' }}"
+     href="?{{ {'period': key, 'group': period.group}|urlencode }}">{{ label }}</a>
+  {% endfor %}
+</p>
+<form class="form-inline" method="get" style="margin-bottom: 15px">
+  <label>From <input type="date" class="form-control input-sm" name="from" value="{{ period.start or '' }}"></label>
+  <label>to <input type="date" class="form-control input-sm" name="to" value="{{ period.end or '' }}"></label>
+  <label>Group by
+    <select class="form-control input-sm" name="group">
+      {% for key, label in groups %}<option value="{{ key }}" {{ 'selected' if period.group == key }}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <button class="btn btn-default btn-sm" type="submit">Show</button>
+</form>
+
+<h3>Sales</h3>
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th></th>{% for name in marketplace_names %}<th class="text-right">{{ mp_name(name) }}</th>{% endfor %}<th class="text-right">Total</th></tr>
+  {% for label, key, kind in [('Sales Receipts', 'receipts', 'n'), ('Sold for', 'gross', '$'), ('Fees', 'fees', '$'), ('Fee %', 'feepc', '%'), ('Net sold', 'net', '$'), ('Cost of the Units sold', 'cogs', '$')] %}
+  <tr>
+    <th>{{ label }}</th>
+    {% for name in marketplace_names %}{% set v = marketplaces[name][key] %}
+    <td class="text-right">{% if kind == '$' %}{{ money(v) }}{% elif kind == '%' %}{{ '%.2f'|format(v) }}%{% else %}{{ v }}{% endif %}</td>
+    {% endfor %}
+    {% set v = total[key] %}
+    <td class="text-right"><b>{% if kind == '$' %}{{ money(v) }}{% elif kind == '%' %}{{ '%.2f'|format(v) }}%{% else %}{{ v }}{% endif %}</b></td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="text-muted">
+  Other is Sales Receipts with no eBay or Discogs order. Other Items' sales are
+  not here: they are further down, and never in record stock, cost or profit.
+</p>
+
+<h3>Profit</h3>
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th></th><th class="text-right">Cost of goods</th><th class="text-right">Cash</th></tr>
+  <tr><td>Net sold</td><td class="text-right">{{ money(total.net) }}</td><td class="text-right">{{ money(total.net) }}</td></tr>
+  <tr><td>Less the Units sold (their share of their Lots' prices)</td><td class="text-right">{{ money(-total.cogs) }}</td><td class="text-right"></td></tr>
+  <tr><td>Less Purchase Lots bought</td><td class="text-right"></td><td class="text-right">{{ money(-total.lots) }}</td></tr>
+  <tr><td>Less supplies bought</td><td class="text-right">{{ money(-total.supplies) }}</td><td class="text-right">{{ money(-total.supplies) }}</td></tr>
+  <tr><td>Less Expenses</td><td class="text-right">{{ money(-total.expenses) }}</td><td class="text-right">{{ money(-total.expenses) }}</td></tr>
+  <tr><th>Profit</th><th class="text-right">{{ money(total.cogs_profit) }}</th><th class="text-right">{{ money(total.cash_profit) }}</th></tr>
+  <tr><td>Margin (of net sold)</td><td class="text-right">{{ '%.2f'|format(total.margin) }}%</td><td class="text-right">{{ '%.2f'|format(total.cash_profit / total.net * 100 if total.net > 0 else 0) }}%</td></tr>
+</table>
+<p class="text-muted">
+  Cost of goods answers "were the things sold this period sold at a profit?":
+  buying a big Lot in December doesn't make the year look like a loss. Cash
+  answers "did the shop make or spend money this period?". Over all time,
+  cash profit is the home page's total net profit.
+  A Lot's price is split evenly over its Units, so a Lot's cost in one month is
+  an average.
+</p>
+
+{% if expenses %}
+<h3>Expenses</h3>
+<table class="table table-bordered table-condensed" style="width: auto">
+  {% for label, amount in expenses.items() %}<tr><td>{{ label }}</td><td class="text-right">{{ money(amount) }}</td></tr>{% endfor %}
+</table>
+{% endif %}
+
+<h3>By {{ period.group }}</h3>
+{% if columns %}
+<div style="overflow-x: auto">
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th></th>{% for label, f in columns %}<th class="text-right">{{ label }}</th>{% endfor %}</tr>
+  {% for label, key in [('Sales Receipts', 'receipts'), ('Net sold', 'net'), ('Cost of the Units sold', 'cogs'), ('Lots bought', 'lots'), ('Supplies bought', 'supplies'), ('Expenses', 'expenses'), ('Profit, cost of goods', 'cogs_profit'), ('Profit, cash', 'cash_profit')] %}
+  <tr><th>{{ label }}</th>{% for _, f in columns %}<td class="text-right">{% if key == 'receipts' %}{{ f[key] }}{% else %}{{ money(f[key]) }}{% endif %}</td>{% endfor %}</tr>
+  {% endfor %}
+</table>
+</div>
+{% else %}
+<p>No records in this period.</p>
+{% endif %}
+
+<h3>Other Items</h3>
+{% if other.receipts %}
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><td>Sold</td><td class="text-right">{{ other['items'] }}</td></tr>
+  <tr><td>Sold for</td><td class="text-right">{{ money(other.gross) }}</td></tr>
+  <tr><td>Net sold</td><td class="text-right">{{ money(other.net) }}</td></tr>
+  <tr><td>Shipping supplies used</td><td class="text-right">{{ money(other.supplies) }}</td></tr>
+  <tr><td>Profit, of those with a cost</td><td class="text-right">{% if other.profit is none %}no cost entered{% else %}{{ money(other.profit) }}{% endif %}</td></tr>
+</table>
+{% else %}
+<p>No Other Items sold in this period.</p>
+{% endif %}
+{% endblock %}
