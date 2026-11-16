@@ -281,6 +281,19 @@ def item_category(item_id):
     return str(category_id), []
 
 
+def item_pictures(item_id):
+    """
+    (the addresses of a listing's pictures in order, errors) from GetItem.
+    The list is empty, with no errors, for a listing that has none. eBay only
+    answers for an ended listing for a while after it ends.
+    """
+    resp, summary = _call("GetItem", {"ItemID": item_id})
+    if resp is None or summary["errors"]:
+        return [], summary["errors"] or ["No response."]
+    details = (resp.get("Item") or {}).get("PictureDetails") or {}
+    return [str(u) for u in _as_list(details.get("PictureURL")) if u], []
+
+
 def seller_profiles():
     """
     The seller's business policies from GetUserPreferences, as

@@ -184,6 +184,21 @@ old), so a copy taken while the app runs is whole, and needn't match the
 database to the second. The pictures of a Unit that's deleted stay in the
 folder, and are small to keep.
 
+To copy the pictures of existing eBay listings to their Units, once, from
+the live container (see "Copying pictures down from eBay listings" in
+[Using fbc](using.md)):
+
+```bash
+docker/live-flask.sh pictures-import
+docker/live-flask.sh pictures-import --apply
+```
+
+The first only reads; the second copies. Both ask eBay about each listing, and
+the second fetches each picture, so a shop with many listings takes a while;
+`--limit 50` does some at a time, and running it again carries on. Take a
+backup of the pictures folder first if it already holds pictures you care
+about.
+
 The `unit_picture` table comes with a migration, which the container runs
 when it starts. eBay Drafts use a Unit's stored pictures, and send them to eBay
 when the draft is checked or published (see "Pictures on an eBay Draft" in
