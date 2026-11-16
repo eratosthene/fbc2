@@ -1,1 +1,17 @@
 {% macro money(x) %}{% if x < 0 %}-${{ '%.2f'|format(-x) }}{% else %}${{ '%.2f'|format(x) }}{% endif %}{% endmacro %}
+
+{# A chart: `spec` is {labels, unit, series} (see fbc/static/js/report-charts.js). #}
+{% macro draw(id, title, spec) %}
+{% if spec and spec.labels %}
+<h4>{{ title }}</h4>
+<div class="report-chart-box">
+  <canvas id="{{ id }}" class="report-chart" role="img" aria-label="{{ title }}. The figures are in the table on this page."></canvas>
+</div>
+<script type="application/json" id="{{ id }}-data">{{ spec|tojson }}</script>
+{% endif %}
+{% endmacro %}
+
+{% macro chart_scripts() %}
+<script src="{{ url_for('static', filename='js/chart.umd.js') }}"></script>
+<script src="{{ url_for('static', filename='js/report-charts.js') }}"></script>
+{% endmacro %}

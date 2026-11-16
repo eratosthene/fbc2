@@ -369,7 +369,62 @@ def profit_and_loss(period):
         else []
     )
     result["breakeven"] = breakeven(period)
+    # Cash comes in from a position before the period, so the cumulative line
+    # is the shop's whole run, not just the period's.
+    before = (
+        _figures(loaded, None, start - datetime.timedelta(days=1))["total"][
+            "cash_profit"
+        ]
+        if start
+        else 0.0
+    )
+    result["chart"] = _pnl_chart(result["columns"], before)
     return result
+
+
+def _pnl_chart(columns, opening):
+    """Chart.js data for the P&L: net sales and spending as bars, cash profit
+    as a line, and the cumulative cash position, from `opening`."""
+    spending = [round(f["lots"] + f["supplies"] + f["expenses"], 2) for _, f in columns]
+    running, cumulative = opening, []
+    for _, f in columns:
+        running += f["cash_profit"]
+        cumulative.append(round(running, 2))
+    return {
+        "money": {
+            "labels": [label for label, _ in columns],
+            "unit": "$",
+            "series": [
+                {
+                    "label": "Net sold",
+                    "kind": "bar",
+                    "data": [f["net"] for _, f in columns],
+                },
+                {
+                    "label": "Spending (Lots, supplies, Expenses)",
+                    "kind": "bar",
+                    "data": spending,
+                },
+                {
+                    "label": "Cash profit",
+                    "kind": "line",
+                    "data": [f["cash_profit"] for _, f in columns],
+                },
+            ],
+        },
+        "cumulative": {
+            "labels": [label for label, _ in columns],
+            "unit": "$",
+            "series": [
+                {
+                    "label": "Cumulative cash position",
+                    "kind": "line",
+                    "data": cumulative,
+                },
+                {"label": "Break-even", "kind": "baseline", "data": [0] * len(columns)},
+            ],
+        },
+    }
 
 
 # --- Inventory ---------------------------------------------------------------
@@ -457,17 +512,47 @@ def inventory(period):
     dates = [d for u in units for d in u[:2] if d]
     first = period.start or (min(dates) if dates else None)
     last = period.end or max([today(), *dates])
+    columns = (
+        [
+            (label, _stock_figures(units, a, b))
+            for label, a, b in buckets(first, last, period.group)
+        ]
+        if first and first <= last
+        else []
+    )
     return {
         "total": _stock_figures(units, period.start, period.end),
-        "columns": (
-            [
-                (label, _stock_figures(units, a, b))
-                for label, a, b in buckets(first, last, period.group)
-            ]
-            if first and first <= last
-            else []
-        ),
+        "columns": columns,
         "flags": flags,
+        "chart": _stock_chart(columns),
+    }
+
+
+def _stock_chart(columns):
+    labels = [label for label, _ in columns]
+    return {
+        "value": {
+            "labels": labels,
+            "unit": "$",
+            "series": [
+                {
+                    "label": "Stock at cost, end of period",
+                    "kind": "line",
+                    "data": [f["closing"]["cost"] for _, f in columns],
+                }
+            ],
+        },
+        "sold": {
+            "labels": labels,
+            "unit": "n",
+            "series": [
+                {
+                    "label": "Units sold",
+                    "kind": "bar",
+                    "data": [f["sold"]["units"] for _, f in columns],
+                }
+            ],
+        },
     }
 
 
@@ -486,7 +571,8 @@ def lots_report(period):
         for lot in db.session.query(PurchaseLot).order_by(PurchaseLot.date.desc())
         if _within(lot.date, period.start, period.end)
     ]
-    figures = finance.lot_figures(lots)
+    inv = finance.Inventory()
+    figures = finance.lot_figures(lots, inv)
     avg, _source = _average_net_per_unit(period)
     rows = []
     for lot in lots:
@@ -506,7 +592,64 @@ def lots_report(period):
     total["fees"] = round(total["gross"] - total["net"], 2)
     total["profit"] = round(total["net"] - total["capital"], 2)
     total["roi"] = finance.percent(total["profit"], total["capital"])
-    return {"rows": rows, "total": total}
+    return {"rows": rows, "total": total, "payback": _payback(rows, inv)}
+
+
+PAYBACK_LOTS = 5
+
+
+def _payback(rows, inv):
+    """
+    Chart.js data for how fast the PAYBACK_LOTS dearest Lots (by price) paid
+    back: the net sold so far as a % of the Lot's price, at the end of each
+    month from the first of their dates until now. A line starts in its Lot's
+    month. 100% is where the Lot has paid for itself.
+    """
+    top = sorted(rows, key=lambda r: -r["capital"])[:PAYBACK_LOTS]
+    top = [r for r in top if r["capital"] > 0]
+    if not top:
+        return None
+    ids = {r["lot"].id for r in top}
+    receipt_dates = dict(db.session.query(SalesReceipt.id, SalesReceipt.date))
+    sales = {i: [] for i in ids}
+    for u in inv.units:
+        if u.sold and u.purchase_lot_id in ids and u.sales_receipt_id in receipt_dates:
+            sale = inv.sale(u)
+            if sale:
+                sales[u.purchase_lot_id].append(
+                    (receipt_dates[u.sales_receipt_id], sale[1] or 0.0)
+                )
+    first = _month_start(min(r["lot"].date for r in top))
+    months = []
+    while first <= today():
+        months.append(first)
+        first = _add_months(first, 1)
+    series = []
+    for r in top:
+        lot = r["lot"]
+        data = []
+        for month in months:
+            end = _month_end(month)
+            if end < lot.date:
+                data.append(None)
+                continue
+            net = sum(n for d, n in sales[lot.id] if d <= end)
+            data.append(round(net / lot.price * 100, 1))
+        series.append(
+            {
+                "label": f"{lot.name} ({lot.date.isoformat()})",
+                "kind": "line",
+                "data": data,
+            }
+        )
+    series.append(
+        {"label": "Paid back", "kind": "baseline", "data": [100] * len(months)}
+    )
+    return {
+        "labels": [f"{m.year}-{m.month:02d}" for m in months],
+        "unit": "%",
+        "series": series,
+    }
 
 
 # --- Sales -------------------------------------------------------------------
@@ -988,4 +1131,27 @@ def breakeven(period):
             "average_of": average_of,
             "units": _units_to_cover(outstanding, average),
         },
+    }
+
+
+# --- Home page ---------------------------------------------------------------
+
+
+def year_to_date(now=None):
+    """
+    {"start", "end", "net", "profit", "margin", "units_sold", "receipts"}: this
+    calendar year so far, for the home page. Profit is the cost-of-goods one
+    from Profit & Loss, and so is the margin (of net sold).
+    """
+    period = Period({"period": "ytd"}, now)
+    total = _figures(_load(), period.start, period.end)["total"]
+    rows, units = _sales_load()
+    return {
+        "start": period.start,
+        "end": period.end,
+        "net": total["net"],
+        "profit": total["cogs_profit"],
+        "margin": total["margin"],
+        "receipts": total["receipts"],
+        "units_sold": _sales_figures(rows, units, period.start, period.end)["units"],
     }

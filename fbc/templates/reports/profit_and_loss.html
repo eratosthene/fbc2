@@ -1,5 +1,5 @@
 {% extends "appbuilder/base.html" %}
-{% from "reports/_macros.html" import money %}
+{% from "reports/_macros.html" import money, draw, chart_scripts %}
 {% macro mp_name(name) %}{{ name or 'Other' }}{% endmacro %}
 {% block content %}
 <h2>Profit &amp; Loss <small>{{ period.label() }}</small></h2>
@@ -56,6 +56,8 @@
 
 <h3>By {{ period.group }}</h3>
 {% if columns %}
+{{ draw("pnl-money", "Net sold and spending by " ~ period.group, chart.money) }}
+{{ draw("pnl-cumulative", "Cumulative cash position", chart.cumulative) }}
 <div style="overflow-x: auto">
 <table class="table table-bordered table-condensed" style="width: auto">
   <tr><th></th>{% for label, f in columns %}<th class="text-right">{{ label }}</th>{% endfor %}</tr>
@@ -82,4 +84,5 @@
 {% else %}
 <p>No Other Items sold in this period.</p>
 {% endif %}
+{% if columns %}{{ chart_scripts() }}{% endif %}
 {% endblock %}

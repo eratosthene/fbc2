@@ -22,6 +22,10 @@ insertions close to or over the limit), then these sections, in order:
 - **Listings**: the active listings and this month's free insertions (see
   below).
 - **Stock**: the Units in stock.
+- **Year to date**: this calendar year's net sold, Sales Receipts and Units
+  sold, and profit and margin (cost of goods, as in Profit & Loss), with links
+  to every report.
+- **All time**, which holds the rest, over every date:
 - **Sales by marketplace**: Sales Receipts, Sold Price and Net Sold for eBay,
   Discogs and sales not linked to an order.
 - **Net profit** and the **breakeven price per Unit**, then **Profit Details**
@@ -910,9 +914,8 @@ category. Its total supply cost leaves out the Expenses on Purchase Orders.
 ## Reports
 
 The Reports menu shows money for a chosen period, where the home page shows
-all time. It's being built in slices (issue #69); so far there are Profit &
-Loss, Inventory, Lots, Sales, Aging and Supplies, with break-even figures and
-CSV downloads.
+all time: Profit & Loss, Inventory, Lots, Sales, Aging and Supplies, with
+break-even figures, charts and CSV downloads.
 
 ### The period
 
@@ -1046,6 +1049,25 @@ whole: what all time has spent (Lots, supplies and Expenses) beyond its net
 sales, over the average net per Unit sold in the period (or in all time, if the
 period sold none). The Lots report has the same sum for each Lot, as "To break
 even": the Units still to sell to cover that Lot's price.
+
+### Charts
+
+Charts sit above the tables they come from (the numbers are always in the
+table too), and follow the period and the group:
+
+- **Profit & Loss:** net sold and spending (Lots, supplies and Expenses) as
+  bars with cash profit as a line, and the **cumulative cash position**. It
+  starts from what the shop had made or spent before the period, so it's the
+  whole run, and where it crosses the dashed zero line is when the shop as a
+  whole broke even.
+- **Inventory:** stock at cost at the end of each month or quarter, and Units
+  sold.
+- **Lots:** how fast the five dearest Lots in the period paid back: net sold so
+  far as a % of the Lot's price, at the end of each month, from the Lot's own
+  month. The dashed line at 100% is where a Lot has paid for itself.
+
+Hover a chart for the figures. The charts need no internet: Chart.js is kept
+with the app. A report prints without its menu and period buttons.
 
 ### Downloading a report
 

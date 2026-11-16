@@ -59,7 +59,7 @@ def marketplace_sales():
 def home_totals():
     """Everything the home page shows, worked out from the database."""
     from fbc import db
-    from fbc.sales import finance
+    from fbc.sales import finance, reports
     from fbc.models.inventory import PurchaseLot, StorageBox
     from fbc.models.expenses import (
         category_label,
@@ -226,6 +226,7 @@ def home_totals():
         "tasks": tasks.counts(),
         "marketplace_sales": marketplace_sales(),
         "other_sales": other_sales,
+        "ytd": reports.year_to_date(),
     }
 
 

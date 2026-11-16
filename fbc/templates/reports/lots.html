@@ -1,5 +1,5 @@
 {% extends "appbuilder/base.html" %}
-{% from "reports/_macros.html" import money %}
+{% from "reports/_macros.html" import money, draw, chart_scripts %}
 {% block content %}
 <h2>Lots <small>{{ period.label() }}</small></h2>
 {% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
@@ -14,6 +14,8 @@
   sold none); it is blank when nothing has ever sold.
 </p>
 {% if rows %}
+{{ draw("lot-payback", "Payback of the " ~ (rows|length if rows|length < 5 else 5) ~ " dearest Lots: net sold so far as a % of the Lot's price", payback) }}
+{{ chart_scripts() if payback }}
 <div style="overflow-x: auto">
 <table class="table table-bordered table-condensed" id="lots-report" style="width: auto">
   <thead><tr>

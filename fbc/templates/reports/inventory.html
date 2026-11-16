@@ -1,5 +1,5 @@
 {% extends "appbuilder/base.html" %}
-{% from "reports/_macros.html" import money %}
+{% from "reports/_macros.html" import money, draw, chart_scripts %}
 {% block content %}
 <h2>Inventory <small>{{ period.label() }}</small></h2>
 {% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
@@ -46,7 +46,10 @@
 
 <h3>By {{ period.group }}</h3>
 {% if columns %}
+{{ draw("stock-value", "Stock at cost over time", chart.value) }}
+{{ draw("stock-sold", "Units sold by " ~ period.group, chart.sold) }}
 {{ stock_table(columns, true) }}
+{{ chart_scripts() }}
 {% else %}
 <p>No records in this period.</p>
 {% endif %}

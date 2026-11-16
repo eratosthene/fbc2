@@ -1,4 +1,4 @@
-<p>
+<p class="hidden-print">
   {% for key, label in presets %}
   <a class="btn btn-xs {{ 'btn-primary' if period.preset == key else 'btn-default' }}"
      href="?{{ dict(period=key, group=period.group, **(extra|default({})))|urlencode }}">{{ label }}</a>
