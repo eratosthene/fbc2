@@ -105,9 +105,11 @@ file is what they don't say.
   working on it, `docs/production.md` for the live server. `README.md` is an
   overview with links; change it only when that changes, such as a new area
   of the app. Docs are Markdown, with commands in fenced `bash` blocks.
-- GitHub closes an issue on merge when a PR description has "Closes #N" (or
-  fixes, resolves) anywhere, even in a sentence like "Closes #N only once...".
-  For one slice of a multi-slice issue, write `Refs #N` and never those words.
+- GitHub closes an issue on merge if a PR description has a closing word
+  (close, closes, fix, fixes, resolve, resolves) before an issue number,
+  anywhere, even in a quote or an explanation. So write one only in the
+  `Closes #N.` line of a PR that finishes its issue. For one slice of a
+  multi-slice issue, write `Refs #N` and no closing word at all.
 - PR descriptions follow this shape: `Closes #N.`, a one-line summary, then
   sections as needed: How it works, Differences from the issue, and Testing,
   which says what was run, against what, and what *wasn't* run. CI writes its
