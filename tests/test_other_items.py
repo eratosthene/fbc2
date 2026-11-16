@@ -647,3 +647,28 @@ def test_an_old_order_with_no_listing_gets_one_and_an_other_item(client, finance
     client.post(url, data={"net_sold": "16.50"})
     assert db.session.get(OtherItem, item.id).sold is True
     assert index.home_totals()["other_sales"]["sold"] == 1
+
+
+def test_an_old_order_that_knows_no_listing_gets_one_made_for_it(client, finances):
+    order = _order()
+    order.ebay_listing_id = None
+    order.items = []
+    db.session.commit()
+    assert ship.shipment_units([order])[0] is None
+    url = "/ebayordermodelview/ship/" + order.order_id
+
+    assert "Make Other Item and ship" in client.get(url).get_data(as_text=True)
+    client.post(url, data={"action": "make_other"})
+
+    listing = db.session.get(EbayListing, "o" + order.order_id)
+    assert (listing.title, listing.ended, listing.archived) == (
+        "Transformers figure",
+        True,
+        True,
+    )
+    assert db.session.get(EbayOrder, order.order_id).ebay_listing_id == listing.item_id
+    assert db.session.query(OtherItem).one().ebay_listing_id == listing.item_id
+
+    client.post(url, data={"net_sold": "16.50"})
+    assert db.session.query(OtherItem).one().sold is True
+    assert db.session.query(SalesReceipt).one().net_sold == 16.5
