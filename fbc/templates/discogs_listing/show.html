@@ -1,6 +1,43 @@
 {% extends "crud/show.html" %}
 {% block show_form %}
 {{ super() }}
+{% if unit %}
+<p>
+  <a href="{{ url_for('UnitModelView.show', pk=unit.id) }}">Unit: {{ unit.name }}</a>
+  &middot; <a href="{{ url_for('UnitPicturesView.show', pk=unit.id) }}">Pictures page</a>
+</p>
+{% if pictures %}
+{# Closed until opened, so the page isn't a wall of pictures. They load only
+   when it's opened, since up to 24 of them are a lot to fetch for nothing. #}
+<div class="panel-group" id="unit-pictures">
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h4 class="panel-title">
+        <a data-toggle="collapse" data-parent="#unit-pictures" href="#unit-pictures-body" class="collapsed">
+          Pictures from the Unit ({{ pictures|length }})
+        </a>
+      </h4>
+    </div>
+    <div id="unit-pictures-body" class="panel-collapse collapse">
+      <div class="panel-body">
+        <p class="text-muted">Add them to this listing on Discogs by hand: Edit Details, then
+          Add Photos. Drag a picture (Chrome only) or
+          <a href="{{ url_for('UnitPicturesView.zip', pk=unit.id) }}">download them all (zip)</a>
+          and drag the files from a folder.</p>
+        {% for picture in pictures %}
+        {% set file_name = picture_name(unit.id, picture.position) %}
+        {% set file_url = url_for('UnitPicturesView.file', pk=unit.id, filename=file_name) %}
+        <p><strong>{{ file_name }}</strong>{% if loop.first %} (main){% endif %}</p>
+        <div style="overflow: auto; max-width: 100%; margin-bottom: 15px">
+          <a href="{{ file_url }}"><img src="{{ file_url }}" alt="{{ file_name }}" loading="lazy" style="max-width: none"></a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
 <hr>
 {% for text, link in ebay_notes %}
 <div class="alert alert-warning"><strong>Also on eBay.</strong> {{ text }}

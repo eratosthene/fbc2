@@ -22,6 +22,7 @@ from fbc.sync.notes import (
     SyncedViewMixin,
 )
 from fbc.core.forms import CustomModelView
+from fbc.pictures import store
 from fbc.sales.archive import ArchivableViewMixin
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
@@ -247,6 +248,9 @@ class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
                 and not (unit and unit.sold)
             ),
             ebay_notes=discogs_listing.ebay_conflicts(unit) if unit else [],
+            unit=unit,
+            pictures=store.for_unit(unit) if unit else [],
+            picture_name=store.display_name,
         )
 
     @expose("/fromunit/<int:pk>", methods=["GET", "POST"])
