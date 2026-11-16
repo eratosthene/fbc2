@@ -32,6 +32,15 @@ services:
         # Fail if it's missing, rather than make an empty folder in its place.
         bind:
           create_host_path: false
+      # Each Unit's pictures. FBC_PICTURES_DIR in docker/.env is the host
+      # folder, which should be outside the repo, on the NAS's volume, and
+      # backed up with the database (see "Pictures" in docs/production.md).
+      # Without it, `pictures/` in the repo root is used and made if missing.
+      - type: bind
+        source: ${FBC_PICTURES_DIR:-../pictures}
+        target: /pictures
+    environment:
+      FBC_CONFIG_PICTURES_DIR: /pictures
     ports:
       - "20000:20000"
     # Healthy once the entrypoint's `flask setup-db` has finished and the app

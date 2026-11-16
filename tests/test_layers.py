@@ -25,6 +25,7 @@ LAYERS = {
     "models": 1,
     "ebay": 2,
     "discogs": 2,
+    "pictures": 2,
     "sync": 3,
     "sales": 4,
     "views": 5,

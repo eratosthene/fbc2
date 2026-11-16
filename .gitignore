@@ -75,6 +75,11 @@ config.py
 /docker/dev-db/
 /dev-db/
 
+# Pictures kept by the live container's default mount and by compose.dev.yml
+# (may be copies of live pictures).
+/pictures/
+/docker/dev-pictures/
+
 # Claude Code: the worktrees it makes for each session, and personal settings.
 # .claude/settings.json, launch.json and hooks/ are shared and committed.
 /.claude/worktrees/

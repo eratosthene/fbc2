@@ -117,6 +117,14 @@ IMG_UPLOAD_URL = "/static/uploads/"
 # Setup image size default is (300, 200, True)
 # IMG_SIZE = (300, 200, True)
 
+# Where each Unit's pictures are kept: the original upload and a copy shrunk
+# to 2048 pixels, in a folder per Unit. Unset, pictures can't be kept. In the
+# live container docker/compose.yml mounts a host folder at /pictures and sets
+# this for you (the host folder is FBC_PICTURES_DIR in docker/.env); set it
+# here only for running from a checkout. The folder needs backing up with the
+# database: see "Pictures" in docs/production.md.
+# PICTURES_DIR = basedir + "/pictures"
+
 # Where the Discogs and eBay syncs keep their logs while they run in the
 # background. Every web server process must see the same folder. The default
 # is fbc-sync-jobs in the system temp folder.

@@ -63,6 +63,7 @@ services:
       # live eBay and Discogs accounts. FBC_DEV_MODE=0 in docker/.env turns it
       # off, unless config.py sets DEV_MODE = True.
       FBC_DEV_MODE: ${FBC_DEV_MODE:-1}
+      FBC_CONFIG_PICTURES_DIR: /pictures
     # Mounted rather than baked in, so edits show up without a rebuild. The
     # entrypoint still runs `flask setup-db` first, as on the live server.
     volumes:
@@ -70,6 +71,9 @@ services:
       - ../fbc:/app/fbc
       - ../migrations:/app/migrations
       - ../dev-scripts:/app/dev-scripts:ro
+      # Pictures kept while testing. docker/dev-pictures is ignored by git;
+      # FBC_PICTURES_DIR in docker/.env picks another folder.
+      - ${FBC_PICTURES_DIR:-./dev-pictures}:/pictures
     command: ["flask", "run", "--debug", "--host", "0.0.0.0", "--port", "5555"]
     ports:
       - "127.0.0.1:5555:5555"
