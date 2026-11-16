@@ -457,11 +457,12 @@ then Add Photos. The Pictures page helps two ways:
   those names, in order. Unzip it and drag the files onto Add Photos from a
   folder, which every browser accepts.
 
-Whether dragging a picture straight from the page works depends on the
-browser: some hand Discogs the picture's address rather than the file, and
-Safari is the least reliable at it. fbc can't test this against a Discogs login,
-so try it in the browser you use; the zip always works. The zip and the page use
-the shrunk 2048 pixel copies, not the originals.
+Dragging a picture straight from the page onto Add Photos was tried on a real
+Discogs listing: it works in Chrome and not in Firefox, and Safari hasn't been
+tried (it is the least reliable at dragging images off a page). Nothing on the
+page can fix Firefox, so there, use Download or the zip and drag the files from a
+folder, which every browser accepts. The zip and the page use the shrunk 2048
+pixel copies, not the originals.
 
 ### Pictures on an eBay Draft
 
