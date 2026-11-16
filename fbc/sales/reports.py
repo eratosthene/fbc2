@@ -1,6 +1,7 @@
 """
 The Reports: money for a chosen period, not for all time. So far the period,
-the profit and loss, the inventory and the Lots; see issue #69 for the rest.
+the profit and loss, the inventory, the Lots, the sales and the aging; see
+issue #69 for the rest.
 
 Plain Python over the database, like fbc.sales.finance, which it builds on:
 everything is loaded once and totalled in Python, so the number of queries
@@ -21,6 +22,7 @@ The tax year is the calendar year.
 
 import calendar
 import datetime
+import statistics
 
 import sqlalchemy as sa
 
@@ -28,8 +30,8 @@ from fbc import db
 from fbc.core import localtime
 from fbc.models.expenses import Expense, category_label
 from fbc.models.inventory import PurchaseLot
-from fbc.models.other import OtherItem
-from fbc.models.sales import SalesReceipt
+from fbc.models.other import OtherItem, receipt_ids
+from fbc.models.sales import SalesReceipt, SalesReceiptLine
 from fbc.models.supplies import PurchaseOrder
 from fbc.sales import finance, other
 
@@ -365,7 +367,7 @@ def profit_and_loss(period):
 
 def _stock_units():
     """
-    ([(came in, went out, cost, retail)], flags): one entry per Unit that is
+    ([(came in, went out, cost, retail, lot id)], flags): one entry per Unit that is
     or was in stock. A Unit comes in on its Lot's date and goes out on its
     Sales Receipt's date; a Unit with no Lot has no date to come in on, so it
     is in stock from the beginning, at no cost. Cost is the Unit's share of its
@@ -398,7 +400,9 @@ def _stock_units():
             flags["no_lot"] += 1
         if came_in and went_out and went_out < came_in:
             flags["sold_first"] += 1
-        units.append((came_in, went_out, cost, u.retail_price or 0.0))
+        units.append(
+            (came_in, went_out, cost, u.retail_price or 0.0, u.purchase_lot_id)
+        )
     return units, flags
 
 
@@ -489,3 +493,234 @@ def lots_report(period):
     total["profit"] = round(total["net"] - total["capital"], 2)
     total["roi"] = finance.percent(total["profit"], total["capital"])
     return {"rows": rows, "total": total}
+
+
+# --- Sales -------------------------------------------------------------------
+
+
+def _sales_load():
+    """
+    ([receipts], [sold Units]) for record Sales Receipts (Other Items' are
+    left out). A receipt is (date, marketplace, sold for, net, its Sale lines'
+    total or None). A Unit is (its receipt's date, its share of sold for, its
+    share of net, its cost, days from its Lot's date to the sale or None).
+    """
+    inv = finance.Inventory()
+    others = {r for (r,) in db.session.execute(receipt_ids())}
+    receipts = {
+        r.id: r
+        for r in db.session.query(SalesReceipt).options(
+            sa.orm.selectinload(SalesReceipt.ebay_orders),
+            sa.orm.selectinload(SalesReceipt.discogs_orders),
+        )
+        if r.id not in others
+    }
+    sale_lines = dict(
+        db.session.query(
+            SalesReceiptLine.sales_receipt_id, sa.func.sum(SalesReceiptLine.amount)
+        )
+        .filter(SalesReceiptLine.kind == "SALE")
+        .group_by(SalesReceiptLine.sales_receipt_id)
+    )
+    rows = [
+        (
+            r.date,
+            r.marketplace(),
+            r.sold_price or 0.0,
+            r.net_sold or 0.0,
+            sale_lines.get(r.id),
+        )
+        for r in receipts.values()
+    ]
+    lots = {
+        lot_id: (day, price)
+        for lot_id, day, price in db.session.query(
+            PurchaseLot.id, PurchaseLot.date, PurchaseLot.price
+        )
+    }
+    units = []
+    for u in inv.units:
+        receipt = receipts.get(u.sales_receipt_id)
+        if not u.sold or receipt is None:
+            continue
+        gross, net = inv.sale(u)
+        lot = lots.get(u.purchase_lot_id)
+        cost = lot[1] / inv.units_per_lot[u.purchase_lot_id] if lot else 0.0
+        days = (receipt.date - lot[0]).days if lot and receipt.date >= lot[0] else None
+        units.append((receipt.date, gross or 0.0, net or 0.0, cost, days))
+    return rows, units
+
+
+def _spread(days):
+    """The median, quartiles, fastest and slowest of `days`; None for none."""
+    if not days:
+        return None
+    days = sorted(days)
+    if len(days) > 1:
+        q1, _, q3 = statistics.quantiles(days, n=4, method="inclusive")
+    else:
+        q1 = q3 = days[0]
+    return {
+        "median": statistics.median(days),
+        "q1": q1,
+        "q3": q3,
+        "fastest": days[0],
+        "slowest": days[-1],
+    }
+
+
+def _sales_figures(rows, units, start, end):
+    """The sales from start to end: counts, money, averages and days to sell."""
+    receipts = [r for r in rows if _within(r[0], start, end)]
+    sold = [u for u in units if _within(u[0], start, end)]
+    gross = sum(r[2] for r in receipts)
+    net = sum(r[3] for r in receipts)
+    count = len(sold)
+    days = [u[4] for u in sold if u[4] is not None]
+
+    def per_unit(total):
+        return round(total / count, 2) if count else 0.0
+
+    return {
+        "receipts": len(receipts),
+        "units": count,
+        "gross": round(gross, 2),
+        "fees": round(gross - net, 2),
+        "feepc": finance.percent(gross - net, gross),
+        "net": round(net, 2),
+        "avg_receipt": round(gross / len(receipts), 2) if receipts else 0.0,
+        "avg_unit": per_unit(sum(u[1] for u in sold)),
+        "avg_net_unit": per_unit(sum(u[2] for u in sold)),
+        # Before supplies and Expenses: they are the shop's, not a Unit's.
+        "avg_profit_unit": per_unit(sum(u[2] - u[3] for u in sold)),
+        "days": _spread(days),
+        "days_unknown": count - len(days),
+    }
+
+
+def _gross_by_year(rows):
+    """
+    [(year, {marketplace: {"gross", "sale_lines"}, "total": same})], newest
+    first. "sale_lines" is the receipts' Sale lines (eBay's figure, which has
+    the taxes it collects taken out), or the sold for where a receipt has none.
+    """
+    years = {}
+    for day, marketplace, gross, _net, lines in rows:
+        year = years.setdefault(
+            day.year,
+            {m: {"gross": 0.0, "sale_lines": 0.0} for m in [*MARKETPLACES, "total"]},
+        )
+        for key in (marketplace, "total"):
+            year[key]["gross"] += gross
+            year[key]["sale_lines"] += gross if lines is None else lines
+    return [
+        (
+            y,
+            {
+                k: {m: round(v, 2) for m, v in figures.items()}
+                for k, figures in years[y].items()
+            },
+        )
+        for y in sorted(years, reverse=True)
+    ]
+
+
+def sales_report(period):
+    """
+    {"total", "columns", "years"}: _sales_figures() for the whole Period and
+    for each column ([(label, figures)]), and the gross for every calendar
+    year, whatever the Period (for checking eBay's 1099-K).
+    """
+    rows, units = _sales_load()
+    dates = [r[0] for r in rows]
+    first = period.start or (min(dates) if dates else None)
+    last = period.end or max([today(), *dates])
+    return {
+        "total": _sales_figures(rows, units, period.start, period.end),
+        "columns": (
+            [
+                (label, _sales_figures(rows, units, a, b))
+                for label, a, b in buckets(first, last, period.group)
+            ]
+            if first and first <= last
+            else []
+        ),
+        "years": _gross_by_year(rows),
+    }
+
+
+# --- Aging -------------------------------------------------------------------
+
+AGE_BUCKETS = [
+    ("0–3 months", 0, 3),
+    ("3–6 months", 3, 6),
+    ("6–12 months", 6, 12),
+    ("A year or more", 12, None),
+]
+OLD_STOCK_LOTS = 10
+# "Old" stock, for the list of Lots holding it: bought this many months ago
+# (the default; the page lets you change it, up to MAX_OLD_AFTER_MONTHS).
+OLD_AFTER_MONTHS = 6
+MAX_OLD_AFTER_MONTHS = 120
+
+
+def old_after_months(text):
+    """The months from ?old=, or the default when it isn't a whole number in range."""
+    try:
+        months = int(text)
+    except (TypeError, ValueError):
+        return OLD_AFTER_MONTHS
+    return months if 1 <= months <= MAX_OLD_AFTER_MONTHS else OLD_AFTER_MONTHS
+
+
+def _months_between(first, last):
+    """Whole months from `first` to `last`."""
+    months = (last.year - first.year) * 12 + last.month - first.month
+    return months - 1 if last.day < first.day else months
+
+
+def aging(period, old_after=OLD_AFTER_MONTHS):
+    """
+    {"as_of", "buckets", "no_lot", "total", "old_lots"}: the Units in stock at
+    the end of the Period (today, if it ends later or not at all), by months
+    since their Purchase Lot's date. Each of "buckets" ([(label, figures)]),
+    "no_lot" and "total" has {"units", "cost", "retail"}. "old_lots" is the
+    OLD_STOCK_LOTS Purchase Lots bought OLD_AFTER_MONTHS or more before then
+    that have the most cost in stock, as [{"lot", "units", "cost"}];
+    `old_after` changes the OLD_AFTER_MONTHS.
+    """
+    units, _flags = _stock_units()
+    as_of = min(period.end, today()) if period.end else today()
+    held = _held_before(units, as_of + datetime.timedelta(days=1))
+    groups = [[] for _ in AGE_BUCKETS]
+    no_lot = []
+    old = {}
+    for u in held:
+        if u[0] is None:
+            no_lot.append(u)
+            continue
+        months = _months_between(u[0], as_of)
+        for group, (_label, low, high) in zip(groups, AGE_BUCKETS):
+            if months >= low and (high is None or months < high):
+                group.append(u)
+        if months >= old_after:
+            old.setdefault(u[4], []).append(u)
+    names = {
+        lot_id: lot
+        for lot_id, lot in ((lot.id, lot) for lot in db.session.query(PurchaseLot))
+        if lot_id in old
+    }
+    old_lots = sorted(
+        (
+            {"lot": names[lot_id], **_sum(lot_units)}
+            for lot_id, lot_units in old.items()
+        ),
+        key=lambda f: (-f["cost"], -f["units"], f["lot"].date),
+    )[:OLD_STOCK_LOTS]
+    return {
+        "as_of": as_of,
+        "buckets": [(a[0], _sum(g)) for a, g in zip(AGE_BUCKETS, groups)],
+        "no_lot": _sum(no_lot),
+        "total": _sum(held),
+        "old_lots": old_lots,
+    }

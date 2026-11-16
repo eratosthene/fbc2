@@ -9,7 +9,7 @@ from fbc.models.discogs import DiscogsOrder
 from fbc.models.ebay import EbayOrder
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.models.other import OtherItem
-from fbc.models.sales import SalesReceipt
+from fbc.models.sales import SalesReceipt, SalesReceiptLine
 from fbc.models.supplies import PurchaseOrder
 from fbc.sales import index, reports
 
@@ -369,3 +369,135 @@ def test_inventory_and_lots_pages_render(app):
         assert b"$100.00" in client.get("/lotsreport/?period=all").data
     empty = reports.Period({"from": "2020-01-01", "to": "2020-01-31"})
     assert reports.lots_report(empty)["rows"] == []
+
+
+def test_sales_averages_and_days_to_sell(app):
+    lot = _lot(75.0, D(2026, 1, 1))  # 3 Units, $25 each
+    _sale(lot, 40.0, 34.0, D(2026, 1, 11), order=EbayOrder(order_id="1"))  # 10 days
+    _sale(lot, 20.0, 15.0, D(2026, 1, 31), order=EbayOrder(order_id="2"))  # 30 days
+    _sale(lot, 10.0, 8.0, D(2026, 3, 2))  # outside the period
+    got = reports.sales_report(
+        reports.Period({"from": "2026-01-01", "to": "2026-02-28"})
+    )
+    t = got["total"]
+    assert t["receipts"] == 2 and t["units"] == 2
+    assert t["gross"] == 60.0 and t["net"] == 49.0 and t["fees"] == 11.0
+    assert t["avg_receipt"] == 30.0 and t["avg_unit"] == 30.0
+    assert t["avg_net_unit"] == 24.5
+    assert t["avg_profit_unit"] == -0.5  # 49 - 2 * 25, over 2 Units
+    assert t["days"]["median"] == 20 and t["days"]["fastest"] == 10
+    assert t["days"]["slowest"] == 30 and t["days"]["q1"] == 15
+    assert t["days_unknown"] == 0
+    # The columns add up to the total.
+    assert [c["receipts"] for _, c in got["columns"]] == [2, 0]
+    # It agrees with Profit & Loss.
+    pl = reports.profit_and_loss(
+        reports.Period({"from": "2026-01-01", "to": "2026-02-28"})
+    )["total"]
+    assert (pl["gross"], pl["net"], pl["fees"]) == (t["gross"], t["net"], t["fees"])
+
+
+def test_sales_split_a_receipt_between_its_units(app):
+    lot = _lot(20.0, D(2026, 1, 1))  # 2 Units, $10 each
+    receipt = _sale(lot, 30.0, 24.0, D(2026, 1, 5))
+    _unit(lot, sold=True, receipt=receipt)
+    t = reports.sales_report(reports.Period({"period": "all"}))["total"]
+    assert t["receipts"] == 1 and t["units"] == 2
+    assert t["avg_receipt"] == 30.0 and t["avg_unit"] == 15.0
+    assert t["avg_profit_unit"] == 2.0  # 12 net each, less 10
+
+
+def test_sales_leave_out_days_that_cant_be_counted(app):
+    lot = _lot(10.0, D(2026, 1, 10))
+    _sale(lot, 5.0, 4.0, D(2026, 1, 1))  # sold before its Lot
+    _sale(None, 5.0, 4.0, D(2026, 1, 2))  # no Lot
+    t = reports.sales_report(reports.Period({"period": "all"}))["total"]
+    assert t["units"] == 2 and t["days"] is None and t["days_unknown"] == 2
+
+
+def test_sales_gross_by_year(app):
+    lot = _lot(50.0, D(2025, 1, 1))
+    ebay = _sale(lot, 40.0, 34.0, D(2025, 12, 31), order=EbayOrder(order_id="1"))
+    db.session.add(
+        SalesReceiptLine(sales_receipt=ebay, kind="SALE", label="Sale", amount=46.0)
+    )
+    _sale(lot, 20.0, 15.0, D(2026, 1, 1), order=DiscogsOrder(order_id="2"))
+    # Other Items never count.
+    receipt = SalesReceipt(date=D(2026, 1, 2), sold_price=99.0, net_sold=90.0)
+    db.session.add(receipt)
+    db.session.add(OtherItem(name="Mug", sold=True, sales_receipt=receipt))
+    db.session.commit()
+    years = dict(
+        reports.sales_report(
+            reports.Period({"from": "2026-01-01", "to": "2026-01-31"})
+        )["years"]
+    )
+    assert sorted(years) == [2025, 2026]
+    assert years[2025]["eBay"] == {"gross": 40.0, "sale_lines": 46.0}
+    # No lines: the sold for stands in.
+    assert years[2026]["Discogs"] == {"gross": 20.0, "sale_lines": 20.0}
+    assert years[2026]["total"]["gross"] == 20.0
+
+
+def test_aging_groups_stock_by_lot_age_and_agrees_with_inventory(app):
+    old = _lot(40.0, D(2025, 1, 15))  # 2 Units, $20 each
+    mid = _lot(30.0, D(2025, 9, 1))  # 3 Units, $10 each
+    new = _lot(10.0, D(2026, 3, 1))  # 1 Unit
+    _unit(old, retail=5.0)
+    _unit(old, retail=7.0)
+    _unit(mid)
+    _unit(mid)
+    _unit(
+        mid,
+        sold=True,
+        receipt=SalesReceipt(date=D(2026, 1, 1), sold_price=1.0, net_sold=1.0),
+    )
+    _unit(new)
+    _unit(None)
+    period = {"from": "2026-01-01", "to": "2026-03-31"}
+    got = reports.aging(reports.Period(period))
+    assert got["as_of"] == D(2026, 3, 31)
+    buckets = dict(got["buckets"])
+    assert buckets["0–3 months"]["units"] == 1
+    assert buckets["3–6 months"]["units"] == 0
+    assert buckets["6–12 months"]["units"] == 2  # 1 Sep to 31 Mar is 6 months
+    assert buckets["A year or more"] == {"units": 2, "cost": 40.0, "retail": 12.0}
+    assert got["no_lot"]["units"] == 1
+    # The Units are Inventory's closing stock.
+    closing = _inventory(**period)["total"]["closing"]
+    assert got["total"]["units"] == closing["units"] == 6
+    assert got["total"]["cost"] == closing["cost"]
+    # The old Lots, most cost first.
+    assert [r["lot"].id for r in got["old_lots"]] == [old.id, mid.id]
+    assert got["old_lots"][1]["units"] == 2
+    # A different cut-off: only the Lot over a year old.
+    twelve = reports.aging(reports.Period(period), 12)
+    assert [r["lot"].id for r in twelve["old_lots"]] == [old.id]
+    assert reports.old_after_months("9") == 9
+    for bad in (None, "x", "0", "121", "-3"):
+        assert reports.old_after_months(bad) == reports.OLD_AFTER_MONTHS
+
+
+def test_aging_with_no_end_is_as_of_today(app):
+    lot = _lot(10.0, D(2020, 1, 1))
+    _unit(lot)
+    got = reports.aging(reports.Period({"period": "all"}))
+    assert got["as_of"] == reports.today()
+    assert dict(got["buckets"])["A year or more"]["units"] == 1
+    assert got["total"]["units"] == index.home_totals()["stock_total"] == 1
+
+
+def test_sales_and_aging_pages_render(app):
+    lot = _lot(100.0, D(2026, 1, 5))
+    _sale(lot, 40.0, 34.0, D(2026, 1, 20), order=EbayOrder(order_id="1"))
+    _unit(lot)
+    with signed_in_client(app) as client:
+        for path in ("/salesreport/", "/agingreport/"):
+            for query in ("", "?period=all&group=quarter", "?from=junk"):
+                assert client.get(path + query).status_code == 200, path + query
+        assert b"1099-K" in client.get("/salesreport/?period=all").data
+        assert b"$40.00" in client.get("/salesreport/?period=all").data
+        assert b"A year or more" in client.get("/agingreport/?period=all").data
+        page = client.get("/agingreport/?period=all&old=9").data
+        assert b'name="old" value="9"' in page
+        assert b'name="old" value="6"' in client.get("/agingreport/?old=junk").data
