@@ -35,7 +35,8 @@ SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # Dev mode keeps the app away from the live eBay and Discogs accounts: their
 # keys here and the tokens saved in the database go unused, syncs do nothing,
-# and picture uploads, publishing and Connect eBay/Discogs are turned off.
+# and sending pictures to eBay, publishing and Connect eBay/Discogs are turned
+# off (pictures are still kept, in PICTURES_DIR).
 # FBC_DEV_MODE=1 in the environment also turns it on (docker/compose.dev.yml
 # sets it); either one is enough, and neither turns the other off.
 DEV_MODE = False

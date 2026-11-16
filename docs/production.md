@@ -199,12 +199,13 @@ the second fetches each picture, so a shop with many listings takes a while;
 backup of the pictures folder first if it already holds pictures you care
 about.
 
-The `unit_picture` table comes with a migration, which the container runs
-when it starts. eBay Drafts use a Unit's stored pictures, and send them to eBay
+The `unit_picture` table and the dropping of the old `ebay_draft.pictures`
+column come with migrations, which the container runs when it starts. eBay Drafts use a Unit's stored pictures, and send them to eBay
 when the draft is checked or published (see "Pictures on an eBay Draft" in
-[Using fbc](using.md)). A draft made before this change kept only eBay
-addresses, which fbc no longer reads, so such a draft shows no pictures
-until they are added again. There were none when this was written.
+[Using fbc](using.md)). The old `pictures` column of an eBay Draft, a list of eBay addresses fbc
+stopped reading, is dropped; it can't be got back except from a backup. Drafts
+made before pictures were stored showed none from then on, and there were none
+with any when this was written.
 
 ## Archiving
 

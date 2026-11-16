@@ -1,0 +1,6 @@
+{% extends "crud/edit.html" %}
+{# Edit Unit, with a way to its pictures, which have a page of their own. #}
+{% block edit_form %}
+<p><a href="{{ url_for('UnitPicturesView.show', pk=request.view_args['pk']) }}" class="btn btn-default">Pictures</a></p>
+{{ super() }}
+{% endblock %}

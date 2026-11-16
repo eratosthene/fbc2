@@ -1,0 +1,64 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h3>Pictures: {{ unit.name }}</h3>
+<p>
+  <a href="{{ url_for('UnitModelView.show', pk=unit.id) }}">Unit</a>
+  &middot; <a href="{{ url_for('UnitModelView.edit', pk=unit.id) }}">Edit</a>
+  &middot; <a href="{{ url_for('EbayDraftModelView.from_unit', pk=unit.id) }}">eBay Draft</a>
+</p>
+<p class="text-muted">These pictures belong to the Unit, and an eBay Draft sends eBay
+the same ones. {{ pictures|length }} of {{ max_pictures }}. The first is the main picture.</p>
+
+<h4>On Discogs</h4>
+<p>fbc can't send pictures to Discogs: its API has no photo upload. On the
+Discogs listing, press Add Photos in Edit Details, then either drag a picture
+from this page onto it, or download them all and drag the files from a folder:</p>
+<p>
+  {% if pictures %}
+  <a class="btn btn-primary" href="{{ url_for('UnitPicturesView.zip', pk=unit.id) }}">Download all (zip)</a>
+  {% else %}
+  <button class="btn btn-primary" disabled>Download all (zip)</button>
+  {% endif %}
+</p>
+<p class="text-muted">Each picture below is shown at its real size, the right way
+up, under the name it downloads with. Dragging a picture out of some browsers
+(Safari is the least reliable) gives Discogs the address instead of the file;
+the zip or Download always works.</p>
+
+{% for picture in pictures %}
+{% set file_name = name(unit.id, picture.position) %}
+{% set file_url = url_for('UnitPicturesView.file', pk=unit.id, filename=file_name) %}
+<div style="margin-bottom: 25px">
+  <p>
+    <strong>{{ file_name }}</strong>{% if loop.first %} (main){% endif %}
+    {% if picture.upload_name %}<span class="text-muted">from {{ picture.upload_name }}</span>{% endif %}
+  </p>
+  <div style="overflow: auto; max-width: 100%">
+    <a href="{{ file_url }}"><img src="{{ file_url }}" alt="{{ file_name }}" style="max-width: none"></a>
+  </div>
+  <form method="post" action="{{ url_for('UnitPicturesView.picture', pk=unit.id, index=loop.index0, action='first') }}" style="display: inline">
+    <button class="btn btn-xs btn-default" {% if loop.first %}disabled{% endif %}>Make main</button>
+  </form>
+  {% set picture_index = loop.index0 %}
+  {% for direction, label in (("left", "Rotate left"), ("right", "Rotate right")) %}
+  <form method="post" action="{{ url_for('UnitPicturesView.rotate', pk=unit.id, index=picture_index, direction=direction) }}" style="display: inline">
+    <button class="btn btn-xs btn-default">{{ label }}</button>
+  </form>
+  {% endfor %}
+  <form method="post" action="{{ url_for('UnitPicturesView.picture', pk=unit.id, index=loop.index0, action='remove') }}" style="display: inline">
+    <button class="btn btn-xs btn-danger" title="Deletes it from the Unit, for every marketplace.">Remove</button>
+  </form>
+  <a class="btn btn-xs btn-default" href="{{ file_url }}" download="{{ file_name }}">Download</a>
+</div>
+{% else %}
+<p>No pictures yet.</p>
+{% endfor %}
+
+<hr>
+{% if not pictures_folder %}
+<p class="text-warning">PICTURES_DIR isn't set in config.py, so pictures can't be kept. See docs/production.md.</p>
+{% else %}
+{% set upload_url = url_for('UnitPicturesView.add', pk=unit.id) %}
+{% include "pictures/upload_form.html" %}
+{% endif %}
+{% endblock %}

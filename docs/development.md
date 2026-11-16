@@ -39,7 +39,9 @@ area, and everything else is in a package by area (#157):
   keeps each try as a `ListingEnd`, and only logs in dev mode), `scheduler.py`
   is `flask scheduler`, and `notes.py` is the "last synced" note on a list. A sync's state module is imported as
   `state` (`from fbc.sync import state`).
-- `fbc/pictures/`: a Unit's pictures, kept for every marketplace (#140).
+- `fbc/pictures/`: a Unit's pictures, kept for every marketplace (#140). The
+  Unit's Pictures page is `views/pictures.py`; it and the eBay Draft page share
+  `templates/pictures/upload_form.html` and `store.add_files`.
   `images.py` is Pillow only: it straightens, rotates and shrinks, and knows
   nothing of the disk or the database. `store.py` keeps them in the
   `PICTURES_DIR` folder, one folder per Unit, and in the `UnitPicture` rows.
@@ -473,7 +475,7 @@ it, since Compose reads `.env` from the compose file's folder.
   doesn't use the eBay and Discogs keys in `config.py` or the tokens saved
   in the database, so a copy of live data can't reach the live accounts.
   Syncs log "Dev Mode is turned on, external syncing disabled" and finish
-  without doing anything, and picture uploads, Check with eBay, Publish,
+  without doing anything, and sending pictures to eBay, Check with eBay, Publish,
   Shipping & Returns and Connect eBay/Discogs are turned off. Ship This
   records the Sales Receipt as usual, but takes Net Sold from you and only
   removes the Discogs copy from fbc. To reach the real sites on purpose, put

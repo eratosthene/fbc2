@@ -288,6 +288,13 @@ class Unit(Model):
                 + '">List&nbsp;on&nbsp;eBay</a><br/>'
             )
         ret = ret + self._discogs_listing_link()
+        if self.id:
+            ret = (
+                ret
+                + '<a href="'
+                + url_for("UnitPicturesView.show", pk=self.id)
+                + '">Pictures</a><br/>'
+            )
         if self.sales_receipt:
             ret = (
                 ret
