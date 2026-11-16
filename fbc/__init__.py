@@ -450,7 +450,7 @@ def _register_views():
         PurchaseOrderSupplyModelView,
     )
     from fbc.views.expenses import ExpenseModelView
-    from fbc.views.reports import ProfitAndLossView
+    from fbc.views.reports import InventoryReportView, LotsReportView, ProfitAndLossView
     from fbc.views.identify import IdentifyRecordView
     from fbc.views.inventory import (
         UnitModelView,
@@ -538,6 +538,8 @@ def _register_views():
         appbuilder.add_view(SupplyUseModelView, "Supply Use", category="Supplies")
         appbuilder.add_view(ExpenseModelView, "Expenses", category="Supplies")
         appbuilder.add_view(ProfitAndLossView, "Profit & Loss", category="Reports")
+        appbuilder.add_view(InventoryReportView, "Inventory", category="Reports")
+        appbuilder.add_view(LotsReportView, "Lots", category="Reports")
         appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Connect")
         appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Connect")
 

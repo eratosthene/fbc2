@@ -1,0 +1,53 @@
+{% extends "appbuilder/base.html" %}
+{% from "reports/_macros.html" import money %}
+{% block content %}
+<h2>Inventory <small>{{ period.label() }}</small></h2>
+{% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
+{% include "reports/_period.html" %}
+
+{% macro stock_table(cols, with_head) %}
+<div style="overflow-x: auto">
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th></th>{% for label, f in cols %}<th class="text-right" colspan="3">{{ label }}</th>{% endfor %}</tr>
+  <tr><th></th>{% for _ in cols %}<th class="text-right">Units</th><th class="text-right">Cost</th><th class="text-right">Retail</th>{% endfor %}</tr>
+  {% for label, key in [('Opening stock', 'opening'), ('Bought', 'bought'), ('Sold', 'sold'), ('Closing stock', 'closing')] %}
+  <tr>
+    <th>{{ label }}{% if key == 'sold' %} (cost of goods sold){% endif %}</th>
+    {% for _, f in cols %}
+    <td class="text-right">{{ f[key].units }}</td>
+    <td class="text-right">{{ money(f[key].cost) }}</td>
+    <td class="text-right">{{ money(f[key].retail) }}</td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endmacro %}
+
+<h3>The period</h3>
+{{ stock_table([('Total', total)], false) }}
+<p class="text-muted">
+  Cost is each Unit's share of its Purchase Lot's price (shared evenly), the
+  same as in Profit &amp; Loss, where the cost of goods sold is the Sold line.
+  Retail is the Units' listed prices as they are now. A Unit comes into stock on
+  its Purchase Lot's date and goes out on its Sales Receipt's date. Other Items
+  are never here. Closing stock for a period ending today is the home page's
+  Units in stock.
+</p>
+
+{% if flags.no_lot or flags.unset or flags.no_receipt or flags.sold_first %}
+<div class="alert alert-info">
+  {% if flags.no_lot %}<p>{{ flags.no_lot }} Unit(s) have no Purchase Lot: counted in stock from the beginning, at no cost.</p>{% endif %}
+  {% if flags.unset %}<p>{{ flags.unset }} Unit(s) are neither sold nor in stock (Sold isn't set): left out, as on the home page.</p>{% endif %}
+  {% if flags.no_receipt %}<p>{{ flags.no_receipt }} Unit(s) are sold but have no Sales Receipt, so there's no date to take them out of stock: left out.</p>{% endif %}
+  {% if flags.sold_first %}<p>{{ flags.sold_first }} Unit(s) were sold before their Purchase Lot's date: counted, so stock can dip below zero for a while. Check the dates.</p>{% endif %}
+</div>
+{% endif %}
+
+<h3>By {{ period.group }}</h3>
+{% if columns %}
+{{ stock_table(columns, true) }}
+{% else %}
+<p>No records in this period.</p>
+{% endif %}
+{% endblock %}

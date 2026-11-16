@@ -1,0 +1,17 @@
+<p>
+  {% for key, label in presets %}
+  <a class="btn btn-xs {{ 'btn-primary' if period.preset == key else 'btn-default' }}"
+     href="?{{ {'period': key, 'group': period.group}|urlencode }}">{{ label }}</a>
+  {% endfor %}
+</p>
+<form class="form-inline" method="get" style="margin-bottom: 15px">
+  <label>From <input type="date" class="form-control input-sm" name="from" value="{{ period.start or '' }}"></label>
+  <label>to <input type="date" class="form-control input-sm" name="to" value="{{ period.end or '' }}"></label>
+  <label>Group by
+    <select class="form-control input-sm" name="group">
+      {% for key, label in groups %}<option value="{{ key }}" {{ 'selected' if period.group == key }}>{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <button class="btn btn-default btn-sm" type="submit">Show</button>
+</form>
+

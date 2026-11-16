@@ -910,8 +910,8 @@ category. Its total supply cost leaves out the Expenses on Purchase Orders.
 ## Reports
 
 The Reports menu shows money for a chosen period, where the home page shows
-all time. It's being built in slices (issue #69); so far there is Profit &
-Loss.
+all time. It's being built in slices (issue #69); so far there are Profit &
+Loss, Inventory and Lots.
 
 ### The period
 
@@ -944,3 +944,32 @@ Net profit (which adds up Units) by that receipt's Net Sold.
 
 A Unit's cost is recomputed from its Lot as it is now, so adding a Unit to an
 old Lot changes the past periods' cost of goods. Archived records count.
+
+### Inventory
+
+Stock for the period, in Units, cost and retail price: **opening stock**,
+what was **bought** (Units on Purchase Lots dated in the period), what was
+**sold** (Units on Sales Receipts dated in the period) and **closing stock**,
+for the whole period and for each month or quarter. A Unit's cost is its share
+of its Purchase Lot's price, shared evenly, so the Sold line is the cost of
+goods sold in Profit & Loss. Retail is the Units' listed prices as they are
+now. Archived Units count; Other Items never do. A Purchase Lot with no Units
+adds nothing here, though it's in Profit & Loss's Lots bought.
+
+For a period that ends today or later, closing stock is the home page's Units in
+stock. A note under the table counts the Units that don't fit and how they're
+treated:
+
+- A Unit with no Purchase Lot is in stock from the beginning, at no cost.
+- A Unit marked sold with no Sales Receipt has no date to leave stock on, so
+  it's left out.
+- A Unit sold before its Purchase Lot's date still counts, so stock can dip
+  below zero for a while. Check those dates.
+
+### Lots
+
+The Purchase Lots bought in the period, newest first, with the Purchase Lots
+list's figures: price, Units, cost per Unit, sold, in stock, the cost of what's
+still in stock, Sold For, Net Sold, profit and ROI, and a totals row. Their
+sales are all the sales so far, not just the period's, because a Lot's result
+isn't known until it's sold. Click a heading to sort.

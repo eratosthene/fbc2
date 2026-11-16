@@ -245,3 +245,127 @@ def test_a_receipt_with_no_units_still_counts(app):
     db.session.commit()
     total = reports.profit_and_loss(reports.Period({"period": "all"}))["total"]
     assert total["net"] == 3.31 and total["receipts"] == 1
+
+
+def _unit(lot, sold=False, receipt=None, retail=None):
+    unit = Unit(
+        name="U",
+        unit_type='12" LP',
+        pressing="",
+        grading="",
+        purchase_lot=lot,
+        sold=sold,
+        sales_receipt=receipt,
+        retail_price=retail,
+    )
+    db.session.add(unit)
+    db.session.commit()
+    return unit
+
+
+def _inventory(**period):
+    return reports.inventory(reports.Period(period))
+
+
+def test_inventory_adds_up_and_agrees_with_profit_and_loss(app):
+    jan = _lot(100.0, D(2026, 1, 5))  # 4 Units, $25 each
+    feb = _lot(30.0, D(2026, 2, 5))  # 2 Units, $15 each
+    _sale(jan, 40.0, 34.0, D(2026, 2, 10), order=EbayOrder(order_id="1"))
+    _sale(jan, 20.0, 17.0, D(2026, 3, 1), order=EbayOrder(order_id="2"))
+    _sale(feb, 50.0, 40.0, D(2026, 3, 2), order=EbayOrder(order_id="3"))
+    _unit(jan, retail=12.0)
+    _unit(jan, retail=8.0)
+    _unit(feb)
+    # 6 Units were bought, 3 sold.
+    got = _inventory(**{"from": "2026-02-01", "to": "2026-03-31"})
+    t = got["total"]
+    assert t["opening"]["units"] == 4 and t["opening"]["cost"] == 100.0
+    assert t["bought"]["units"] == 2 and t["bought"]["cost"] == 30.0
+    assert t["sold"]["units"] == 3 and t["sold"]["cost"] == 65.0
+    assert t["closing"]["units"] == 3
+    assert t["closing"]["cost"] == 65.0
+    assert t["closing"]["retail"] == 20.0
+    for f in [t, *[c for _, c in got["columns"]]]:
+        assert (
+            f["opening"]["units"] + f["bought"]["units"] - f["sold"]["units"]
+            == (f["closing"]["units"])
+        )
+        assert round(
+            f["opening"]["cost"] + f["bought"]["cost"] - f["sold"]["cost"], 2
+        ) == round(f["closing"]["cost"], 2)
+    # Each column opens where the one before closed.
+    cols = [c for _, c in got["columns"]]
+    assert cols[1]["opening"] == cols[0]["closing"]
+    # Cost of goods sold is the Profit & Loss figure.
+    pl = reports.profit_and_loss(
+        reports.Period({"from": "2026-02-01", "to": "2026-03-31"})
+    )
+    assert pl["total"]["cogs"] == t["sold"]["cost"]
+
+
+def test_inventory_all_time_starts_empty_and_closing_is_the_home_page(app):
+    lot = _lot(60.0, D(2025, 6, 1))
+    _sale(lot, 10.0, 8.0, D(2025, 7, 1), order=EbayOrder(order_id="1"))
+    _unit(lot)
+    _unit(lot)
+    _unit(None)  # no Lot: in stock from the beginning, at no cost
+    got = _inventory(period="all")
+    assert got["total"]["opening"]["units"] == 1
+    assert got["total"]["closing"]["units"] == index.home_totals()["stock_total"] == 3
+    assert got["total"]["closing"]["cost"] == 40.0
+    assert got["flags"]["no_lot"] == 1
+
+
+def test_inventory_leaves_out_odd_units_and_counts_them(app):
+    lot = _lot(30.0, D(2026, 1, 5))
+    _unit(lot, sold=True)  # sold, but no Sales Receipt
+    _unit(lot)
+    # Sold before the Lot's date.
+    _sale(lot, 5.0, 4.0, D(2026, 1, 1), order=EbayOrder(order_id="1"))
+    got = _inventory(period="all")
+    assert got["flags"] == {"unset": 0, "no_receipt": 1, "no_lot": 0, "sold_first": 1}
+    assert got["total"]["closing"]["units"] == index.home_totals()["stock_total"] == 1
+
+
+def test_other_items_stay_out_of_inventory(app):
+    lot = _lot(10.0, D(2026, 1, 5))
+    _unit(lot)
+    receipt = SalesReceipt(date=D(2026, 1, 6), sold_price=5.0, net_sold=4.0)
+    db.session.add(receipt)
+    db.session.add(OtherItem(name="Mug", sold=True, sales_receipt=receipt))
+    db.session.commit()
+    got = _inventory(period="all")
+    assert got["total"]["closing"]["units"] == 1
+    assert got["total"]["sold"]["units"] == 0
+
+
+def test_lots_report_lists_lots_bought_in_the_period(app):
+    old = _lot(50.0, D(2025, 12, 31))
+    new = _lot(40.0, D(2026, 1, 5))  # 2 Units
+    _sale(new, 30.0, 25.0, D(2026, 2, 1), order=EbayOrder(order_id="1"))
+    _unit(new, retail=9.0)
+    _sale(old, 10.0, 8.0, D(2026, 1, 9), order=EbayOrder(order_id="2"))
+    got = reports.lots_report(
+        reports.Period({"from": "2026-01-01", "to": "2026-12-31"})
+    )
+    assert [r["lot"].id for r in got["rows"]] == [new.id]
+    row = got["rows"][0]
+    assert (row["units"], row["sold_units"], row["instock"]) == (2, 1, 1)
+    assert row["stock_cost"] == 20.0
+    assert (row["net"], row["profit"]) == (25.0, -15.0)
+    assert got["total"]["capital"] == 40.0 and got["total"]["stock_cost"] == 20.0
+    # The same figures as the Purchase Lots list.
+    assert row["profit"] == reports.finance.lot_figures()[new.id]["profit"]
+
+
+def test_inventory_and_lots_pages_render(app):
+    lot = _lot(100.0, D(2026, 1, 5))
+    _sale(lot, 40.0, 34.0, D(2026, 1, 20), order=EbayOrder(order_id="1"))
+    with signed_in_client(app) as client:
+        for path in ("/inventoryreport/", "/lotsreport/"):
+            for query in ("", "?period=all&group=quarter", "?from=junk"):
+                assert client.get(path + query).status_code == 200, path + query
+        assert b"Closing stock" in client.get("/inventoryreport/?period=all").data
+        assert b"$100.00" in client.get("/lotsreport/?period=all").data
+    empty = reports.Period({"from": "2020-01-01", "to": "2020-01-31"})
+    assert reports.lots_report(empty)["rows"] == []

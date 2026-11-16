@@ -1,0 +1,78 @@
+{% extends "appbuilder/base.html" %}
+{% from "reports/_macros.html" import money %}
+{% block content %}
+<h2>Lots <small>{{ period.label() }}</small></h2>
+{% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
+{% include "reports/_period.html" %}
+
+<p class="text-muted">
+  The Purchase Lots bought in this period. Their sales are all the sales so
+  far, not just this period's, because a Lot's result isn't known until it's
+  sold. These are the Purchase Lots list's figures. Click a heading to sort.
+</p>
+{% if rows %}
+<div style="overflow-x: auto">
+<table class="table table-bordered table-condensed" id="lots-report" style="width: auto">
+  <thead><tr>
+    {% for h in ['Date', 'Lot', 'Price', 'Units', 'Per Unit', 'Sold', 'In stock', 'Stock at cost', 'Sold for', 'Net sold', 'Profit', 'ROI'] %}
+    <th class="text-right" style="cursor: pointer">{{ h }}</th>
+    {% endfor %}
+  </tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td data-sort="{{ r.lot.date.isoformat() }}">{{ r.lot.date.isoformat() }}</td>
+    <td>{{ r.lot.name }}</td>
+    <td class="text-right" data-sort="{{ r.capital }}">{{ money(r.capital) }}</td>
+    <td class="text-right">{{ r.units }}</td>
+    <td class="text-right" data-sort="{{ r.perunit }}">{{ money(r.perunit) }}</td>
+    <td class="text-right">{{ r.sold_units }}</td>
+    <td class="text-right">{{ r.instock }}</td>
+    <td class="text-right" data-sort="{{ r.stock_cost }}">{{ money(r.stock_cost) }}</td>
+    <td class="text-right" data-sort="{{ r.gross }}">{{ money(r.gross) }}</td>
+    <td class="text-right" data-sort="{{ r.net }}">{{ money(r.net) }}</td>
+    <td class="text-right" data-sort="{{ r.profit }}">{{ money(r.profit) }}</td>
+    <td class="text-right" data-sort="{{ r.roi }}">{{ '%.2f'|format(r.roi) }}%</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr>
+    <th>Total</th><th></th>
+    <th class="text-right">{{ money(total.capital) }}</th>
+    <th class="text-right">{{ total.units }}</th><th></th>
+    <th class="text-right">{{ total.sold_units }}</th>
+    <th class="text-right">{{ total.instock }}</th>
+    <th class="text-right">{{ money(total.stock_cost) }}</th>
+    <th class="text-right">{{ money(total.gross) }}</th>
+    <th class="text-right">{{ money(total.net) }}</th>
+    <th class="text-right">{{ money(total.profit) }}</th>
+    <th class="text-right">{{ '%.2f'|format(total.roi) }}%</th>
+  </tr></tfoot>
+</table>
+</div>
+<script>
+(function () {
+  var table = document.getElementById("lots-report");
+  var body = table.tBodies[0];
+  table.tHead.rows[0].querySelectorAll("th").forEach(function (th, col) {
+    var up = false;
+    th.addEventListener("click", function () {
+      up = !up;
+      var key = function (tr) {
+        var td = tr.cells[col];
+        var v = td.getAttribute("data-sort") || td.textContent;
+        var n = parseFloat(v);
+        return isNaN(n) || /^\d{4}-/.test(v) ? v : n;
+      };
+      Array.prototype.slice.call(body.rows).sort(function (a, b) {
+        var x = key(a), y = key(b);
+        return (x < y ? -1 : x > y ? 1 : 0) * (up ? 1 : -1);
+      }).forEach(function (tr) { body.appendChild(tr); });
+    });
+  });
+})();
+</script>
+{% else %}
+<p>No Purchase Lots were bought in this period.</p>
+{% endif %}
+{% endblock %}
