@@ -76,6 +76,7 @@ if SKIP_VIEWS:
         "expenses",
         "inventory",
         "other",
+        "pictures",
         "sales",
         "supplies",
         "sync",
@@ -398,6 +399,7 @@ def _register_views():
         UnitsNeedingDraftsView,
     )
     from fbc.models.sync import SyncRecord  # noqa: F401  (so its table exists)
+    from fbc.models.pictures import UnitPicture  # noqa: F401  (likewise)
     from fbc.views.connect import ConnectDiscogsView, ConnectEbayView
     from fbc.views.supplies import (
         ReconcileSuppliesView,

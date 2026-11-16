@@ -154,6 +154,40 @@ A change to `config.py` needs the container recreated (`docker/live-up.sh -n`).
 The same settings can be set in `docker/.env` as `FBC_CONFIG_SCHEDULER=false`
 and the like. It does not run in dev mode. There is no migration.
 
+## Pictures
+
+Each Unit's pictures are kept on disk (#140), one folder per Unit, holding
+the upload as it came and a copy shrunk to 2048 pixels on the long side.
+The folder is a bind mount: `docker/compose.yml` mounts the host folder in
+`FBC_PICTURES_DIR` at `/pictures` and points `PICTURES_DIR` at it. Put it
+outside the repo, on the NAS's volume, so a checkout or deploy never touches it,
+and set it in `docker/.env`:
+
+```bash
+mkdir -p /volume1/docker/fbc2-pictures
+echo 'FBC_PICTURES_DIR=/volume1/docker/fbc2-pictures' >> docker/.env
+docker/live-up.sh -n
+```
+
+Left out, it is `pictures/` in the repo root, which Docker makes if it's
+missing and git ignores. That works but is easy to lose with the checkout.
+
+The folder holds what the database can't rebuild, so it has to be backed up
+with the database. There is no off-site backup today. The NAS's disks are
+redundant, which covers a failed disk but not a deleted folder or a lost NAS,
+and it covers the folder only because it is on the volume. The `mysqldump` in
+[Deploying fbc](deploy.md) doesn't include it, so copy the folder when you
+back up before a migration.
+
+Files are never changed in place (a rotation writes new ones and removes the
+old), so a copy taken while the app runs is whole, and needn't match the
+database to the second. The pictures of a Unit that's deleted stay in the
+folder, and are small to keep.
+
+The `unit_picture` table comes with a migration, which the container runs
+when it starts. Nothing in the app uses it yet; eBay Drafts still use their
+own picture list until the next change.
+
 ## Archiving
 
 The archive column comes with a migration, which the container runs when it

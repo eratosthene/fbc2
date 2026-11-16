@@ -137,6 +137,14 @@ When a deploy brings a new migration:
      | gzip > fbc-before-sha-2222222.sql.gz
    ```
 
+   Copy the pictures folder too (`FBC_PICTURES_DIR` in `docker/.env`; see
+   "Pictures" in [Running fbc in production](production.md)), since the
+   dump doesn't hold it:
+
+   ```bash
+   cp -a /volume1/docker/fbc2-pictures fbc2-pictures-before-sha-2222222
+   ```
+
 2. Deploy, saying you did:
 
    ```bash

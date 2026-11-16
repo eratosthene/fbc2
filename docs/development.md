@@ -38,6 +38,11 @@ area, and everything else is in a package by area (#157):
   keeps each try as a `ListingEnd`, and only logs in dev mode), `scheduler.py`
   is `flask scheduler`, and `notes.py` is the "last synced" note on a list. A sync's state module is imported as
   `state` (`from fbc.sync import state`).
+- `fbc/pictures/`: a Unit's pictures, kept for every marketplace (#140).
+  `images.py` is Pillow only: it straightens, rotates and shrinks, and knows
+  nothing of the disk or the database. `store.py` keeps them in the
+  `PICTURES_DIR` folder, one folder per Unit, and in the `UnitPicture` rows.
+  It sits beside `ebay/` and `discogs/`, and `ebay/pictures.py` uses it.
 - `fbc/sales/`: what the owner does with stock and sales, using both eBay and
   Discogs. `ship.py` is Ship This (eBay orders, and Discogs orders in `discogs_*`
   functions), `stock.py` is the supplies it takes out of
@@ -45,8 +50,8 @@ area, and everything else is in a package by area (#157):
   (Purchase Lot money), `pricing.py` (what to ask), `tasks.py` and `index.py`
   (the home page), and `widgets.py` (the Supplies Used field).
 
-The packages sit in layers, lowest first: `core`, `models`, `ebay` and
-`discogs`, `sync`, `sales`, then `views`. A module only imports from its own
+The packages sit in layers, lowest first: `core`, `models`, `ebay`,
+`discogs` and `pictures`, `sync`, `sales`, then `views`. A module only imports from its own
 layer or lower, and within a layer the modules don't import each other in a
 circle. Package `__init__.py` files are empty, so importing one module never
 imports its neighbours. `models/` may import `core/` and modules that import
@@ -487,6 +492,12 @@ it, since Compose reads `.env` from the compose file's folder.
   ```bash
   docker compose -f docker/compose.dev.yml exec app flask fab create-admin
   ```
+
+- Pictures are kept in `docker/dev-pictures/` (git ignores it), mounted at
+  `/pictures`. Put `FBC_PICTURES_DIR=<a folder>` in `docker/.env` to use another.
+  Running from a checkout with `dev-scripts/run-local.sh` needs `PICTURES_DIR`
+  in `config.py` (see `config.py.tpl`). Dev mode doesn't stop keeping pictures,
+  since that's all on this machine; it only stops uploads to eBay.
 
 - Start it, then open http://127.0.0.1:5555:
 
