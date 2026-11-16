@@ -911,7 +911,7 @@ category. Its total supply cost leaves out the Expenses on Purchase Orders.
 
 The Reports menu shows money for a chosen period, where the home page shows
 all time. It's being built in slices (issue #69); so far there are Profit &
-Loss, Inventory and Lots.
+Loss, Inventory, Lots, Sales and Aging.
 
 ### The period
 
@@ -973,3 +973,38 @@ list's figures: price, Units, cost per Unit, sold, in stock, the cost of what's
 still in stock, Sold For, Net Sold, profit and ROI, and a totals row. Their
 sales are all the sales so far, not just the period's, because a Lot's result
 isn't known until it's sold. Click a heading to sort.
+
+### Sales
+
+Sales Receipts dated in the period (Other Items' are never here): how many,
+Units sold, Sold For, Fees, Fee % and Net Sold, for the whole period and by
+month or quarter. A Sales Receipt's money is split between its Units, and a
+Purchase Lot's price is split evenly over its Units, as on the home page.
+
+- **Averages:** the average sale per Sales Receipt and per Unit, and the
+  average net and profit per Unit. Profit per Unit is its share of Net Sold
+  less its share of its Lot's price, before supplies and Expenses (those are in
+  Profit & Loss).
+- **Days to sell:** the days from a Unit's Purchase Lot's date to its Sales
+  Receipt's date, as the median, the quartiles (the middle half of Units), the
+  fastest and the slowest. Units with no Lot, or sold before their Lot's date,
+  are left out and counted under the table.
+- **Gross by year**, for checking eBay's 1099-K: every calendar year with sales,
+  whatever the period, by eBay, Discogs and Other. Sold For leaves out the
+  shipping a buyer paid and the sales tax eBay collected. Sale lines are the
+  Sale lines of the receipts' earnings, which have the taxes taken out (a
+  receipt with no lines counts its Sold For). fbc doesn't keep the sales tax,
+  so eBay's figure, which counts it, will still be higher.
+
+### Aging
+
+The Units in stock at the end of the period (today, if the period ends later or
+has no end), by how long before then their Purchase Lot was bought: 0-3 months,
+3-6, 6-12, and a year or more, with their Units, cost and retail price. Units
+with no Purchase Lot have no age and are on a row of their own. The Units are
+Inventory's closing stock and, for a period ending today, the home page's Units
+in stock.
+
+Under it are the ten Purchase Lots bought six months or more before then that
+have the most cost still in stock: older stock is where money is tied up, and
+where a price drop is worth trying.

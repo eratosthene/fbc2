@@ -1,0 +1,91 @@
+{% extends "appbuilder/base.html" %}
+{% from "reports/_macros.html" import money %}
+{% block content %}
+<h2>Sales <small>{{ period.label() }}</small></h2>
+{% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
+{% include "reports/_period.html" %}
+
+{% macro days(d) %}{% if d %}{{ '%g'|format(d.median) }}{% else %}-{% endif %}{% endmacro %}
+
+<h3>The period</h3>
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><td>Sales Receipts</td><td class="text-right">{{ total.receipts }}</td></tr>
+  <tr><td>Units sold</td><td class="text-right">{{ total.units }}</td></tr>
+  <tr><td>Sold for</td><td class="text-right">{{ money(total.gross) }}</td></tr>
+  <tr><td>Fees</td><td class="text-right">{{ money(total.fees) }} ({{ '%.2f'|format(total.feepc) }}%)</td></tr>
+  <tr><td>Net sold</td><td class="text-right">{{ money(total.net) }}</td></tr>
+  <tr><td>Average sale, per Sales Receipt</td><td class="text-right">{{ money(total.avg_receipt) }}</td></tr>
+  <tr><td>Average sale, per Unit</td><td class="text-right">{{ money(total.avg_unit) }}</td></tr>
+  <tr><td>Average net, per Unit</td><td class="text-right">{{ money(total.avg_net_unit) }}</td></tr>
+  <tr><td>Average profit, per Unit</td><td class="text-right">{{ money(total.avg_profit_unit) }}</td></tr>
+</table>
+<p class="text-muted">
+  A Sales Receipt's money is split between its Units, and a Purchase Lot's
+  price is split evenly over its Units, as on the home page. Profit per Unit is
+  its share of Net Sold less its share of its Lot's price, before supplies and
+  Expenses (those are in Profit &amp; Loss). Other Items are never here.
+</p>
+
+<h3>Days to sell</h3>
+{% if total.days %}
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><td>Median</td><td class="text-right">{{ '%g'|format(total.days.median) }}</td></tr>
+  <tr><td>Middle half of Units (quartiles)</td><td class="text-right">{{ '%g'|format(total.days.q1) }} to {{ '%g'|format(total.days.q3) }}</td></tr>
+  <tr><td>Fastest</td><td class="text-right">{{ total.days.fastest }}</td></tr>
+  <tr><td>Slowest</td><td class="text-right">{{ total.days.slowest }}</td></tr>
+</table>
+{% else %}
+<p>No Units sold in this period have a Purchase Lot to count from.</p>
+{% endif %}
+<p class="text-muted">
+  Days from a Unit's Purchase Lot's date to its Sales Receipt's date.
+  {% if total.days_unknown %}{{ total.days_unknown }} Unit(s) sold in this period are left out: no Purchase Lot, or sold before the Lot's date. Check those dates.{% endif %}
+</p>
+
+<h3>By {{ period.group }}</h3>
+{% if columns %}
+<div style="overflow-x: auto">
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th></th>{% for label, f in columns %}<th class="text-right">{{ label }}</th>{% endfor %}</tr>
+  {% for label, key in [('Sales Receipts', 'receipts'), ('Units sold', 'units'), ('Sold for', 'gross'), ('Fees', 'fees'), ('Net sold', 'net'), ('Average sale, per Unit', 'avg_unit'), ('Average net, per Unit', 'avg_net_unit'), ('Average profit, per Unit', 'avg_profit_unit')] %}
+  <tr>
+    <th>{{ label }}</th>
+    {% for _, f in columns %}<td class="text-right">{% if key in ['receipts', 'units'] %}{{ f[key] }}{% else %}{{ money(f[key]) }}{% endif %}</td>{% endfor %}
+  </tr>
+  {% endfor %}
+  <tr><th>Fee %</th>{% for _, f in columns %}<td class="text-right">{{ '%.2f'|format(f.feepc) }}%</td>{% endfor %}</tr>
+  <tr><th>Median days to sell</th>{% for _, f in columns %}<td class="text-right">{{ days(f.days) }}</td>{% endfor %}</tr>
+</table>
+</div>
+{% else %}
+<p>No records in this period.</p>
+{% endif %}
+
+<h3>Gross by year, for the 1099-K check</h3>
+{% if years %}
+<div style="overflow-x: auto">
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th rowspan="2">Year</th>{% for m in marketplace_names %}<th class="text-right" colspan="2">{{ m or 'Other' }}</th>{% endfor %}<th class="text-right" colspan="2">Total</th></tr>
+  <tr>{% for _ in range(marketplace_names|length + 1) %}<th class="text-right">Sold for</th><th class="text-right">Sale lines</th>{% endfor %}</tr>
+  {% for year, f in years %}
+  <tr>
+    <th>{{ year }}</th>
+    {% for m in marketplace_names %}<td class="text-right">{{ money(f[m].gross) }}</td><td class="text-right">{{ money(f[m].sale_lines) }}</td>{% endfor %}
+    <th class="text-right">{{ money(f.total.gross) }}</th><th class="text-right">{{ money(f.total.sale_lines) }}</th>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% else %}
+<p>No Sales Receipts yet.</p>
+{% endif %}
+<p class="text-muted">
+  This table is for every year, whatever the period above. Sold for is the
+  Sales Receipts' Sold Price, which leaves out the shipping a buyer paid and the
+  sales tax eBay collected. Sale lines are the Sale lines of the receipts'
+  earnings, which have the taxes taken out but not the shipping; a receipt with
+  no earnings lines counts its Sold For. The sales tax isn't kept anywhere, so
+  eBay's 1099-K, which counts it, will still be higher. Other Items are never
+  here.
+</p>
+{% endblock %}

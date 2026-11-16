@@ -1,0 +1,39 @@
+{% extends "appbuilder/base.html" %}
+{% from "reports/_macros.html" import money %}
+{% block content %}
+<h2>Aging <small>{{ period.label() }}</small></h2>
+{% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
+{% include "reports/_period.html" %}
+
+<p class="text-muted">
+  The Units in stock on {{ as_of.isoformat() }} (the end of the period, or
+  today if that is later), by how long before then their Purchase Lot was
+  bought. Cost is each Unit's share of its Lot's price, shared evenly. Retail
+  is the Units' listed prices as they are now. The Units here are Inventory's
+  closing stock. Older stock is where money is tied up.
+</p>
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>Age</th><th class="text-right">Units</th><th class="text-right">Cost</th><th class="text-right">Retail</th></tr>
+  {% for label, f in buckets %}
+  <tr><td>{{ label }}</td><td class="text-right">{{ f.units }}</td><td class="text-right">{{ money(f.cost) }}</td><td class="text-right">{{ money(f.retail) }}</td></tr>
+  {% endfor %}
+  <tr><td>No Purchase Lot (no age)</td><td class="text-right">{{ no_lot.units }}</td><td class="text-right">{{ money(no_lot.cost) }}</td><td class="text-right">{{ money(no_lot.retail) }}</td></tr>
+  <tr><th>Total</th><th class="text-right">{{ total.units }}</th><th class="text-right">{{ money(total.cost) }}</th><th class="text-right">{{ money(total.retail) }}</th></tr>
+</table>
+
+<h3>Lots with the most old stock</h3>
+{% if old_lots %}
+<p class="text-muted">
+  Purchase Lots bought {{ old_after }} months or more before then, with the
+  most cost still in stock. At most 10.
+</p>
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>Date</th><th>Lot</th><th class="text-right">Units in stock</th><th class="text-right">Cost</th></tr>
+  {% for r in old_lots %}
+  <tr><td>{{ r.lot.date.isoformat() }}</td><td>{{ r.lot.name }}</td><td class="text-right">{{ r.units }}</td><td class="text-right">{{ money(r.cost) }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No stock is {{ old_after }} months old or more.</p>
+{% endif %}
+{% endblock %}

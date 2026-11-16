@@ -62,3 +62,43 @@ class LotsReportView(BaseView):
             groups=reports.GROUPS,
             **reports.lots_report(period),
         )
+
+
+class SalesReportView(BaseView):
+    """Reports > Sales: averages, days to sell, and gross by year."""
+
+    route_base = "/salesreport"
+    default_view = "report"
+
+    @expose("/")
+    @has_access
+    def report(self):
+        period = reports.Period(request.args)
+        return self.render_template(
+            "reports/sales.html",
+            period=period,
+            presets=reports.PRESETS,
+            groups=reports.GROUPS,
+            marketplace_names=reports.MARKETPLACES,
+            **reports.sales_report(period),
+        )
+
+
+class AgingReportView(BaseView):
+    """Reports > Aging: the Units in stock, by how long ago their Lot was bought."""
+
+    route_base = "/agingreport"
+    default_view = "report"
+
+    @expose("/")
+    @has_access
+    def report(self):
+        period = reports.Period(request.args)
+        return self.render_template(
+            "reports/aging.html",
+            period=period,
+            presets=reports.PRESETS,
+            groups=reports.GROUPS,
+            old_after=reports.OLD_AFTER_MONTHS,
+            **reports.aging(period),
+        )
