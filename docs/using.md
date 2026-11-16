@@ -471,6 +471,41 @@ only, not listings that are already published. Adding, turning and removing
 pictures all work in Dev Mode, since they stay on this machine; only sending
 to eBay is turned off.
 
+#### Copying pictures down from eBay listings
+
+Units listed before fbc kept pictures have none stored. `flask pictures-import`
+copies each eBay listing's pictures down to the Units linked to it, active
+or ended, so they can be used again, such as for a Discogs listing (see
+[Running fbc in production](production.md#pictures) for running it on the live
+server). It reads each listing's pictures from eBay, fetches the files, and
+keeps them as the Unit's own, in the listing's order:
+
+```bash
+flask --app fbc pictures-import
+flask --app fbc pictures-import --apply
+```
+
+The first only reads the listings and says what it would do. Things to know:
+
+- A Unit that already has pictures is left alone, so it is safe to run again
+  and a second run only does what the first couldn't. Every Unit of a listing
+  with several gets the same pictures.
+- Sold Units are left out, since they can't be listed again; `--include-sold`
+  adds them. Mystery boxes have no Units linked, so they have nothing to copy
+  to.
+- A listing is all or nothing. If eBay can't be read for one, or one of its
+  pictures can't be fetched or isn't a picture, that listing is skipped with
+  the reason and nothing of it is kept, so the next run tries it again.
+  eBay only tells about an ended listing for a while after it ends, so an old
+  ended one may be unreadable.
+- `--limit 20` reads at most that many listings, and `--item 123456789012` does
+  one. It is one eBay call for each listing, and one for each picture.
+- The copies have no eBay address saved, so publishing a draft for the Unit
+  sends eBay the stored file, not the old listing's address.
+- The pictures come from the address eBay gives, which may not be the largest
+  size the seller originally uploaded.
+- Dev Mode refuses, as it does for every eBay call.
+
 ### Ship This
 
 Once the label is bought on eBay, Ship This on an order records its Sales

@@ -18,7 +18,8 @@ area, and everything else is in a package by area (#157):
   Unit's title, description and item specifics, no network), `drafts.py`
   (an eBay Draft's item), `publish.py` (verify and publish), `pictures.py`,
   `vocab.py` (the lookup tables), `skus.py`, `insertions.py`, `tracking.py`,
-  `mystery.py`, `sorting.py` (sorts listings into records and Other Items by
+  `mystery.py`, `picture_import.py` (`flask pictures-import`: copies listings'
+  pictures down to their Units), `sorting.py` (sorts listings into records and Other Items by
   eBay category), `finances.py` (an order's transactions, fees and earnings from
   the Finances API), and `listings.py` and `orders.py` (saving the listings and
   orders a sync reads from eBay). Each module refers to the others by module name

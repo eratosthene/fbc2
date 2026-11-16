@@ -58,6 +58,7 @@ SKIP_VIEWS_COMMANDS = {
     "set-listing-skus",
     "archive",
     "sort-other-items",
+    "pictures-import",
     "sync",
     "scheduler",
 }
@@ -222,6 +223,45 @@ def sort_other_items(apply, limit):
     )
     if not apply:
         click.echo("This was a dry run. Add --apply to save the changes.")
+
+
+@app.cli.command("pictures-import")
+@click.option("--apply", is_flag=True, help="Copy the pictures; without it, only show.")
+@click.option("--limit", type=int, help="Read at most this many listings.")
+@click.option("--item", help="Only the Units of this eBay listing (its item id).")
+@click.option("--include-sold", is_flag=True, help="Also do Units that are sold.")
+def pictures_import(apply, limit, item, include_sold):
+    """Copy eBay listings' pictures down to the Units linked to them."""
+    from fbc.ebay import picture_import
+
+    counts = picture_import.import_pictures(
+        apply=apply,
+        limit=limit,
+        item=item,
+        include_sold=include_sold,
+        echo=click.echo,
+    )
+    click.echo(
+        ("Copied " if apply else "Would copy ")
+        + str(counts["pictures"])
+        + " pictures to "
+        + str(counts["units"])
+        + " Units from "
+        + str(counts["listings"])
+        + " listings. Couldn't read: "
+        + str(counts["unreadable"])
+        + ", no pictures on eBay: "
+        + str(counts["no_pictures"])
+        + ", Units already with pictures: "
+        + str(counts["have"])
+        + ", sold Units left out: "
+        + str(counts["sold"])
+        + ", mystery boxes: "
+        + str(counts["mystery"])
+        + "."
+    )
+    if not apply:
+        click.echo("This was a dry run. Add --apply to copy them.")
 
 
 @app.cli.group("sync")
