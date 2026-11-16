@@ -459,10 +459,13 @@ then Add Photos. The Pictures page helps two ways:
 
 Dragging a picture straight from the page onto Add Photos was tried on a real
 Discogs listing: it works in Chrome and not in Firefox, and Safari hasn't been
-tried (it is the least reliable at dragging images off a page). Nothing on the
-page can fix Firefox, so there, use Download or the zip and drag the files from a
-folder, which every browser accepts. The zip and the page use the shrunk 2048
-pixel copies, not the originals.
+tried. As far as I can tell this is a limit of Firefox, not something the page
+can change. Chrome lets a page offer a dragged picture as a file (a
+non-standard feature Firefox hasn't built; Mozilla's bug 570164 asks for it),
+and Firefox doesn't let a page attach a file to a drag. I haven't tested a
+workaround in Firefox. There, use Download or the zip and drag the files from a
+folder, or press Add Photos and choose them, which every browser accepts. The
+zip and the page use the shrunk 2048 pixel copies, not the originals.
 
 ### Pictures on an eBay Draft
 
