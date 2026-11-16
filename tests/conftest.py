@@ -60,6 +60,49 @@ for _name in [n for n in os.environ if n.startswith("FBC_CONFIG_")]:
 fbc = importlib.import_module("fbc")
 
 
+# Registering every view's permissions (`appbuilder.add_permissions`) takes most
+# of a second and a test that signs in does it each time, against a database
+# that is rebuilt for each test. So it runs for real once per process; after
+# that the rows it made are put back directly.
+_PERMISSION_TABLES = (
+    "ab_permission",
+    "ab_view_menu",
+    "ab_role",
+    "ab_permission_view",
+    "ab_permission_view_role",
+)
+_permission_rows = None
+
+
+def _cached_add_permissions(real):
+    def add_permissions(*args, **kwargs):
+        global _permission_rows
+        tables = [fbc.db.metadata.tables[name] for name in _PERMISSION_TABLES]
+        if _permission_rows is None:
+            real(*args, **kwargs)
+            with fbc.db.engine.connect() as connection:
+                _permission_rows = {
+                    t.name: [
+                        dict(row._mapping) for row in connection.execute(t.select())
+                    ]
+                    for t in tables
+                }
+            return
+        with fbc.db.engine.begin() as connection:
+            # Children first on the way out, parents first on the way in.
+            for table in reversed(tables):
+                connection.execute(table.delete())
+            for table in tables:
+                if _permission_rows[table.name]:
+                    connection.execute(table.insert(), _permission_rows[table.name])
+        fbc.db.session.expire_all()
+
+    return add_permissions
+
+
+fbc.appbuilder.add_permissions = _cached_add_permissions(fbc.appbuilder.add_permissions)
+
+
 @pytest.fixture
 def app():
     """The single, module-level Flask application under test."""
