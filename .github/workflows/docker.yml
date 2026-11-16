@@ -144,6 +144,8 @@ jobs:
           push: true
           provenance: false
           tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.sha }}
+          build-args: |
+            FBC_REVISION=${{ steps.tag.outputs.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

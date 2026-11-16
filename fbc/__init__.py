@@ -28,6 +28,15 @@ settings.load(app.config)
 devmode.init_app(app)
 # The TIMEZONE setting, the localtime filters and local log times.
 localtime.init_app(app)
+
+
+# The image's deploy id (sha-1a2b3c4), shown in the footer. CI builds it in
+# (see docker/Dockerfile); it's empty in dev and for a local build.
+@app.context_processor
+def revision_context():
+    return {"revision": os.environ.get("FBC_REVISION", "").strip()}
+
+
 # Flask-AppBuilder's page layout, with the Dev Mode banner added.
 app.config.setdefault("FAB_BASE_TEMPLATE", "layout.html")
 # Flask-AppBuilder's Model is the models' base class, so passing it here puts

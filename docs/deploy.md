@@ -28,6 +28,10 @@ On every push to `main`, the `publish` job in `.github/workflows/docker.yml`:
 
 On pull requests the job is skipped, so nothing is published from a branch.
 
+The image is built with that tag as its `FBC_REVISION`, and the footer of every
+page shows it next to the shop's name, so you can see what's running. It's
+blank in dev and for an image built by hand (`--local`).
+
 Not every merge builds an image. The Docker workflow only runs when a change
 touches what goes into the image: `Pipfile`, `Pipfile.lock`, `fbc/`,
 `migrations/`, the Dockerfile, its `.dockerignore` and entrypoint, and the
