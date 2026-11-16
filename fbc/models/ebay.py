@@ -278,9 +278,6 @@ class EbayDraft(Model):
     item_specifics = Column(Text)
     # Package weight in ounces, packing included.
     weight_oz = Column(Integer)
-    # No longer used: a draft's pictures are its Unit's (UnitPicture), and
-    # each keeps its own eBay URL. Dropped in a later change (#140).
-    pictures = Column(Text)
     status = Column(String(20), default="draft", index=True)
     # The last Verify/Publish outcome from eBay: errors, warnings and fees.
     messages = Column(Text)

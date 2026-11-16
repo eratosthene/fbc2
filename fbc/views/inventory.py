@@ -105,6 +105,7 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
     add_exclude_columns = ["archived"]
     add_form_extra_fields = UNIT_ADD_FORM_EXTRA_FIELDS
     add_template = "pricing/add_unit.html"
+    edit_template = "unit/edit.html"
     edit_form_extra_fields = UNIT_FORM_EXTRA_FIELDS
 
     def render_template(self, template, **kwargs):

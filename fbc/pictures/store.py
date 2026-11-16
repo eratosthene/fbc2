@@ -34,6 +34,10 @@ def _model():
     return UnitPicture
 
 
+# eBay allows up to 24 pictures on a listing, and a Unit's pictures go to it.
+MAX_PICTURES = 24
+
+
 class NotConfigured(Exception):
     """PICTURES_DIR isn't set, so there's nowhere to keep pictures."""
 
@@ -121,6 +125,59 @@ def add(unit, data, upload_name=None):
     db.session.add(picture)
     db.session.flush()
     return picture
+
+
+def add_files(unit, files):
+    """
+    Keep uploaded files (werkzeug FileStorage) as the Unit's next pictures,
+    up to MAX_PICTURES. A file that isn't a picture is refused and the rest are
+    kept. Returns [(message, level)] for the page to flash.
+    """
+    messages = []
+    count = len(for_unit(unit))
+    for f in files:
+        if not f.filename:
+            continue
+        if count >= MAX_PICTURES:
+            messages.append(
+                ("eBay allows at most " + str(MAX_PICTURES) + " pictures.", "warning")
+            )
+            break
+        try:
+            add(unit, f.read(), f.filename)
+        except NotConfigured as e:
+            messages.append((str(e), "danger"))
+            break
+        except ValueError as e:
+            messages.append((f.filename + ": " + str(e), "danger"))
+            continue
+        count += 1
+    return messages
+
+
+def display_name(unit_id, position):
+    """The name a picture is shown and downloaded under, such as unit-123-1.jpg."""
+    return "unit-" + str(int(unit_id)) + "-" + str(int(position)) + ".jpg"
+
+
+def zip_of(unit):
+    """
+    The Unit's working copies in a zip, named unit-123-1.jpg and so on in
+    their order. Returns a BytesIO, or None if the Unit has no pictures.
+    """
+    import io
+    import zipfile
+
+    pictures = for_unit(unit)
+    if not pictures:
+        return None
+    out = io.BytesIO()
+    # The pictures are JPEGs already, so storing them as they are loses nothing.
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as archive:
+        for picture in pictures:
+            archive.write(path(picture), display_name(unit.id, picture.position))
+    out.seek(0)
+    return out
 
 
 def _renumber(ordered):

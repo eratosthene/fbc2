@@ -435,6 +435,34 @@ shows a warning and needs Publish anyway ticked, but still goes ahead. If the
 last Check with eBay reported an insertion fee that no discount covered, the
 draft page says so too: that is eBay saying the free ones are used up.
 
+### Pictures on a Unit
+
+Every Unit has a **Pictures** page (#140): the Pictures link in the Units list's
+Links column, the Pictures button on Edit Unit, or the link on an eBay Draft. It
+is where to add pictures before there is a draft, and where to take them to
+Discogs. They are the same pictures an eBay Draft uses, so what you add here
+shows on the draft and what you add there shows here. The page has the same
+add, Make main, Remove and Rotate left and right as the draft page; see
+[Pictures on an eBay Draft](#pictures-on-an-ebay-draft) for what each does.
+
+**Taking them to Discogs.** fbc can't send pictures to Discogs, because its API
+has no photo upload, so they go in by hand, on the Discogs listing: Edit Details,
+then Add Photos. The Pictures page helps two ways:
+
+- Each picture is shown at its real size (not a thumbnail, which would upload
+  a thumbnail), the right way up, and under a real name such as
+  `unit-123-1.jpg`. The number is its place, so `-1` is the main picture. Drag
+  one onto Add Photos, or press its Download button.
+- **Download all (zip)** gives `unit-123-pictures.zip` with every picture under
+  those names, in order. Unzip it and drag the files onto Add Photos from a
+  folder, which every browser accepts.
+
+Whether dragging a picture straight from the page works depends on the
+browser: some hand Discogs the picture's address rather than the file, and
+Safari is the least reliable at it. fbc can't test this against a Discogs login,
+so try it in the browser you use; the zip always works. The zip and the page use
+the shrunk 2048 pixel copies, not the originals.
+
 ### Pictures on an eBay Draft
 
 A Unit's pictures are kept by fbc, on the server, not only on eBay (#140).

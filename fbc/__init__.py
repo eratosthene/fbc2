@@ -441,6 +441,7 @@ def _register_views():
     from fbc.models.sync import SyncRecord  # noqa: F401  (so its table exists)
     from fbc.models.pictures import UnitPicture  # noqa: F401  (likewise)
     from fbc.views.connect import ConnectDiscogsView, ConnectEbayView
+    from fbc.views.pictures import UnitPicturesView
     from fbc.views.supplies import (
         ReconcileSuppliesView,
         SupplyModelView,
@@ -463,6 +464,7 @@ def _register_views():
         units = appbuilder.add_view(UnitModelView, "Units", category="Inventory")
         units_list = units.route_base + "/list/?"
         rebox = appbuilder.add_view_no_menu(UnitModelReboxView)
+        appbuilder.add_view_no_menu(UnitPicturesView)
         appbuilder.add_link(
             "Rebox Units",
             href=rebox.route_base + "/list/?" + urlencode(UNSOLD_UNITS_OVER_2_FILTERS),

@@ -19,10 +19,6 @@ from fbc.core.widgets import EbayDraftListWidget, TallTextAreaWidget
 
 logger = logging.getLogger()
 
-# eBay allows up to 24 pictures on a listing.
-MAX_PICTURES = 24
-
-
 # Filter preset on the eBay Drafts list by the Tasks menu link: status Equal to
 # draft (string filter 3), as fbc.sales.tasks.DRAFT_STATUS.
 DRAFTS_TO_LIST_FILTERS = {"_flt_3_status": "draft"}
@@ -160,22 +156,10 @@ class EbayDraftModelView(CustomModelView):
         draft = self._draft(pk)
         if draft.status != "draft":
             abort(404)
-        count = len(draft.stored_pictures())
-        for f in request.files.getlist("pictures"):
-            if not f.filename:
-                continue
-            if count >= MAX_PICTURES:
-                flash("eBay allows at most 24 pictures.", "warning")
-                break
-            try:
-                store.add(draft.unit, f.read(), f.filename)
-            except store.NotConfigured as e:
-                flash(str(e), "danger")
-                break
-            except ValueError as e:
-                flash(f.filename + ": " + str(e), "danger")
-                continue
-            count += 1
+        for message, level in store.add_files(
+            draft.unit, request.files.getlist("pictures")
+        ):
+            flash(message, level)
         db.session.commit()
         return self._back(draft)
 
