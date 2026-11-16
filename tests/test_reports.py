@@ -236,3 +236,12 @@ def test_the_number_of_queries_does_not_grow(app):
     for i in range(5):
         _sale(lot, 40.0, 34.0, D(2025, 2, 1 + i), order=EbayOrder(order_id=str(10 + i)))
     assert count_queries() == few
+
+
+def test_a_receipt_with_no_units_still_counts(app):
+    # The home page's Sales by marketplace counts it, though its Net profit
+    # (which adds up Units) doesn't; the report follows the first.
+    db.session.add(SalesReceipt(date=D(2026, 1, 2), sold_price=5.0, net_sold=3.31))
+    db.session.commit()
+    total = reports.profit_and_loss(reports.Period({"period": "all"}))["total"]
+    assert total["net"] == 3.31 and total["receipts"] == 1

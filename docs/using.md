@@ -938,5 +938,9 @@ understood falls back to year to date, with a note.
 - **Other Items** are never in the record figures. Their sales are shown apart,
   with a profit only for those that have a cost.
 
+A Sales Receipt with no Units still counts in the sales, as in the home
+page's Sales by marketplace, so the report can differ from the home page's
+Net profit (which adds up Units) by that receipt's Net Sold.
+
 A Unit's cost is recomputed from its Lot as it is now, so adding a Unit to an
 old Lot changes the past periods' cost of goods. Archived records count.
