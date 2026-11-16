@@ -452,6 +452,7 @@ def _register_views():
     from fbc.views.expenses import ExpenseModelView
     from fbc.views.reports import (
         AgingReportView,
+        SuppliesReportView,
         InventoryReportView,
         LotsReportView,
         ProfitAndLossView,
@@ -548,6 +549,7 @@ def _register_views():
         appbuilder.add_view(LotsReportView, "Lots", category="Reports")
         appbuilder.add_view(SalesReportView, "Sales", category="Reports")
         appbuilder.add_view(AgingReportView, "Aging", category="Reports")
+        appbuilder.add_view(SuppliesReportView, "Supplies", category="Reports")
         appbuilder.add_view(ConnectEbayView, "Connect eBay", category="Connect")
         appbuilder.add_view(ConnectDiscogsView, "Connect Discogs", category="Connect")
 

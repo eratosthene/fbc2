@@ -16,3 +16,6 @@
   <button class="btn btn-default btn-sm" type="submit">Show</button>
 </form>
 
+<p class="hidden-print">
+  <a class="btn btn-default btn-xs" href="download?{{ period.query(**(extra|default({})))|urlencode }}">Download CSV</a>
+</p>

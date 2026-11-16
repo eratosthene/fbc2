@@ -10,7 +10,7 @@ from fbc.models.ebay import EbayOrder
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.models.other import OtherItem
 from fbc.models.sales import SalesReceipt, SalesReceiptLine
-from fbc.models.supplies import PurchaseOrder
+from fbc.models.supplies import PurchaseOrder, PurchaseOrderSupply, Supply, SupplyUse
 from fbc.sales import index, reports
 
 D = datetime.date
@@ -501,3 +501,222 @@ def test_sales_and_aging_pages_render(app):
         page = client.get("/agingreport/?period=all&old=9").data
         assert b'name="old" value="9"' in page
         assert b'name="old" value="6"' in client.get("/agingreport/?old=junk").data
+
+
+def _supplies_fixture():
+    """A Lot of two Units sold in January and March, with supplies and uses."""
+    lot = _lot(100.0, D(2026, 1, 5))
+    jan = _sale(lot, 40.0, 34.0, D(2026, 1, 20), order=EbayOrder(order_id="1"))
+    mar = _sale(lot, 60.0, 50.0, D(2026, 3, 2), order=DiscogsOrder(order_id="2"))
+    po = PurchaseOrder(date=D(2026, 1, 10), price=25.0)
+    mailer = Supply(name="Mailer", quantity=50, cost_per_use=0.5)
+    tape = Supply(name="Tape", quantity=5)
+    db.session.add_all([po, mailer, tape])
+    db.session.commit()
+    db.session.add_all(
+        [
+            Expense(
+                date=D(2026, 1, 10), category="supplies", amount=5.0, purchase_order=po
+            ),
+            PurchaseOrderSupply(purchase_order=po, supply=mailer, quantity=50),
+            SupplyUse(
+                date=datetime.datetime(2026, 1, 20, 18),
+                supply=mailer,
+                count=2,
+                kind="shipping",
+                sales_receipt=jan,
+            ),
+            SupplyUse(
+                date=datetime.datetime(2026, 3, 2, 18),
+                supply=tape,
+                count=1,
+                kind="shipping",
+                sales_receipt=mar,
+            ),
+            # A restock isn't a use.
+            SupplyUse(
+                date=datetime.datetime(2026, 1, 10, 18),
+                supply=mailer,
+                count=-50,
+                kind="restock",
+            ),
+        ]
+    )
+    db.session.commit()
+    return lot
+
+
+def test_supplies_agree_with_profit_and_loss(app):
+    _supplies_fixture()
+    period = reports.Period({"from": "2026-01-01", "to": "2026-03-31"})
+    s = reports.supplies_report(period)
+    t = s["total"]
+    assert t["bought"] == 20.0  # the order, less its $5 Expense
+    assert t["net"] == reports.profit_and_loss(period)["total"]["supplies"]
+    assert (t["units_sold"], t["per_unit"]) == (2, 10.0)
+    assert (t["used"], t["used_cost"], t["uncosted"]) == (3, 1.0, 1)
+    assert t["used_per_unit"] == 0.5
+    jan = dict(s["columns"])["2026-01"]
+    assert (jan["bought"], jan["used"], jan["used_cost"]) == (20.0, 2, 1.0)
+    rows = {r["supply"].name: r for r in s["per_supply"]}
+    assert (rows["Mailer"]["ordered"], rows["Mailer"]["used"]) == (50, 2)
+    assert rows["Mailer"]["used_cost"] == 1.0
+    assert rows["Tape"]["used_cost"] is None and rows["Tape"]["cost_per_use"] is None
+    # Outside the period there is nothing.
+    empty = reports.supplies_report(
+        reports.Period({"from": "2020-01-01", "to": "2020-01-31"})
+    )
+    assert empty["per_supply"] == [] and empty["total"]["per_unit"] is None
+
+
+def test_supplies_used_on_other_items_stay_out_of_use(app):
+    receipt = SalesReceipt(date=D(2026, 2, 1), sold_price=20.0, net_sold=17.0)
+    mailer = Supply(name="Mailer", quantity=5, cost_per_use=2.0)
+    db.session.add_all([receipt, mailer])
+    db.session.commit()
+    db.session.add_all(
+        [
+            OtherItem(name="Shirt", sold=True, sales_receipt=receipt),
+            SupplyUse(
+                date=datetime.datetime(2026, 2, 1, 18),
+                supply=mailer,
+                count=1,
+                kind="shipping",
+                sales_receipt=receipt,
+            ),
+        ]
+    )
+    db.session.commit()
+    period = reports.Period({"period": "all"})
+    t = reports.supplies_report(period)["total"]
+    assert t["used"] == 0
+    assert t["other_used"] == 2.0 and t["net"] == -2.0
+    assert t["net"] == reports.profit_and_loss(period)["total"]["supplies"]
+
+
+def test_break_even(app):
+    _supplies_fixture()
+    period = reports.Period({"from": "2026-01-01", "to": "2026-01-31"})
+    b = reports.breakeven(period)
+    # All time: $50 a Unit, 16% fees, $10 of supplies a Unit.
+    assert b["all"]["units"] == 2
+    assert b["all"]["breakeven"] == pytest.approx(50 / 0.84 + 10, abs=0.01)
+    assert b["all"]["breakeven"] == pytest.approx(
+        index.home_totals()["breakeven_per_unit"], abs=0.01
+    )
+    # January: one Unit sold, costing $50, fees 15%, the $20 of supplies.
+    assert b["period"]["units"] == 1
+    assert b["period"]["breakeven"] == pytest.approx(50 / 0.85 + 20, abs=0.01)
+    # Spent 100 + 20 + the $5 Expense, against 84 of net sales: $41 over, at $34
+    # net a Unit (January's).
+    s = b["still_to_sell"]
+    assert (s["outstanding"], s["average"], s["average_of"]) == (
+        41.0,
+        34.0,
+        "the period",
+    )
+    assert s["units"] == 2
+    empty = reports.breakeven(
+        reports.Period({"from": "2020-01-01", "to": "2020-01-31"})
+    )
+    assert empty["period"]["breakeven"] is None
+    assert empty["still_to_sell"]["average_of"] == "all time"
+
+
+def test_break_even_with_nothing(app):
+    b = reports.breakeven(reports.Period({"period": "all"}))
+    assert b["all"]["breakeven"] is None
+    assert b["still_to_sell"] == {
+        "outstanding": 0.0,
+        "average": 0.0,
+        "average_of": "",
+        "units": 0,
+    }
+
+
+def test_lots_say_how_many_units_to_break_even(app):
+    lot = _supplies_fixture()
+    other = _lot(500.0, D(2026, 2, 1))
+    rows = {
+        r["lot"].id: r
+        for r in reports.lots_report(reports.Period({"period": "all"}))["rows"]
+    }
+    # $100 Lot, $84 back; the average net a Unit over all time is $42.
+    assert rows[lot.id]["to_break_even"] == 1
+    assert rows[other.id]["to_break_even"] == 12
+
+
+def test_supplies_query_count_does_not_grow(app):
+    from sqlalchemy import event
+
+    def count_queries():
+        n = []
+        engine = db.session.get_bind()
+        event.listen(engine, "before_cursor_execute", lambda *a: n.append(1))
+        reports.supplies_report(reports.Period({"period": "all"}))
+        return len(n)
+
+    lot = _supplies_fixture()
+    few = count_queries()
+    mailer = db.session.query(Supply).filter_by(name="Mailer").one()
+    for i in range(5):
+        receipt = _sale(lot, 40.0, 34.0, D(2026, 4, 1 + i))
+        db.session.add(
+            SupplyUse(
+                date=datetime.datetime(2026, 4, 1 + i, 18),
+                supply=mailer,
+                count=1,
+                kind="shipping",
+                sales_receipt=receipt,
+            )
+        )
+    db.session.commit()
+    assert count_queries() == few
+
+
+def test_csv_downloads(app):
+    from fbc.sales import report_csv
+
+    _supplies_fixture()
+    db.session.add(PurchaseLot(name="=HYPERLINK()", date=D(2026, 2, 1), price=7.0))
+    db.session.commit()
+    with signed_in_client(app) as client:
+        for path in (
+            "/profitandloss",
+            "/inventoryreport",
+            "/lotsreport",
+            "/salesreport",
+            "/agingreport",
+            "/suppliesreport",
+        ):
+            for query in ("", "?period=all&group=quarter", "?from=junk"):
+                response = client.get(f"{path}/download{query}")
+                assert response.status_code == 200, path + query
+                assert response.mimetype == "text/csv"
+                assert "attachment" in response.headers["Content-Disposition"]
+        text = client.get("/profitandloss/download?period=all").get_data(as_text=True)
+        assert text.splitlines()[0].startswith(",Total,2026-01")
+        assert "Net sold,84.00," in text
+        lots = client.get("/lotsreport/download?period=all").get_data(as_text=True)
+        assert "'=HYPERLINK()" in lots
+        records = client.get("/profitandloss/records?period=all").get_data(as_text=True)
+        lines = records.splitlines()
+        assert lines[0] == "Type,Date,Description,Amount,Net"
+        assert "Sales Receipt,2026-01-20,eBay,40.00,34.00" in lines
+        assert "Purchase Lot,2026-01-05,Lot,100.00," in lines
+        assert "Supplies,2026-01-10,,20.00," in lines
+        assert "Expense,2026-01-10,Supplies (line 22),5.00," in lines
+        assert "Download CSV" in client.get("/suppliesreport/").get_data(as_text=True)
+    assert report_csv.render([["a,b", 1.5, None]]) == '"a,b",1.50,\r\n'
+
+
+def test_supplies_page_renders(app):
+    _supplies_fixture()
+    with signed_in_client(app) as client:
+        for query in ("", "?period=all&group=quarter", "?from=junk"):
+            assert client.get("/suppliesreport/" + query).status_code == 200, query
+        page = client.get("/suppliesreport/?period=all").get_data(as_text=True)
+        assert "Break-even per Unit" in page and "Mailer" in page
+        assert "Break-even" in client.get("/profitandloss/?period=all").get_data(
+            as_text=True
+        )
