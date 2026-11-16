@@ -419,9 +419,11 @@ def test_index_groups_its_alerts_above_the_listings(app):
 
     assert page.index("Time to reorder") < page.index("<h2>Listings</h2>")
     assert page.index("<h2>Listings</h2>") < page.index("<h2>Stock</h2>")
-    assert page.index("<h2>Stock</h2>") < page.index("<h2>Money</h2>")
+    assert page.index("<h2>Stock</h2>") < page.index("Year to date")
+    assert page.index("Year to date") < page.index("<h2>All time</h2>")
+    assert page.index("<h2>All time</h2>") < page.index("<h3>Money</h3>")
     # The shop's name is a small footer, not a heading.
     assert "<h1>" not in page
-    assert page.rindex("Fire &amp; Bones Collectibles") > page.index("<h2>Money</h2>")
+    assert page.rindex("Fire &amp; Bones Collectibles") > page.index("<h3>Money</h3>")
     # One footer, without Flask-AppBuilder's rule.
     assert page.count("<footer") == 1 and "<hr" not in page

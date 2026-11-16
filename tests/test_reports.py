@@ -720,3 +720,100 @@ def test_supplies_page_renders(app):
         assert "Break-even" in client.get("/profitandloss/?period=all").get_data(
             as_text=True
         )
+
+
+def test_profit_and_loss_chart_data(app):
+    lot = _lot(100.0, D(2026, 1, 5))
+    _sale(lot, 40.0, 34.0, D(2026, 2, 20), order=EbayOrder(order_id="1"))
+    _sale(lot, 60.0, 50.0, D(2026, 3, 2), order=EbayOrder(order_id="2"))
+    _lot(30.0, D(2025, 12, 1))
+    c = reports.profit_and_loss(
+        reports.Period({"from": "2026-01-01", "to": "2026-03-31"})
+    )["chart"]
+    money = c["money"]
+    assert money["labels"] == ["2026-01", "2026-02", "2026-03"]
+    net, spending, profit = (s["data"] for s in money["series"])
+    assert net == [0.0, 34.0, 50.0]
+    assert spending == [100.0, 0.0, 0.0]
+    assert profit == [-100.0, 34.0, 50.0]
+    # The December Lot is before the period: it starts the cumulative line.
+    cumulative = c["cumulative"]["series"][0]["data"]
+    assert cumulative == [-130.0, -96.0, -46.0]
+    assert c["cumulative"]["series"][1]["kind"] == "baseline"
+    # The whole run, from nothing, ends where all-time cash profit does.
+    everything = reports.profit_and_loss(reports.Period({"period": "all"}))
+    assert (
+        everything["chart"]["cumulative"]["series"][0]["data"][-1]
+        == (everything["total"]["cash_profit"])
+    )
+
+
+def test_inventory_chart_data(app):
+    lot = _lot(100.0, D(2026, 1, 5))
+    _sale(lot, 40.0, 34.0, D(2026, 2, 20))
+    _unit(lot)
+    c = reports.inventory(reports.Period({"from": "2026-01-01", "to": "2026-02-28"}))[
+        "chart"
+    ]
+    assert c["value"]["series"][0]["data"] == [100.0, 50.0]
+    assert c["sold"]["series"][0]["data"] == [0, 1]
+
+
+def test_lot_payback_chart(app):
+    big = _lot(200.0, D(2026, 1, 5))
+    _sale(big, 100.0, 90.0, D(2026, 1, 20))
+    _sale(big, 100.0, 90.0, D(2026, 2, 10))
+    small = _lot(50.0, D(2026, 2, 3))
+    _sale(small, 60.0, 55.0, D(2026, 2, 5))
+    for i in range(6):
+        _lot(1.0 + i, D(2026, 1, 1))
+    p = reports.lots_report(reports.Period({"from": "2026-01-01", "to": "2026-03-31"}))[
+        "payback"
+    ]
+    # The five dearest, and the Paid back line.
+    assert len(p["series"]) == 6
+    first = p["series"][0]
+    assert first["label"].startswith("Lot (2026-01-05)")
+    assert first["data"][:3] == [45.0, 90.0, 90.0]
+    assert p["series"][-1] == {
+        "label": "Paid back",
+        "kind": "baseline",
+        "data": [100] * len(p["labels"]),
+    }
+    assert (
+        reports.lots_report(reports.Period({"from": "2020-01-01", "to": "2020-01-31"}))[
+            "payback"
+        ]
+        is None
+    )
+
+
+def test_year_to_date_for_the_home_page(app):
+    lot = _lot(100.0, D(2026, 1, 5))
+    _sale(lot, 40.0, 34.0, D(2026, 2, 20), order=EbayOrder(order_id="1"))
+    _sale(lot, 60.0, 50.0, D(2025, 3, 2), order=EbayOrder(order_id="2"))
+    y = reports.year_to_date(now=D(2026, 6, 1))
+    assert (y["start"], y["end"]) == (D(2026, 1, 1), D(2026, 6, 1))
+    assert (y["net"], y["receipts"], y["units_sold"]) == (34.0, 1, 1)
+    assert y["profit"] == 34.0 - 50.0
+    assert y["margin"] == pytest.approx((34.0 - 50.0) / 34.0 * 100, abs=0.01)
+    # The same as Profit & Loss's year to date.
+    pnl = reports.profit_and_loss(reports.Period({"period": "ytd"}))["total"]
+    now = reports.year_to_date()
+    assert now["net"] == pnl["net"] and now["profit"] == pnl["cogs_profit"]
+
+
+def test_chart_pages_and_home_summary_render(app):
+    lot = _lot(100.0, reports.today().replace(day=1))
+    _sale(lot, 40.0, 34.0, reports.today(), order=EbayOrder(order_id="1"))
+    with signed_in_client(app) as client:
+        for path in ("/profitandloss/", "/inventoryreport/", "/lotsreport/"):
+            page = client.get(path + "?period=all").get_data(as_text=True)
+            assert "js/chart.umd.js" in page and "report-charts.js" in page, path
+            assert 'class="report-chart"' in page, path
+        assert b"Cumulative cash position" in client.get("/profitandloss/").data
+        assert client.get("/static/js/chart.umd.js").status_code == 200
+        assert client.get("/static/js/report-charts.js").status_code == 200
+        home = client.get("/").get_data(as_text=True)
+        assert "Year to date" in home and "$34.00" in home
+        assert "/profitandloss/" in home and "/suppliesreport/" in home

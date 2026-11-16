@@ -81,6 +81,15 @@ data is in `sales/`. A form field, filter or helper that doesn't know about
 either is in `core/`. A new table is a module in `models/`, with its screens
 in `views/`.
 
+## The Reports' charts
+
+The charts are Chart.js 4.4.7, kept in `fbc/static/js/` (with its licence), so
+they work offline on the LAN. A report's function in `fbc/sales/reports.py`
+returns each chart's data as `{labels, unit, series: [{label, kind, data}]}`
+(kind is `bar`, `line` or `baseline`), a template draws it with the `draw`
+macro in `reports/_macros.html`, and `report-charts.js` does the styling. To
+update Chart.js, replace the two files and look at each chart in a browser.
+
 ## Setting up
 
 The app reads its settings from `config.py`, which isn't in git. Copy

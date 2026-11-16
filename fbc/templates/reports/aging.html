@@ -22,7 +22,7 @@
 </table>
 
 <h3>Lots with the most old stock</h3>
-<form class="form-inline" method="get" style="margin-bottom: 15px">
+<form class="form-inline hidden-print" method="get" style="margin-bottom: 15px">
   {% for k, v in period.query().items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
   <label>Old is <input type="number" min="1" max="120" class="form-control input-sm" name="old" value="{{ old_after }}" style="width: 5em"> months or more</label>
   <button class="btn btn-default btn-sm" type="submit">Show</button>
