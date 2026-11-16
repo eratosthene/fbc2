@@ -94,11 +94,12 @@ class AgingReportView(BaseView):
     @has_access
     def report(self):
         period = reports.Period(request.args)
+        old_after = reports.old_after_months(request.args.get("old"))
         return self.render_template(
             "reports/aging.html",
             period=period,
             presets=reports.PRESETS,
             groups=reports.GROUPS,
-            old_after=reports.OLD_AFTER_MONTHS,
-            **reports.aging(period),
+            old_after=old_after,
+            **reports.aging(period, old_after),
         )

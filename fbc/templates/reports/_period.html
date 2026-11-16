@@ -1,7 +1,7 @@
 <p>
   {% for key, label in presets %}
   <a class="btn btn-xs {{ 'btn-primary' if period.preset == key else 'btn-default' }}"
-     href="?{{ {'period': key, 'group': period.group}|urlencode }}">{{ label }}</a>
+     href="?{{ dict(period=key, group=period.group, **(extra|default({})))|urlencode }}">{{ label }}</a>
   {% endfor %}
 </p>
 <form class="form-inline" method="get" style="margin-bottom: 15px">
@@ -12,6 +12,7 @@
       {% for key, label in groups %}<option value="{{ key }}" {{ 'selected' if period.group == key }}>{{ label }}</option>{% endfor %}
     </select>
   </label>
+  {% for k, v in (extra|default({})).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
   <button class="btn btn-default btn-sm" type="submit">Show</button>
 </form>
 

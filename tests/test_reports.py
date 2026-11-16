@@ -470,6 +470,12 @@ def test_aging_groups_stock_by_lot_age_and_agrees_with_inventory(app):
     # The old Lots, most cost first.
     assert [r["lot"].id for r in got["old_lots"]] == [old.id, mid.id]
     assert got["old_lots"][1]["units"] == 2
+    # A different cut-off: only the Lot over a year old.
+    twelve = reports.aging(reports.Period(period), 12)
+    assert [r["lot"].id for r in twelve["old_lots"]] == [old.id]
+    assert reports.old_after_months("9") == 9
+    for bad in (None, "x", "0", "121", "-3"):
+        assert reports.old_after_months(bad) == reports.OLD_AFTER_MONTHS
 
 
 def test_aging_with_no_end_is_as_of_today(app):
@@ -492,3 +498,6 @@ def test_sales_and_aging_pages_render(app):
         assert b"1099-K" in client.get("/salesreport/?period=all").data
         assert b"$40.00" in client.get("/salesreport/?period=all").data
         assert b"A year or more" in client.get("/agingreport/?period=all").data
+        page = client.get("/agingreport/?period=all&old=9").data
+        assert b'name="old" value="9"' in page
+        assert b'name="old" value="6"' in client.get("/agingreport/?old=junk").data

@@ -658,8 +658,19 @@ AGE_BUCKETS = [
     ("A year or more", 12, None),
 ]
 OLD_STOCK_LOTS = 10
-# "Old" stock, for the list of Lots holding it: bought this many months ago.
+# "Old" stock, for the list of Lots holding it: bought this many months ago
+# (the default; the page lets you change it, up to MAX_OLD_AFTER_MONTHS).
 OLD_AFTER_MONTHS = 6
+MAX_OLD_AFTER_MONTHS = 120
+
+
+def old_after_months(text):
+    """The months from ?old=, or the default when it isn't a whole number in range."""
+    try:
+        months = int(text)
+    except (TypeError, ValueError):
+        return OLD_AFTER_MONTHS
+    return months if 1 <= months <= MAX_OLD_AFTER_MONTHS else OLD_AFTER_MONTHS
 
 
 def _months_between(first, last):
@@ -668,14 +679,15 @@ def _months_between(first, last):
     return months - 1 if last.day < first.day else months
 
 
-def aging(period):
+def aging(period, old_after=OLD_AFTER_MONTHS):
     """
     {"as_of", "buckets", "no_lot", "total", "old_lots"}: the Units in stock at
     the end of the Period (today, if it ends later or not at all), by months
     since their Purchase Lot's date. Each of "buckets" ([(label, figures)]),
     "no_lot" and "total" has {"units", "cost", "retail"}. "old_lots" is the
     OLD_STOCK_LOTS Purchase Lots bought OLD_AFTER_MONTHS or more before then
-    that have the most cost in stock, as [{"lot", "units", "cost"}].
+    that have the most cost in stock, as [{"lot", "units", "cost"}];
+    `old_after` changes the OLD_AFTER_MONTHS.
     """
     units, _flags = _stock_units()
     as_of = min(period.end, today()) if period.end else today()
@@ -691,7 +703,7 @@ def aging(period):
         for group, (_label, low, high) in zip(groups, AGE_BUCKETS):
             if months >= low and (high is None or months < high):
                 group.append(u)
-        if months >= OLD_AFTER_MONTHS:
+        if months >= old_after:
             old.setdefault(u[4], []).append(u)
     names = {
         lot_id: lot

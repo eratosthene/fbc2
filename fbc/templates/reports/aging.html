@@ -3,7 +3,7 @@
 {% block content %}
 <h2>Aging <small>{{ period.label() }}</small></h2>
 {% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
-{% include "reports/_period.html" %}
+{% with extra = {"old": old_after} %}{% include "reports/_period.html" %}{% endwith %}
 
 <p class="text-muted">
   The Units in stock on {{ as_of.isoformat() }} (the end of the period, or
@@ -22,6 +22,11 @@
 </table>
 
 <h3>Lots with the most old stock</h3>
+<form class="form-inline" method="get" style="margin-bottom: 15px">
+  {% for k, v in period.query().items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <label>Old is <input type="number" min="1" max="120" class="form-control input-sm" name="old" value="{{ old_after }}" style="width: 5em"> months or more</label>
+  <button class="btn btn-default btn-sm" type="submit">Show</button>
+</form>
 {% if old_lots %}
 <p class="text-muted">
   Purchase Lots bought {{ old_after }} months or more before then, with the

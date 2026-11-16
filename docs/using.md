@@ -1007,4 +1007,5 @@ in stock.
 
 Under it are the ten Purchase Lots bought six months or more before then that
 have the most cost still in stock: older stock is where money is tied up, and
-where a price drop is worth trying.
+where a price drop is worth trying. Change "Old is ... months or more" above
+that list to use another age (`?old=9`, from 1 to 120).
