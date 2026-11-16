@@ -17,9 +17,11 @@ from fbc.ebay.describe import (
 from fbc.ebay.drafts import build_item, check_ready, new_draft
 from fbc.ebay.publish import publish_draft
 from fbc.models.discogs import Artist, DiscogsRelease, Genre, Style
-from fbc.models.ebay import EbayDraft, EbayListing
+from fbc.models.ebay import EbayListing
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.ebay.listings import add_ebay_listing
+from fbc.pictures import store
+from fake_pictures import give_pictures, jpeg
 
 SETTINGS = {
     "SHIPPING_PROFILE_ID": "111",
@@ -211,9 +213,10 @@ def _draft(pictures=None, **kwargs):
     draft = new_draft(unit)
     for k, v in kwargs.items():
         setattr(draft, k, v)
-    draft.set_picture_list(pictures or [])
     db.session.add(draft)
     db.session.commit()
+    if pictures:
+        give_pictures(draft, pictures)
     return draft
 
 
@@ -250,7 +253,7 @@ def test_check_ready_needs_a_picture_and_business_policies(app, monkeypatch):
     assert check_ready(draft) == ["Add at least one picture before publishing."]
 
     monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "LISTING", {})
-    draft.set_picture_list(["https://i.ebayimg.com/a.jpg"])
+    give_pictures(draft, ["https://i.ebayimg.com/a.jpg"])
     problems = check_ready(draft)
     assert len(problems) == 1
     assert "TEMPLATE_ITEM_ID" in problems[0]
@@ -400,12 +403,21 @@ def test_unit_link_column_offers_list_on_ebay_until_listed(app):
     assert "List&nbsp;on&nbsp;eBay" not in str(unit.link_column())
 
 
-def test_draft_picture_list_round_trips(app):
-    draft = EbayDraft(title="t", unit_id=1)
-    assert draft.picture_list() == []
-    draft.set_picture_list(["a", "b"])
-    assert draft.picture_list() == ["a", "b"]
-    assert draft.picture_count() == 2
+def test_draft_pictures_are_its_units_stored_ones(app):
+    draft = _draft()
+    assert draft.stored_pictures() == []
+    assert draft.ebay_picture_urls() == []
+    assert draft.picture_count() == 0
+
+    give_pictures(draft, ["https://i.ebayimg.com/a.jpg", "https://i.ebayimg.com/b.jpg"])
+    store.add(draft.unit, jpeg(), "not-sent.jpg")
+    db.session.commit()
+
+    assert draft.picture_count() == 3
+    assert draft.ebay_picture_urls() == [
+        "https://i.ebayimg.com/a.jpg",
+        "https://i.ebayimg.com/b.jpg",
+    ]
 
 
 # GetItem's Item for a listing like https://www.ebay.com/itm/397798127145,
@@ -1521,3 +1533,189 @@ def test_call_passes_the_verb_through_to_the_fee_summary(app, monkeypatch):
     _, summary = api._call("AddFixedPriceItem", {"Item": {}})
 
     assert summary["fee_total"] == FREE_INSERTION[1]
+
+
+# --- Sending the stored pictures to eBay ---
+
+
+class _Uploads:
+    """A stand-in for upload_picture that remembers what it was sent."""
+
+    def __init__(self, fail_on=None):
+        self.sent = []
+        self.fail_on = fail_on
+
+    def __call__(self, fileobj, filename, content_type=None):
+        if filename == self.fail_on:
+            return None, {"errors": ["eBay said no."], "warnings": [], "fees": []}
+        self.sent.append((filename, content_type, len(fileobj.read())))
+        return "https://i.ebayimg.com/" + filename, {
+            "errors": [],
+            "warnings": ["Picture is small."],
+            "fees": [],
+        }
+
+
+def _unsent_draft(count=2):
+    draft = _draft()
+    for n in range(count):
+        store.add(draft.unit, jpeg(), "IMG_%d.jpg" % n)
+    db.session.commit()
+    return draft
+
+
+def test_ensure_uploaded_sends_each_working_copy_and_saves_the_address(
+    app, monkeypatch
+):
+    uploads = _Uploads()
+    monkeypatch.setattr(pictures, "upload_picture", uploads)
+    draft = _unsent_draft()
+
+    summary = pictures.ensure_uploaded(draft)
+
+    unit = str(draft.unit_id)
+    assert [s[0] for s in uploads.sent] == [
+        "unit-" + unit + "-1.jpg",
+        "unit-" + unit + "-2.jpg",
+    ]
+    assert {s[1] for s in uploads.sent} == {"image/jpeg"}
+    assert draft.ebay_picture_urls() == [
+        "https://i.ebayimg.com/unit-" + unit + "-1.jpg",
+        "https://i.ebayimg.com/unit-" + unit + "-2.jpg",
+    ]
+    assert summary["errors"] == []
+    assert summary["warnings"] == ["Picture is small."] * 2
+    assert all(p.ebay_uploaded_at for p in draft.stored_pictures())
+
+
+def test_ensure_uploaded_sends_only_what_eBay_does_not_have(app, monkeypatch):
+    uploads = _Uploads()
+    monkeypatch.setattr(pictures, "upload_picture", uploads)
+    draft = _draft(pictures=["https://i.ebayimg.com/a.jpg"])
+    store.add(draft.unit, jpeg(), "new.jpg")
+    db.session.commit()
+
+    pictures.ensure_uploaded(draft)
+
+    assert len(uploads.sent) == 1
+    assert draft.ebay_picture_urls()[0] == "https://i.ebayimg.com/a.jpg"
+    assert len(draft.ebay_picture_urls()) == 2
+
+
+def test_ensure_uploaded_sends_a_picture_again_when_its_address_is_old(
+    app, monkeypatch
+):
+    uploads = _Uploads()
+    monkeypatch.setattr(pictures, "upload_picture", uploads)
+    draft = _draft()
+    old = datetime.datetime.now(datetime.timezone.utc).replace(
+        tzinfo=None
+    ) - datetime.timedelta(days=pictures.EBAY_URL_DAYS + 1)
+    give_pictures(draft, ["https://i.ebayimg.com/old.jpg"], uploaded=old)
+
+    pictures.ensure_uploaded(draft)
+
+    assert len(uploads.sent) == 1
+    assert draft.ebay_picture_urls() != ["https://i.ebayimg.com/old.jpg"]
+
+
+def test_ensure_uploaded_sends_a_rotated_picture_again(app, monkeypatch):
+    uploads = _Uploads()
+    monkeypatch.setattr(pictures, "upload_picture", uploads)
+    draft = _draft(pictures=["https://i.ebayimg.com/a.jpg"])
+    store.rotate(draft.stored_pictures()[0], "left")
+    db.session.commit()
+
+    pictures.ensure_uploaded(draft)
+
+    assert len(uploads.sent) == 1
+
+
+def test_ensure_uploaded_keeps_what_worked_when_a_later_upload_fails(app, monkeypatch):
+    draft = _unsent_draft(count=3)
+    second = "unit-" + str(draft.unit_id) + "-2.jpg"
+    uploads = _Uploads(fail_on=second)
+    monkeypatch.setattr(pictures, "upload_picture", uploads)
+
+    summary = pictures.ensure_uploaded(draft)
+
+    assert summary["errors"] == ["eBay said no."]
+    stored = draft.stored_pictures()
+    assert [bool(p.ebay_url) for p in stored] == [True, False, True]
+    # The next try sends only the one that failed.
+    uploads.fail_on = None
+    uploads.sent.clear()
+    pictures.ensure_uploaded(draft)
+    assert [s[0] for s in uploads.sent] == [second]
+
+
+def test_ensure_uploaded_reports_a_picture_file_that_is_missing(app, monkeypatch):
+    monkeypatch.setattr(pictures, "upload_picture", _Uploads())
+    draft = _unsent_draft(count=1)
+    store.path(draft.stored_pictures()[0]).unlink()
+
+    summary = pictures.ensure_uploaded(draft)
+
+    assert summary["errors"][0].startswith("Couldn't read unit-")
+    assert draft.ebay_picture_urls() == []
+
+
+def test_publish_sends_the_pictures_before_listing(app, monkeypatch):
+    order = []
+    uploads = _Uploads()
+    monkeypatch.setattr(
+        pictures, "upload_picture", lambda *a: (order.append("upload"), uploads(*a))[1]
+    )
+
+    def fake_call(verb, data):
+        order.append(verb)
+        urls = data["Item"]["PictureDetails"]["PictureURL"]
+        assert len(urls) == 2
+        resp = {"ItemID": "123", "StartTime": "2026-10-29T16:00:00.000Z"}
+        return resp, summarize_response(resp)
+
+    monkeypatch.setattr(api, "_call", fake_call)
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "LISTING", dict(SETTINGS))
+    draft = _unsent_draft()
+
+    summary = publish_draft(draft)
+
+    assert order == ["upload", "upload", "AddFixedPriceItem"]
+    assert draft.status == "published"
+    assert "Picture is small." in summary["warnings"]
+
+
+def test_publish_does_not_list_when_a_picture_wont_upload(app, monkeypatch):
+    draft = _unsent_draft()
+    monkeypatch.setattr(
+        pictures, "upload_picture", _Uploads(fail_on="unit-%d-2.jpg" % draft.unit_id)
+    )
+    monkeypatch.setattr(
+        api, "_call", lambda *a: pytest.fail("shouldn't reach the listing call")
+    )
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "LISTING", dict(SETTINGS))
+
+    summary = publish_draft(draft)
+
+    assert summary["errors"] == ["eBay said no."]
+    assert draft.status == "draft"
+
+
+def test_verify_also_sends_the_pictures_first(app, monkeypatch):
+    uploads = _Uploads()
+    monkeypatch.setattr(pictures, "upload_picture", uploads)
+    seen = []
+
+    def fake_call(verb, data):
+        seen.append((verb, data["Item"]["PictureDetails"]["PictureURL"]))
+        return {}, summarize_response({})
+
+    monkeypatch.setattr(api, "_call", fake_call)
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "LISTING", dict(SETTINGS))
+    draft = _unsent_draft(count=1)
+
+    publish.verify_draft(draft)
+
+    assert len(uploads.sent) == 1
+    assert seen[0][0] == "VerifyAddFixedPriceItem"
+    assert len(seen[0][1]) == 1

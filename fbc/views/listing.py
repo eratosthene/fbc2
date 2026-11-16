@@ -1,7 +1,7 @@
 import json
 import logging
 
-from flask import abort, flash, redirect, request, url_for
+from flask import abort, flash, redirect, request, send_file, url_for
 from flask_appbuilder import expose, has_access
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from markupsafe import Markup
@@ -11,14 +11,9 @@ from fbc.ebay import insertions
 from fbc.core import devmode
 from fbc.ebay.api import listing_settings, seller_profiles
 from fbc.ebay.drafts import check_ready, describe_template, listing_details, new_draft
-from fbc.ebay.pictures import (
-    fetch_picture,
-    rotate_picture,
-    upright_picture,
-    upload_picture,
-)
 from fbc.ebay.publish import publish_draft, verify_draft
 from fbc.models.ebay import EbayDraft
+from fbc.pictures import store
 from fbc.core.forms import CustomModelView
 from fbc.core.widgets import EbayDraftListWidget, TallTextAreaWidget
 
@@ -46,6 +41,7 @@ class EbayDraftModelView(CustomModelView):
         "can_from_unit",
         "can_pictures",
         "can_picture",
+        "can_picturefile",
         "can_rotate",
         "can_verify",
         "can_publish",
@@ -123,6 +119,8 @@ class EbayDraftModelView(CustomModelView):
             related_views=self._related_views,
             draft=draft,
             problems=check_ready(draft),
+            pictures=draft.stored_pictures(),
+            pictures_folder=store.folder() is not None,
             over_warning=insertions.publish_warning(insertions.listing_summary()),
             uncovered_fee=insertions.uncovered_insertion_fee(
                 json.loads(draft.messages) if draft.messages else None
@@ -153,84 +151,93 @@ class EbayDraftModelView(CustomModelView):
     @expose("/pictures/<int:pk>", methods=["POST"])
     @has_access
     def pictures(self, pk):
-        """Upload pictures to eBay's picture hosting and add them to the draft."""
+        """
+        Keep the chosen pictures as the Unit's own, after its other ones.
+        Nothing goes to eBay until the draft is checked or published.
+        """
         from fbc import db
 
         draft = self._draft(pk)
-        if devmode.on():
-            flash(devmode.message("picture uploads"), "warning")
-            return self._back(draft)
-        urls = draft.picture_list()
+        if draft.status != "draft":
+            abort(404)
+        count = len(draft.stored_pictures())
         for f in request.files.getlist("pictures"):
             if not f.filename:
                 continue
-            if len(urls) >= MAX_PICTURES:
+            if count >= MAX_PICTURES:
                 flash("eBay allows at most 24 pictures.", "warning")
                 break
-            url, summary = upload_picture(
-                upright_picture(f.stream), f.filename, f.mimetype
-            )
-            self._flash_summary(summary)
-            if url:
-                urls.append(url)
-        draft.set_picture_list(urls)
+            try:
+                store.add(draft.unit, f.read(), f.filename)
+            except store.NotConfigured as e:
+                flash(str(e), "danger")
+                break
+            except ValueError as e:
+                flash(f.filename + ": " + str(e), "danger")
+                continue
+            count += 1
         db.session.commit()
         return self._back(draft)
+
+    def _stored(self, draft, index):
+        pictures = draft.stored_pictures()
+        if index < 0 or index >= len(pictures):
+            abort(404)
+        return pictures[index]
 
     @expose("/picture/<int:pk>/<int:index>/<action>", methods=["POST"])
     @has_access
     def picture(self, pk, index, action):
-        """Remove a picture, or move it to the front to make it the main one."""
+        """
+        Remove a picture, or move it to the front to make it the main one.
+        Removing deletes it from the Unit, for every marketplace.
+        """
         from fbc import db
 
         draft = self._draft(pk)
-        urls = draft.picture_list()
-        if index < 0 or index >= len(urls):
-            abort(404)
-        url = urls.pop(index)
+        picture = self._stored(draft, index)
         if action == "first":
-            urls.insert(0, url)
-        elif action != "remove":
+            store.make_first(picture)
+        elif action == "remove":
+            try:
+                store.remove(picture)
+            except store.NotConfigured as e:
+                flash(str(e), "danger")
+        else:
             abort(400)
-        draft.set_picture_list(urls)
         db.session.commit()
         return self._back(draft)
+
+    @expose("/picturefile/<int:pk>/<int:index>")
+    @has_access
+    def picturefile(self, pk, index):
+        """A stored picture's working copy, for the draft page to show."""
+        picture = self._stored(self._draft(pk), index)
+        try:
+            return send_file(store.path(picture), mimetype="image/jpeg", max_age=0)
+        except (OSError, store.NotConfigured):
+            abort(404)
 
     @expose("/rotate/<int:pk>/<int:index>/<direction>", methods=["POST"])
     @has_access
     def rotate(self, pk, index, direction):
         """
-        Turn a picture 90 degrees: fetch it from eBay, rotate it, upload it as
-        a new picture and put that in the old one's place. The old picture is
-        left on eBay.
+        Turn a picture 90 degrees, in the stored files. eBay's copy is
+        forgotten and the new one is sent when the draft is next checked or
+        published.
         """
         from fbc import db
 
         draft = self._draft(pk)
         if draft.status != "draft" or direction not in ("left", "right"):
             abort(404 if draft.status != "draft" else 400)
-        urls = draft.picture_list()
-        if index < 0 or index >= len(urls):
-            abort(404)
-        if devmode.on():
-            flash(devmode.message("rotating pictures"), "warning")
-            return self._back(draft)
-        data, error = fetch_picture(urls[index])
-        if error:
-            flash(error, "danger")
-            return self._back(draft)
+        picture = self._stored(draft, index)
         try:
-            rotated, content_type = rotate_picture(data, direction)
-        except ValueError as e:
+            store.rotate(picture, direction)
+        except (ValueError, store.NotConfigured) as e:
             flash(str(e), "danger")
             return self._back(draft)
-        filename = urls[index].rsplit("/", 1)[-1].split("?")[0] or "picture.jpg"
-        url, summary = upload_picture(rotated, filename, content_type)
-        self._flash_summary(summary)
-        if url:
-            urls[index] = url
-            draft.set_picture_list(urls)
-            db.session.commit()
+        db.session.commit()
         return self._back(draft)
 
     @expose("/verify/<int:pk>", methods=["POST"])

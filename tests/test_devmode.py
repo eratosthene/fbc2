@@ -1,6 +1,5 @@
 import datetime
 import io
-import json
 import logging
 
 from auth import signed_in_client
@@ -18,6 +17,9 @@ from fbc.discogs.client import DiscogsAuthError
 from fbc.ebay.oauth import OAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsOAuthToken
 from fbc.models.ebay import EbayDraft, EbayOAuthToken
+from fake_pictures import give_pictures, jpeg
+from fbc.ebay import pictures as ebay_pictures
+from fbc.pictures import store
 from test_listing import SETTINGS, _carnaval
 from test_shipping import _order
 
@@ -284,43 +286,57 @@ def _draft():
         unit=_carnaval(),
         title="Carnaval",
         price=25.0,
-        pictures=json.dumps(["https://i.ebayimg.com/a.jpg"]),
         status="draft",
     )
     db.session.add(draft)
     db.session.commit()
+    give_pictures(draft, ["https://i.ebayimg.com/a.jpg"])
     return draft
 
 
-def test_draft_page_turns_off_uploads_checking_and_publishing(client, dev_mode):
+def test_draft_page_turns_off_checking_and_publishing_but_not_pictures(
+    client, dev_mode
+):
     draft = _draft()
 
     html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
         as_text=True
     )
 
-    assert "Upload to eBay" not in html
-    assert "picture uploads disabled" in html
+    assert "Add pictures" in html
     assert "disabled>Check with eBay" in html
     assert "disabled>Publish to eBay" in html
 
 
-def test_pictures_arent_uploaded_in_dev_mode(client, dev_mode, monkeypatch):
-    monkeypatch.setattr("fbc.views.listing.upload_picture", _fails)
+def test_pictures_are_kept_in_dev_mode_without_reaching_ebay(
+    client, dev_mode, monkeypatch
+):
+    monkeypatch.setattr("fbc.ebay.pictures.upload_picture", _fails)
+    monkeypatch.setattr("requests.post", _fails)
     draft = _draft()
 
-    page = client.post(
+    client.post(
         "/ebaydraftmodelview/pictures/" + str(draft.id),
-        data={"pictures": [(io.BytesIO(b"front"), "front.jpg")]},
+        data={"pictures": [(io.BytesIO(jpeg()), "front.jpg")]},
         content_type="multipart/form-data",
-        follow_redirects=True,
     )
 
-    assert "Dev Mode is turned on, picture uploads disabled." in page.get_data(
-        as_text=True
-    )
     db.session.expire_all()
-    assert draft.picture_list() == ["https://i.ebayimg.com/a.jpg"]
+    assert draft.picture_count() == 2
+
+
+def test_stored_pictures_arent_sent_to_ebay_in_dev_mode(dev_mode, monkeypatch):
+    monkeypatch.setattr("fbc.ebay.pictures.upload_picture", _fails)
+    draft = _draft()
+    store.add(draft.unit, jpeg(), "new.jpg")
+    db.session.commit()
+
+    summary = ebay_pictures.ensure_uploaded(draft)
+
+    assert summary["errors"] == [
+        "Dev Mode is turned on, uploading pictures to eBay disabled."
+    ]
+    assert draft.ebay_picture_urls() == ["https://i.ebayimg.com/a.jpg"]
 
 
 @pytest.mark.parametrize(
@@ -455,21 +471,20 @@ def test_no_banner_without_dev_mode(client):
     assert "Dev Mode" not in html
 
 
-def test_pictures_arent_rotated_in_dev_mode(client, dev_mode, monkeypatch):
-    monkeypatch.setattr("fbc.views.listing.upload_picture", _fails)
+def test_pictures_are_rotated_in_dev_mode_without_reaching_ebay(
+    client, dev_mode, monkeypatch
+):
+    monkeypatch.setattr("fbc.ebay.pictures.upload_picture", _fails)
     monkeypatch.setattr("requests.get", _fails)
+    monkeypatch.setattr("requests.post", _fails)
     draft = _draft()
 
-    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
-        as_text=True
-    )
-    page = client.post(
-        "/ebaydraftmodelview/rotate/%d/0/left" % draft.id, follow_redirects=True
-    )
+    client.post("/ebaydraftmodelview/rotate/%d/0/left" % draft.id)
 
-    assert "rotating pictures disabled" in html
-    assert "Dev Mode is turned on, rotating pictures disabled." in page.get_data(
-        as_text=True
-    )
     db.session.expire_all()
-    assert draft.picture_list() == ["https://i.ebayimg.com/a.jpg"]
+    (picture,) = draft.stored_pictures()
+    assert picture.ebay_url is None
+    from PIL import Image
+
+    with Image.open(store.path(picture)) as image:
+        assert image.size == (20, 40)

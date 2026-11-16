@@ -42,7 +42,12 @@ area, and everything else is in a package by area (#157):
   `images.py` is Pillow only: it straightens, rotates and shrinks, and knows
   nothing of the disk or the database. `store.py` keeps them in the
   `PICTURES_DIR` folder, one folder per Unit, and in the `UnitPicture` rows.
-  It sits beside `ebay/` and `discogs/`, and `ebay/pictures.py` uses it.
+  It sits beside `ebay/` and `discogs/`. `ebay/pictures.py`'s
+  `ensure_uploaded` sends the working copies eBay doesn't have yet, and caches
+  the address on the row (`ebay_url`, `ebay_uploaded_at`); `ebay/publish.py` calls
+  it before every Check with eBay and Publish. `store.py` imports its model
+  inside a function: it is reached while `fbc` is importing, and a model whose
+  foreign key names `unit` can't load before the others.
 - `fbc/sales/`: what the owner does with stock and sales, using both eBay and
   Discogs. `ship.py` is Ship This (eBay orders, and Discogs orders in `discogs_*`
   functions), `stock.py` is the supplies it takes out of
@@ -497,7 +502,8 @@ it, since Compose reads `.env` from the compose file's folder.
   `/pictures`. Put `FBC_PICTURES_DIR=<a folder>` in `docker/.env` to use another.
   Running from a checkout with `dev-scripts/run-local.sh` needs `PICTURES_DIR`
   in `config.py` (see `config.py.tpl`). Dev mode doesn't stop keeping pictures,
-  since that's all on this machine; it only stops uploads to eBay.
+  since that's all on this machine; `ensure_uploaded` refuses to send them to
+  eBay, as Check and Publish do.
 
 - Start it, then open http://127.0.0.1:5555:
 

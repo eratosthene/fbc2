@@ -96,6 +96,14 @@ def sync_job_folder(tmp_path, monkeypatch):
     return folder
 
 
+@pytest.fixture(autouse=True)
+def pictures_folder(tmp_path, monkeypatch):
+    """Keep each test's stored pictures (fbc/pictures/store.py) out of the repo."""
+    folder = tmp_path / "pictures"
+    monkeypatch.setitem(fbc.app.config, "PICTURES_DIR", str(folder))
+    return folder
+
+
 @pytest.fixture
 def inline_sync(monkeypatch):
     """Run background sync jobs in the test's own thread, before start() returns."""

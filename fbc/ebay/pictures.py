@@ -1,5 +1,6 @@
-"""Uploading, rotating and fetching pictures for eBay listings."""
+"""Sending a Unit's stored pictures to eBay, and fetching pictures from it."""
 
+import datetime
 import logging
 
 from fbc.core import devmode
@@ -7,9 +8,16 @@ from fbc.ebay import api, oauth
 
 # The picture handling that isn't eBay's moved to fbc/pictures/images.py;
 # the eBay views and tests still reach it here.
+from fbc.pictures import store
 from fbc.pictures.images import rotate_picture, upright_picture  # noqa: F401
 
 logger = logging.getLogger()
+
+# How long fbc trusts the eBay address it saved for a picture. I haven't
+# confirmed how long eBay keeps an uploaded picture that no listing uses, so
+# an older address is uploaded again before publishing: it costs only the
+# upload, and the stored file is the real copy.
+EBAY_URL_DAYS = 30
 
 
 def upload_picture(fileobj, filename, content_type=None):
@@ -83,3 +91,45 @@ def fetch_picture(url):
     if r.status_code != 200:
         return None, "eBay's picture host answered " + str(r.status_code) + "."
     return r.content, None
+
+
+def _utcnow():
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+
+def _current(picture, now):
+    if not picture.ebay_url or not picture.ebay_uploaded_at:
+        return False
+    return now - picture.ebay_uploaded_at < datetime.timedelta(days=EBAY_URL_DAYS)
+
+
+def ensure_uploaded(draft):
+    """
+    Make sure eBay has every stored picture of the draft's Unit, uploading the
+    working copy of any that has no address yet (never sent, turned since, or
+    saved long ago) and saving the address it gets. An upload that worked is
+    kept even if a later one fails. Returns a summary; its errors say what
+    couldn't be sent, and eBay can't list the draft until there are none.
+    """
+    from fbc import db
+
+    summary = api._empty_summary()
+    now = _utcnow()
+    todo = [p for p in draft.stored_pictures() if not _current(p, now)]
+    if todo and devmode.on():
+        summary["errors"].append(devmode.message("uploading pictures to eBay"))
+        return summary
+    for picture in todo:
+        name = "unit-" + str(picture.unit_id) + "-" + str(picture.position) + ".jpg"
+        try:
+            with open(store.path(picture), "rb") as f:
+                url, result = upload_picture(f, name, "image/jpeg")
+        except (OSError, store.NotConfigured) as e:
+            summary["errors"].append("Couldn't read " + name + ": " + str(e))
+            continue
+        summary["errors"].extend(result["errors"])
+        summary["warnings"].extend(result["warnings"])
+        if url:
+            store.set_ebay_url(picture, url)
+            db.session.commit()
+    return summary

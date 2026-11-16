@@ -20,10 +20,18 @@ from pathlib import Path
 
 from flask import current_app
 
-from fbc.models.pictures import UnitPicture
 from fbc.pictures import images
 
 logger = logging.getLogger()
+
+
+def _model():
+    # Imported when used, not at the top: this module is reached while fbc
+    # itself is being imported, and a model that names the unit table can't
+    # load before the other models have (see fbc/models/pictures.py).
+    from fbc.models.pictures import UnitPicture
+
+    return UnitPicture
 
 
 class NotConfigured(Exception):
@@ -60,9 +68,14 @@ def original_path(picture):
 
 def for_unit(unit):
     """A Unit's pictures, the main one first."""
+    return for_unit_id(unit.id)
+
+
+def for_unit_id(unit_id):
     return (
-        UnitPicture.query.filter_by(unit_id=unit.id)
-        .order_by(UnitPicture.position, UnitPicture.id)
+        _model()
+        .query.filter_by(unit_id=unit_id)
+        .order_by(_model().position, _model().id)
         .all()
     )
 
@@ -98,7 +111,7 @@ def add(unit, data, upload_name=None):
     _write(where / original_file, data)
     _write(where / file, working.getvalue())
     last = max((p.position for p in for_unit(unit)), default=0)
-    picture = UnitPicture(
+    picture = _model()(
         unit_id=unit.id,
         position=last + 1,
         file=file,
@@ -124,8 +137,9 @@ def remove(picture):
     db.session.delete(picture)
     db.session.flush()
     rest = (
-        UnitPicture.query.filter_by(unit_id=unit_id)
-        .order_by(UnitPicture.position, UnitPicture.id)
+        _model()
+        .query.filter_by(unit_id=unit_id)
+        .order_by(_model().position, _model().id)
         .all()
     )
     _renumber(rest)
@@ -134,7 +148,7 @@ def remove(picture):
 
 def make_first(picture):
     """Make this the Unit's main picture, the others keeping their order."""
-    rest = [p for p in for_unit(picture.unit) if p.id != picture.id]
+    rest = [p for p in for_unit_id(picture.unit_id) if p.id != picture.id]
     _renumber([picture] + rest)
 
 

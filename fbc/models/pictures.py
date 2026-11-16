@@ -2,7 +2,6 @@
 
 from flask_appbuilder import Model
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import relationship
 
 
 class UnitPicture(Model):
@@ -11,7 +10,9 @@ class UnitPicture(Model):
     working copy (what eBay gets and the Discogs page shows) and
     `original_file` is the upload as it came, both names inside the Unit's
     folder. A picture's files are never changed in place, so a rotation makes
-    new names.
+    new names. There's no relationship to the Unit: the Unit's id is enough,
+    and a relationship to a model that may not be loaded yet would break the
+    mappers of every view imported before it.
     """
 
     __tablename__ = "unit_picture"
@@ -22,7 +23,6 @@ class UnitPicture(Model):
         nullable=False,
         index=True,
     )
-    unit = relationship("Unit")
     # 1 is the main picture; the others follow in order.
     position = Column(Integer, nullable=False)
     file = Column(String(60), nullable=False)

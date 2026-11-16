@@ -10,6 +10,7 @@ from fbc.sync import state
 from fbc.ebay import api, insertions
 from fbc.models.ebay import EbayDraft, EbayListing
 from fbc.ebay.listings import mark_ended_listings
+from fake_pictures import give_pictures
 from test_listing import SETTINGS, _carnaval
 
 D = datetime.datetime
@@ -393,7 +394,7 @@ def _ready_draft(client, monkeypatch):
     unit = _carnaval()
     client.get("/ebaydraftmodelview/fromunit/" + str(unit.id))
     draft = db.session.query(EbayDraft).one()
-    draft.set_picture_list(["https://i.ebayimg.com/a.jpg"])
+    give_pictures(draft, ["https://i.ebayimg.com/a.jpg"])
     db.session.commit()
     return draft
 
