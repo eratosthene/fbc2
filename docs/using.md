@@ -636,7 +636,7 @@ combined into one package.
 
 An order whose listing has no Unit, no eBay Draft and isn't a mystery box, and
 isn't an Other Item yet (an old order that was left alone, even if eBay's listing is long gone), gets a page on Ship
-This that offers to make an Other Item of it, with no cost (and adds the listing back, ended and archived, if fbc no longer has it), and then ship it.
+This that offers to make an Other Item of it, with no cost (and adds the listing back, ended and archived, if fbc no longer has it; an order from before fbc kept items, which knows no listing, gets one made for it from the order), and then ship it.
 If it is a record, it links to adding the Sales Receipt by hand instead.
 
 #### Sorting the listings already there

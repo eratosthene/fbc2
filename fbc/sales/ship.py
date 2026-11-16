@@ -120,13 +120,18 @@ def other_items(order):
     return found, problems
 
 
+def stub_listing_id(order):
+    """The id of the listing made for an order that has none, "o" and its id."""
+    return ("o" + order.order_id)[:20]
+
+
 def other_item_candidates(order):
     """
     [(listing id, name)] for the listings of `order` that Ship This could make
     Other Items of, when the order is clearly not for records: none of its
     listings has a Unit, an eBay Draft or is a mystery box. A listing fbc no
-    longer has (an old one) counts: make_other_items brings it back. [] for any
-    other order.
+    longer has (an old one) counts: make_other_items brings it back. So does an
+    order that doesn't know its listing at all. [] for any other order.
     """
     from fbc import db
     from fbc.ebay import sorting
@@ -134,7 +139,10 @@ def other_item_candidates(order):
 
     listings = order.listing_ids()
     if not listings:
-        return []
+        # Orders from before fbc kept items, whose listing is long gone, know
+        # nothing of it. Nothing links them to a Unit, so they can't be a
+        # record's; the listing made for them is keyed by the order.
+        return [(stub_listing_id(order), order.title or order.order_id)]
     titles = {i.ebay_listing_id: i.title for i in order.items}
     found = []
     for listing_id in listings:
@@ -162,6 +170,7 @@ def make_other_items(order, candidates):
     from fbc.models.other import OtherItem
 
     prices = {i.ebay_listing_id: i.price for i in order.items}
+    unlinked = not order.listing_ids()
     items = []
     for listing_id, name in candidates:
         if db.session.get(EbayListing, listing_id) is None:
@@ -181,6 +190,9 @@ def make_other_items(order, candidates):
                 )
             )
             db.session.flush()
+        if unlinked:
+            # Ship This finds an order's Items through its listings.
+            order.ebay_listing_id = listing_id
         items.append(OtherItem(name=name[:100], ebay_listing_id=listing_id, sold=False))
     db.session.add_all(items)
     db.session.commit()
