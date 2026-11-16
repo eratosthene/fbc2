@@ -16,6 +16,6 @@ three-column row under a rule) and a banner in dev mode (see fbc/core/devmode.py
 {% endblock %}
 {% block footer %}
 <footer class="container text-muted text-center">
-  <small>Fire &amp; Bones Collectibles</small>
+  <small>Fire &amp; Bones Collectibles{% if revision %} &middot; {{ revision }}{% endif %}</small>
 </footer>
 {% endblock %}

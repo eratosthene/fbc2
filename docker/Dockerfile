@@ -51,6 +51,11 @@ COPY ./fbc /app/fbc
 COPY ./migrations /app/migrations
 COPY --chmod=755 ./docker/docker-entrypoint.sh /app/docker-entrypoint.sh
 
+# The deploy id (sha-1a2b3c4), for the footer. CI passes it in; empty for any
+# other build. Last, so a new commit doesn't invalidate the layers above.
+ARG FBC_REVISION=
+ENV FBC_REVISION=$FBC_REVISION
+
 ENV STATIC_PATH=/usr/local/lib/python3.12/site-packages/flask_appbuilder/static
 ENV LOG_LEVEL=info
 ENV FLASK_APP=fbc
