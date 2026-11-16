@@ -1,7 +1,7 @@
 """
 The Reports: money for a chosen period, not for all time. So far the period,
-the profit and loss, the inventory, the Lots, the sales and the aging; see
-issue #69 for the rest.
+the profit and loss, the inventory, the Lots, the sales, the aging, the
+supplies and the break-even figures; see issue #69 for the rest.
 
 Plain Python over the database, like fbc.sales.finance, which it builds on:
 everything is loaded once and totalled in Python, so the number of queries
@@ -22,6 +22,7 @@ The tax year is the calendar year.
 
 import calendar
 import datetime
+import math
 import statistics
 
 import sqlalchemy as sa
@@ -32,7 +33,15 @@ from fbc.models.expenses import Expense, category_label
 from fbc.models.inventory import PurchaseLot
 from fbc.models.other import OtherItem, receipt_ids
 from fbc.models.sales import SalesReceipt, SalesReceiptLine
-from fbc.models.supplies import PurchaseOrder
+from fbc.models.supplies import (
+    ADDING_UNIT,
+    SHIPPING,
+    PurchaseOrder,
+    PurchaseOrderSupply,
+    Supply,
+    SupplyUse,
+    fmt_stock,
+)
 from fbc.sales import finance, other
 
 PRESETS = [
@@ -359,6 +368,7 @@ def profit_and_loss(period):
         if first and first <= last
         else []
     )
+    result["breakeven"] = breakeven(period)
     return result
 
 
@@ -468,7 +478,8 @@ def lots_report(period):
     """
     {"rows", "total"}: the Purchase Lots dated in the Period, newest first,
     with the figures of the Purchase Lots list (all their sales so far, not
-    just the period's) and the cost of the Units still in stock.
+    just the period's), the cost of the Units still in stock and "to_break_even",
+    the Units still to sell to cover the Lot's price (see breakeven()).
     """
     lots = [
         lot
@@ -476,10 +487,12 @@ def lots_report(period):
         if _within(lot.date, period.start, period.end)
     ]
     figures = finance.lot_figures(lots)
+    avg, _source = _average_net_per_unit(period)
     rows = []
     for lot in lots:
         f = dict(figures[lot.id])
         f["lot"] = lot
+        f["to_break_even"] = _units_to_cover(f["capital"] - f["net"], avg)
         f["stock_cost"] = (
             round(f["instock"] * f["capital"] / f["units"], 2) if f["units"] else 0.0
         )
@@ -489,6 +502,7 @@ def lots_report(period):
         for k in ("capital", "units", "sold_units", "instock", "gross", "net")
     }
     total["stock_cost"] = round(sum(r["stock_cost"] for r in rows), 2)
+    total["to_break_even"] = _units_to_cover(total["capital"] - total["net"], avg)
     total["fees"] = round(total["gross"] - total["net"], 2)
     total["profit"] = round(total["net"] - total["capital"], 2)
     total["roi"] = finance.percent(total["profit"], total["capital"])
@@ -723,4 +737,255 @@ def aging(period, old_after=OLD_AFTER_MONTHS):
         "no_lot": _sum(no_lot),
         "total": _sum(held),
         "old_lots": old_lots,
+    }
+
+
+# --- Supplies ----------------------------------------------------------------
+
+
+def _supplies_load():
+    """
+    The supply money and uses, once: (bought, other_used, uses, ordered,
+    supplies, units_sold).
+    - bought: [(Purchase Order date, price less its Expenses)];
+    - other_used: [(date, cost)] of the supplies used on Other Items' sales;
+    - uses: [(date, supply id, count)] of record sales and Units added (Other
+      Items' are in other_used), in local time; restocks and Supply List edits
+      are not uses;
+    - ordered: [(Purchase Order date, supply id, quantity)];
+    - supplies: {id: Supply};
+    - units_sold: [date] of every sold Unit, by its Sales Receipt.
+    """
+    others = {r for (r,) in db.session.execute(receipt_ids())}
+    receipt_dates = dict(db.session.query(SalesReceipt.id, SalesReceipt.date))
+    po_expenses = dict(
+        db.session.query(Expense.purchase_order_id, sa.func.sum(Expense.amount))
+        .filter(Expense.purchase_order_id.isnot(None))
+        .group_by(Expense.purchase_order_id)
+    )
+    orders = list(
+        db.session.query(PurchaseOrder.id, PurchaseOrder.date, PurchaseOrder.price)
+    )
+    bought = [(day, price - po_expenses.get(i, 0.0)) for i, day, price in orders]
+    order_dates = {i: day for i, day, _price in orders}
+    other_used = [
+        (receipt_dates[r], c)
+        for r, c in other.supply_costs().items()
+        if r in receipt_dates
+    ]
+    uses = [
+        (localtime.local_naive(when).date(), supply_id, count)
+        for when, supply_id, count, receipt_id in db.session.query(
+            SupplyUse.date,
+            SupplyUse.supply_id,
+            SupplyUse.count,
+            SupplyUse.sales_receipt_id,
+        ).filter(SupplyUse.kind.in_([SHIPPING, ADDING_UNIT]))
+        if receipt_id not in others
+    ]
+    ordered = [
+        (order_dates[order_id], supply_id, quantity)
+        for order_id, supply_id, quantity in db.session.query(
+            PurchaseOrderSupply.purchase_order_id,
+            PurchaseOrderSupply.supply_id,
+            PurchaseOrderSupply.quantity,
+        )
+        if order_id in order_dates
+    ]
+    supplies = {s.id: s for s in db.session.query(Supply)}
+    units_sold = [u[0] for u in _sales_load()[1]]
+    return bought, other_used, uses, ordered, supplies, units_sold
+
+
+def _supply_figures(load, start, end):
+    """
+    The supplies for start to end: "bought" (what the shop spent, less the
+    Expenses on its orders), "other_used" (the cost of those used on Other
+    Items, which come off it, as in Profit & Loss), "net" (Profit & Loss's
+    supplies), the Units sold, "per_unit" (net over the Units sold), and
+    the uses of record sales and Units added: "used" (count), "used_cost"
+    (where the Supply has a Cost Per Use), "uncosted" (uses of a Supply
+    that has none) and "used_per_unit".
+    """
+    bought, other_used, uses, _ordered, supplies, units_sold = load
+    spent = sum(p for d, p in bought if _within(d, start, end))
+    off = sum(c for d, c in other_used if _within(d, start, end))
+    used = cost = uncosted = 0
+    for day, supply_id, count in uses:
+        if not _within(day, start, end):
+            continue
+        used += count
+        supply = supplies.get(supply_id)
+        if supply is not None and supply.cost_per_use is not None:
+            cost += count * supply.cost_per_use
+        else:
+            uncosted += count
+    units = sum(1 for d in units_sold if _within(d, start, end))
+    return {
+        "bought": round(spent, 2),
+        "other_used": round(off, 2),
+        "net": round(spent - off, 2),
+        "units_sold": units,
+        "per_unit": round((spent - off) / units, 2) if units else None,
+        "used": used,
+        "used_cost": round(cost, 2),
+        "uncosted": uncosted,
+        "used_per_unit": round(cost / units, 2) if units else None,
+    }
+
+
+def supplies_report(period):
+    """
+    {"total", "columns", "per_supply", "breakeven"}: _supply_figures() for the
+    Period and for each column ([(label, figures)]); one row per Supply,
+    [{"supply", "ordered", "used", "cost_per_use", "used_cost", "in_stock"}],
+    for what was ordered and used in the Period; and breakeven().
+    """
+    load = _supplies_load()
+    bought, other_used, uses, ordered, supplies, units_sold = load
+    dates = [d for d, _ in bought] + [d for d, _ in other_used] + units_sold
+    first = period.start or (min(dates) if dates else None)
+    last = period.end or max([today(), *dates])
+    rows = []
+    for supply in sorted(supplies.values(), key=lambda s: s.name.lower()):
+        order_qty = sum(
+            q
+            for d, i, q in ordered
+            if i == supply.id and _within(d, period.start, period.end)
+        )
+        used = sum(
+            c
+            for d, i, c in uses
+            if i == supply.id and _within(d, period.start, period.end)
+        )
+        if not (order_qty or used):
+            continue
+        rows.append(
+            {
+                "supply": supply,
+                "ordered": order_qty,
+                "used": used,
+                "cost_per_use": supply.cost_per_use,
+                "used_cost": (
+                    round(used * supply.cost_per_use, 2)
+                    if supply.cost_per_use is not None
+                    else None
+                ),
+                "in_stock": fmt_stock(
+                    supply.quantity, supply.pack_size, supply.pack_used
+                ),
+            }
+        )
+    return {
+        "total": _supply_figures(load, period.start, period.end),
+        "columns": (
+            [
+                (label, _supply_figures(load, a, b))
+                for label, a, b in buckets(first, last, period.group)
+            ]
+            if first and first <= last
+            else []
+        ),
+        "per_supply": rows,
+        "breakeven": breakeven(period),
+    }
+
+
+# --- Break-even --------------------------------------------------------------
+
+
+def _average_net_per_unit(period):
+    """(average net per Unit sold, where it came from): the Period's, or all
+    time's when the Period sold nothing; (0.0, "") when nothing ever sold."""
+    rows, units = _sales_load()
+    for label, start, end in (
+        ("the period", period.start, period.end),
+        ("all time", None, None),
+    ):
+        avg = _sales_figures(rows, units, start, end)["avg_net_unit"]
+        if avg > 0:
+            return avg, label
+    return 0.0, ""
+
+
+def _units_to_cover(amount, average):
+    """Whole Units at `average` net each to cover `amount`: 0 when covered,
+    None when there is no average to go on."""
+    if amount <= 0:
+        return 0
+    if average <= 0:
+        return None
+    return math.ceil(amount / average)
+
+
+def _break_even(cost_per_unit, feepc, supply_per_unit):
+    """
+    The least a Unit can sell for to cover its cost and the supplies, after
+    fees: the home page's sum. None when fees take everything.
+    """
+    factor = 1 - feepc / 100
+    if factor <= 0:
+        return None
+    return round(cost_per_unit / factor + supply_per_unit, 2)
+
+
+def breakeven(period):
+    """
+    {"period", "all", "still_to_sell"}. "period" and "all" (all time) are
+    {"units", "cost_per_unit", "feepc", "supply_per_unit", "breakeven"}: the
+    break-even per Unit, which is also the least an average Unit can sell
+    for. All time is the home page's: every Lot's price over every Unit,
+    plus every supply over every Unit. The Period's is the cost of the Units
+    sold in it over those Units, plus the Period's supplies over them, with
+    the Period's fee %. "breakeven" is None when there are no Units to go on.
+
+    "still_to_sell" is {"outstanding", "average", "average_of", "units"}: what
+    all time has spent (Lots, supplies and Expenses) beyond its net sales,
+    the average net per Unit sold in the Period (or all time, "average_of"),
+    and the Units still to sell at that average to cover it.
+    """
+    loaded = _load()
+    load = _supplies_load()
+    inv = finance.Inventory()
+    everything = _figures(loaded, None, None)["total"]
+    here = _figures(loaded, period.start, period.end)["total"]
+    all_units = len(inv.units)
+    supply_all = _supply_figures(load, None, None)
+    supply_here = _supply_figures(load, period.start, period.end)
+
+    def block(units, cost, feepc, supplies):
+        per_cost = cost / units if units else 0.0
+        per_supply = supplies / units if units else 0.0
+        return {
+            "units": units,
+            "cost_per_unit": round(per_cost, 2),
+            "feepc": feepc,
+            "supply_per_unit": round(per_supply, 2),
+            "breakeven": _break_even(per_cost, feepc, per_supply) if units else None,
+        }
+
+    average, average_of = _average_net_per_unit(period)
+    outstanding = round(
+        everything["lots"]
+        + everything["supplies"]
+        + everything["expenses"]
+        - everything["net"],
+        2,
+    )
+    return {
+        "period": block(
+            supply_here["units_sold"],
+            here["cogs"],
+            here["feepc"],
+            here["supplies"],
+        ),
+        "all": block(
+            all_units, everything["lots"], everything["feepc"], supply_all["net"]
+        ),
+        "still_to_sell": {
+            "outstanding": max(outstanding, 0.0),
+            "average": average,
+            "average_of": average_of,
+            "units": _units_to_cover(outstanding, average),
+        },
     }

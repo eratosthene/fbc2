@@ -5,6 +5,8 @@
 <h2>Profit &amp; Loss <small>{{ period.label() }}</small></h2>
 {% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
 {% include "reports/_period.html" %}
+<p class="hidden-print"><a class="btn btn-default btn-xs" href="records?{{ period.query()|urlencode }}">Download every record as CSV</a>
+  <span class="text-muted">Sales Receipts, Lots, supply orders and Expenses in the period.</span></p>
 
 <h3>Sales</h3>
 <table class="table table-bordered table-condensed" style="width: auto">
@@ -65,6 +67,8 @@
 {% else %}
 <p>No records in this period.</p>
 {% endif %}
+
+{% include "reports/_breakeven.html" %}
 
 <h3>Other Items</h3>
 {% if other.receipts %}

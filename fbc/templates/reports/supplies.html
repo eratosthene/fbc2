@@ -1,0 +1,52 @@
+{% extends "appbuilder/base.html" %}
+{% from "reports/_macros.html" import money %}
+{% block content %}
+<h2>Supplies <small>{{ period.label() }}</small></h2>
+{% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
+{% include "reports/_period.html" %}
+
+<h3>Spending and use</h3>
+<div style="overflow-x: auto">
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th></th><th class="text-right">Total</th>{% for label, f in columns %}<th class="text-right">{{ label }}</th>{% endfor %}</tr>
+  {% for label, key, kind in [('Bought', 'bought', '$'), ('Less used on Other Items', 'other_used', '$'), ('Supplies in Profit &amp; Loss', 'net', '$'), ('Units sold', 'units_sold', 'n'), ('Supplies per Unit sold', 'per_unit', '$?'), ('Supplies used', 'used', 'n'), ('Cost of those used', 'used_cost', '$'), ('Used with no Cost Per Use', 'uncosted', 'n'), ('Cost used per Unit sold', 'used_per_unit', '$?')] %}
+  <tr>
+    <th>{{ label|safe }}</th>
+    {% for f in [total] + (columns|map(attribute=1)|list) %}
+    <td class="text-right">{% if kind == 'n' %}{{ f[key] }}{% elif kind == '$?' %}{% if f[key] is none %}-{% else %}{{ money(f[key]) }}{% endif %}{% else %}{{ money(f[key]) }}{% endif %}</td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<p class="text-muted">
+  <b>Bought</b> is the Purchase Orders' prices less the Expenses on them, by
+  the order's date. Supplies used on Other Items' sales come off, so
+  "Supplies in Profit &amp; Loss" is the supplies figure there. <b>Used</b> is
+  Ship This and Add Unit taking supplies out of stock for record sales (not
+  restocks or Supply List edits), counted since Supply Use was recorded. Its
+  cost needs a Cost Per Use on the Supply, so it is partial while some have none.
+</p>
+
+{% include "reports/_breakeven.html" %}
+
+<h3>By Supply</h3>
+{% if per_supply %}
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>Supply</th><th class="text-right">Ordered</th><th class="text-right">Used</th><th class="text-right">Cost per use</th><th class="text-right">Cost used</th><th class="text-right">In stock now</th></tr>
+  {% for r in per_supply %}
+  <tr>
+    <td>{{ r.supply.name }}</td>
+    <td class="text-right">{{ r.ordered }}</td>
+    <td class="text-right">{{ r.used }}</td>
+    <td class="text-right">{% if r.cost_per_use is none %}none set{% else %}{{ money(r.cost_per_use) }}{% endif %}</td>
+    <td class="text-right">{% if r.used_cost is none %}-{% else %}{{ money(r.used_cost) }}{% endif %}</td>
+    <td class="text-right">{{ r.in_stock }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="text-muted">Ordered is the quantity on Purchase Orders dated in the period (packs, as on the Supply List). Used leaves out Other Items.</p>
+{% else %}
+<p>No supplies were ordered or used in this period.</p>
+{% endif %}
+{% endblock %}

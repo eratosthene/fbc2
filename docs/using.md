@@ -911,7 +911,8 @@ category. Its total supply cost leaves out the Expenses on Purchase Orders.
 
 The Reports menu shows money for a chosen period, where the home page shows
 all time. It's being built in slices (issue #69); so far there are Profit &
-Loss, Inventory, Lots, Sales and Aging.
+Loss, Inventory, Lots, Sales, Aging and Supplies, with break-even figures and
+CSV downloads.
 
 ### The period
 
@@ -937,6 +938,10 @@ understood falls back to year to date, with a note.
 - **Expenses** by category, and the figures **by month or quarter**.
 - **Other Items** are never in the record figures. Their sales are shown apart,
   with a profit only for those that have a cost.
+- **Break-even** (see below).
+- **Download every record as CSV** gives one row for each Sales Receipt (Other
+  Items' marked as such), Purchase Lot, supply order (its price less its
+  Expenses) and Expense dated in the period, for an accountant.
 
 A Sales Receipt with no Units still counts in the sales, as in the home
 page's Sales by marketplace, so the report can differ from the home page's
@@ -1009,3 +1014,41 @@ Under it are the ten Purchase Lots bought six months or more before then that
 have the most cost still in stock: older stock is where money is tied up, and
 where a price drop is worth trying. Change "Old is ... months or more" above
 that list to use another age (`?old=9`, from 1 to 120).
+
+### Supplies
+
+What packing supplies cost and how many are used, for the whole period and by
+month or quarter.
+
+- **Bought** is the Purchase Orders' prices less the Expenses on them (those
+  are counted as Expenses), by the order's date. Supplies used on Other Items'
+  sales come off it, so "Supplies in Profit & Loss" is the supplies figure
+  there. **Per Unit sold** divides that by the Units sold in the period.
+- **Used** is Ship This and Add Unit taking supplies out of stock for record
+  sales, from Supply Use (so only since it was recorded; restocks and Supply
+  List edits aren't uses). Its **cost** needs a Cost Per Use on the Supply, so it
+  is partial while some have none; a row counts the uses that had none.
+- **By Supply:** for each Supply ordered or used in the period, how many were
+  ordered (packs, as on the Supply List), used and what that cost, and how many
+  are in stock now.
+
+### Break-even
+
+On Profit & Loss and Supplies. **Break-even per Unit** is the least an average
+Unit can sell for to cover its cost and its supplies, after fees: cost per Unit
+÷ (1 − fee %) + supplies per Unit. It's shown for all time, which is
+the home page's figure, and for the period, which uses the cost of the Units
+sold in it, that period's fee % and supplies. A short period can swing, so all
+time is the steadier one.
+
+It also says how many more Units the shop has to sell to break even as a
+whole: what all time has spent (Lots, supplies and Expenses) beyond its net
+sales, over the average net per Unit sold in the period (or in all time, if the
+period sold none). The Lots report has the same sum for each Lot, as "To break
+even": the Units still to sell to cover that Lot's price.
+
+### Downloading a report
+
+Every report has a **Download CSV** button for the period shown: the same
+table (for the reports with a column per month or quarter, a column for the
+total and one for each), with plain numbers (no $ or thousands commas).

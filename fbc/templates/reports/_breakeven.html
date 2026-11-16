@@ -1,0 +1,31 @@
+{% from "reports/_macros.html" import money %}
+<h3>Break-even</h3>
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th></th><th class="text-right">{{ "This period" if period.preset == "all" else period.label() }}</th><th class="text-right">All time</th></tr>
+  <tr><td>Units</td><td class="text-right">{{ breakeven.period.units }} sold</td><td class="text-right">{{ breakeven.all.units }}</td></tr>
+  <tr><td>Cost per Unit</td><td class="text-right">{{ money(breakeven.period.cost_per_unit) }}</td><td class="text-right">{{ money(breakeven.all.cost_per_unit) }}</td></tr>
+  <tr><td>Fee %</td><td class="text-right">{{ '%.2f'|format(breakeven.period.feepc) }}%</td><td class="text-right">{{ '%.2f'|format(breakeven.all.feepc) }}%</td></tr>
+  <tr><td>Supplies per Unit</td><td class="text-right">{{ money(breakeven.period.supply_per_unit) }}</td><td class="text-right">{{ money(breakeven.all.supply_per_unit) }}</td></tr>
+  <tr><th>Break-even per Unit</th>
+    <th class="text-right">{% if breakeven.period.breakeven is none %}-{% else %}{{ money(breakeven.period.breakeven) }}{% endif %}</th>
+    <th class="text-right">{% if breakeven.all.breakeven is none %}-{% else %}{{ money(breakeven.all.breakeven) }}{% endif %}</th></tr>
+</table>
+<p class="text-muted">
+  Break-even per Unit is the least an average Unit can sell for to cover its
+  cost and its supplies, after fees: cost per Unit &divide; (1 &minus; fee %)
+  + supplies per Unit. All time is the home page's figure. The period's uses
+  the cost of the Units sold in it, so a short period can swing; all time is
+  the steadier one.
+</p>
+{% set s = breakeven.still_to_sell %}
+{% if s.outstanding > 0 %}
+<p>
+  All time has spent {{ money(s.outstanding) }} (Lots, supplies and Expenses)
+  more than it has taken in as net sales.
+  {% if s.units is none %}There are no sales to say how many Units that is.
+  {% else %}At {{ money(s.average) }} net per Unit ({{ s.average_of }}), that is
+  <b>{{ s.units }} more Units to sell</b> to break even as a whole.{% endif %}
+</p>
+{% else %}
+<p>All time's net sales cover everything it has spent: the shop as a whole has broken even.</p>
+{% endif %}
