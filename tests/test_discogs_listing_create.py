@@ -14,6 +14,7 @@ from fbc.core import devmode
 from fbc.models.discogs import DiscogsInstance, DiscogsListing
 from fbc.models.ebay import EbayDraft, EbayListing
 from fbc.models.inventory import StorageBox
+from fake_pictures import give_pictures
 from test_discogs_listings import _item
 from test_listing import SETTINGS, _carnaval
 
@@ -413,6 +414,57 @@ def test_make_for_sale_shows_discogs_refusal_and_keeps_the_draft(client, fake):
     client.post("/discogslistingmodelview/makeforsale/7001")
 
     assert db.session.get(DiscogsListing, 7001).status == "Draft"
+
+
+def _show(client, listing_id=7001):
+    return client.get("/discogslistingmodelview/show/%d" % listing_id).get_data(
+        as_text=True
+    )
+
+
+def test_show_links_to_the_unit_and_has_a_closed_accordion_of_its_pictures(
+    client, fake
+):
+    unit = _unit()
+    _draft_on_discogs(fake, unit)
+    draft = EbayDraft(unit=unit, title="t", status="draft")
+    db.session.add(draft)
+    db.session.commit()
+    give_pictures(draft, ["https://i.ebayimg.com/a.jpg", "https://i.ebayimg.com/b.jpg"])
+
+    html = _show(client)
+
+    assert 'href="/unitmodelview/show/%d"' % unit.id in html
+    assert "/unitpictures/show/%d" % unit.id in html
+    assert "Pictures from the Unit (2)" in html
+    # Bootstrap opens a collapse only when it also has the "in" class.
+    assert 'id="unit-pictures-body" class="panel-collapse collapse"' in html
+    for n in (1, 2):
+        name = "unit-%d-%d.jpg" % (unit.id, n)
+        assert "/unitpictures/file/%d/%s" % (unit.id, name) in html
+    assert 'loading="lazy"' in html
+    assert "/unitpictures/zip/%d" % unit.id in html
+
+
+def test_show_links_to_the_unit_but_has_no_accordion_without_pictures(client, fake):
+    unit = _unit()
+    _draft_on_discogs(fake, unit)
+
+    html = _show(client)
+
+    assert 'href="/unitmodelview/show/%d"' % unit.id in html
+    assert "/unitpictures/show/%d" % unit.id in html
+    assert "unit-pictures-body" not in html
+
+
+def test_show_of_a_listing_with_no_unit_has_neither(client, fake):
+    db.session.add(DiscogsListing(listing_id=7002, status="For Sale"))
+    db.session.commit()
+
+    html = _show(client, 7002)
+
+    assert "/unitmodelview/show/" not in html
+    assert "unit-pictures-body" not in html
 
 
 def test_make_for_sale_only_answers_a_post(client, fake):
