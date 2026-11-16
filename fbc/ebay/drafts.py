@@ -69,7 +69,7 @@ def build_item(draft, settings, template=None):
             item.setdefault(key, value)
     if draft.best_offer:
         item["BestOfferDetails"] = {"BestOfferEnabled": "true"}
-    pictures = draft.picture_list()
+    pictures = draft.ebay_picture_urls()
     if pictures:
         item["PictureDetails"] = {"PictureURL": pictures}
     return item
@@ -284,7 +284,7 @@ def ensure_release_details(release):
 def check_ready(draft):
     """Problems fbc can spot before asking eBay; publishing needs none."""
     problems = []
-    if not draft.picture_list():
+    if not draft.stored_pictures():
         problems.append("Add at least one picture before publishing.")
     if draft.price is None:
         problems.append("Set a price.")

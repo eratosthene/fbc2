@@ -1,4 +1,3 @@
-import json
 import logging
 
 from flask_appbuilder import Model
@@ -279,7 +278,8 @@ class EbayDraft(Model):
     item_specifics = Column(Text)
     # Package weight in ounces, packing included.
     weight_oz = Column(Integer)
-    # JSON list of eBay-hosted picture URLs, in listing order.
+    # No longer used: a draft's pictures are its Unit's (UnitPicture), and
+    # each keeps its own eBay URL. Dropped in a later change (#140).
     pictures = Column(Text)
     status = Column(String(20), default="draft", index=True)
     # The last Verify/Publish outcome from eBay: errors, warnings and fees.
@@ -293,13 +293,19 @@ class EbayDraft(Model):
     def __repr__(self):
         return self.title
 
-    def picture_list(self):
-        if not self.pictures:
-            return []
-        return json.loads(self.pictures)
+    def stored_pictures(self):
+        """The Unit's pictures, the main one first; see fbc/pictures/store.py."""
+        from fbc.models.pictures import UnitPicture
 
-    def set_picture_list(self, urls):
-        self.pictures = json.dumps(urls)
+        return (
+            UnitPicture.query.filter_by(unit_id=self.unit_id)
+            .order_by(UnitPicture.position, UnitPicture.id)
+            .all()
+        )
+
+    def ebay_picture_urls(self):
+        """The eBay addresses of the stored pictures that have been uploaded."""
+        return [p.ebay_url for p in self.stored_pictures() if p.ebay_url]
 
     def fmt_price(self):
         if self.price is None:
@@ -307,7 +313,7 @@ class EbayDraft(Model):
         return "$" + f"{self.price:.2f}"
 
     def picture_count(self):
-        return len(self.picture_list())
+        return len(self.stored_pictures())
 
     def link_column(self):
         ret = (

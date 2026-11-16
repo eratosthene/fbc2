@@ -2,22 +2,22 @@
 {% block show_form %}
 {{ super() }}
 <hr>
-<h4>Pictures <small>{{ draft.picture_list()|length }} of 24. The first one is the main picture.</small></h4>
+<h4>Pictures <small>{{ pictures|length }} of 24. The first one is the main picture. They are kept on the Unit, so other marketplaces can use them too.</small></h4>
 <div class="row">
-  {% for url in draft.picture_list() %}
+  {% for picture in pictures %}
   <div class="col-xs-6 col-sm-3" style="margin-bottom: 15px">
-    <a href="{{ url }}"><img src="{{ url }}" class="img-responsive img-thumbnail"></a>
+    <a href="{{ url_for('EbayDraftModelView.picturefile', pk=draft.id, index=loop.index0) }}"><img src="{{ url_for('EbayDraftModelView.picturefile', pk=draft.id, index=loop.index0) }}" class="img-responsive img-thumbnail"></a>
     {% if draft.status == "draft" %}
     <form method="post" action="{{ url_for('EbayDraftModelView.picture', pk=draft.id, index=loop.index0, action='first') }}" style="display: inline">
       <button class="btn btn-xs btn-default" {% if loop.first %}disabled{% endif %}>Make main</button>
     </form>
     <form method="post" action="{{ url_for('EbayDraftModelView.picture', pk=draft.id, index=loop.index0, action='remove') }}" style="display: inline">
-      <button class="btn btn-xs btn-danger">Remove</button>
+      <button class="btn btn-xs btn-danger" title="Deletes it from the Unit, for every marketplace.">Remove</button>
     </form>
     {% set picture_index = loop.index0 %}
     {% for direction, label in (("left", "Rotate left"), ("right", "Rotate right")) %}
     <form method="post" action="{{ url_for('EbayDraftModelView.rotate', pk=draft.id, index=picture_index, direction=direction) }}" style="display: inline">
-      <button class="btn btn-xs btn-default" {% if dev_mode %}disabled title="Dev Mode is turned on, rotating pictures disabled."{% endif %}>{{ label }}</button>
+      <button class="btn btn-xs btn-default">{{ label }}</button>
     </form>
     {% endfor %}
     {% endif %}
@@ -25,13 +25,13 @@
   {% endfor %}
 </div>
 {% if draft.status == "draft" %}
-{% if dev_mode %}
-<p class="text-warning">Dev Mode is turned on, picture uploads disabled.</p>
+{% if not pictures_folder %}
+<p class="text-warning">PICTURES_DIR isn't set in config.py, so pictures can't be kept. See docs/production.md.</p>
 {% else %}
 <form id="picture-form" method="post" enctype="multipart/form-data" action="{{ url_for('EbayDraftModelView.pictures', pk=draft.id) }}" class="form-inline">
   <input type="file" name="pictures" accept="image/*" multiple class="form-control">
-  <button class="btn btn-default">Upload to eBay</button>
-  <p class="text-muted" id="picture-help" hidden>Turn a picture here before it goes to eBay, if it is sideways or upside down.</p>
+  <button class="btn btn-default">Add pictures</button>
+  <p class="text-muted" id="picture-help" hidden>Turn a picture here before it is added, if it is sideways or upside down.</p>
   <div id="picture-previews" class="row" style="margin-top: 10px"></div>
   <p class="text-danger" id="picture-error" hidden></p>
 </form>
@@ -150,7 +150,7 @@
       input.files = transfer.files;
       form.submit();
     }).catch(function (e) {
-      fail(e.message + " Nothing was uploaded.");
+      fail(e.message + " Nothing was added.");
       button.disabled = false;
       button.textContent = label;
     });

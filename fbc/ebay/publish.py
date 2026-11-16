@@ -4,18 +4,28 @@ import datetime
 import logging
 
 
-from fbc.ebay import api, drafts
+from fbc.ebay import api, drafts, pictures
 
 logger = logging.getLogger()
 
 
 def _listing_call(verb, draft):
-    """Run AddFixedPriceItem or its Verify twin for `draft`."""
+    """
+    Run AddFixedPriceItem or its Verify twin for `draft`, after sending eBay
+    any of its pictures it doesn't have.
+    """
+    uploaded = pictures.ensure_uploaded(draft)
+    if uploaded["errors"]:
+        return None, uploaded
     settings = api.listing_settings()
     template, summary = drafts.template_fields(settings)
     if summary["errors"]:
         return None, summary
-    return api._call(verb, {"Item": drafts.build_item(draft, settings, template)})
+    resp, summary = api._call(
+        verb, {"Item": drafts.build_item(draft, settings, template)}
+    )
+    summary["warnings"] = uploaded["warnings"] + summary["warnings"]
+    return resp, summary
 
 
 def verify_draft(draft):

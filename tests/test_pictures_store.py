@@ -24,9 +24,8 @@ def _png(size=(50, 40), mode="RGBA"):
 
 
 @pytest.fixture
-def folder(app, tmp_path, monkeypatch):
-    monkeypatch.setitem(app.config, "PICTURES_DIR", str(tmp_path / "pictures"))
-    return tmp_path / "pictures"
+def folder(pictures_folder):
+    return pictures_folder
 
 
 @pytest.fixture

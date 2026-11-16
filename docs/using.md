@@ -437,24 +437,39 @@ draft page says so too: that is eBay saying the free ones are used up.
 
 ### Pictures on an eBay Draft
 
-Pictures go to eBay's picture hosting when you choose them on the draft page,
-and the draft keeps only their eBay addresses. Files you choose show as small
-previews with Rotate left and Rotate right buttons, so a sideways or upside
-down photo can be turned before it is uploaded. The turning happens in your
-browser when you press Upload to eBay, and the turned copy is saved as a JPEG
-at high quality. A file the browser can't show has no buttons and is uploaded
-as it is. A photo that is only upright
-through its phone's orientation tag is turned upright first, so it doesn't
-come out sideways on eBay.
+A Unit's pictures are kept by fbc, on the server, not only on eBay (#140).
+They belong to the Unit, so a Discogs listing can use the same ones later;
+an eBay Draft shows and uses its Unit's pictures. For each picture fbc
+keeps the file you added and a copy shrunk to 2048 pixels on the long side,
+which is what goes to eBay. The folder they're in is `PICTURES_DIR`; without
+it the draft page says pictures can't be kept (see
+[Running fbc in production](production.md)).
 
-After upload, each picture has Rotate left and Rotate right buttons, next to Make main and
-Remove. fbc fetches the picture from eBay, turns it 90 degrees, uploads it as
-a new picture and puts it where the old one was. The old copy stays on eBay,
-unused. Each turn is saved again as a JPEG at high quality, so a picture
-turned many times loses a little. If the fetch or upload fails, the draft is
-left as it was and a message says why. This changes drafts only, not
-listings that are already published. Dev Mode turns the buttons off, since
-they reach eBay.
+Add pictures with the file chooser on the draft page and Add pictures. Files
+you choose show as small previews with Rotate left and Rotate right buttons, so
+a sideways or upside down photo can be turned first. The turning happens in
+your browser when you press Add pictures. A file the browser can't show has no
+buttons and is added as it is. A photo that is only upright through its phone's
+orientation tag is turned upright when it's kept, so it doesn't come out
+sideways. A file that isn't a picture is refused with a message and the others
+are still added. There can be up to 24.
+
+Nothing goes to eBay when you add a picture. **Check with eBay** and **Publish
+to eBay** first send eBay any picture it doesn't have, and then list the
+draft. A picture that fails to send stops the check or publish, with eBay's
+reason, and the ones that did send aren't sent again next time. fbc remembers
+the address eBay gives each picture, but only for 30 days, because it isn't known
+how long eBay keeps a picture no listing uses; an older one is sent
+again, which is harmless.
+
+Each picture has Make main, Remove and Rotate left and Rotate right buttons.
+Rotate turns the stored files 90 degrees (each turn is saved again at high
+quality, so a picture turned many times loses a little), and the turned
+picture is sent to eBay next time. Remove deletes the picture from the Unit,
+for every marketplace, and its files from the folder. These change drafts
+only, not listings that are already published. Adding, turning and removing
+pictures all work in Dev Mode, since they stay on this machine; only sending
+to eBay is turned off.
 
 ### Ship This
 

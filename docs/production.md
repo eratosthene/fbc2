@@ -185,8 +185,11 @@ database to the second. The pictures of a Unit that's deleted stay in the
 folder, and are small to keep.
 
 The `unit_picture` table comes with a migration, which the container runs
-when it starts. Nothing in the app uses it yet; eBay Drafts still use their
-own picture list until the next change.
+when it starts. eBay Drafts use a Unit's stored pictures, and send them to eBay
+when the draft is checked or published (see "Pictures on an eBay Draft" in
+[Using fbc](using.md)). A draft made before this change kept only eBay
+addresses, which fbc no longer reads, so such a draft shows no pictures
+until they are added again. There were none when this was written.
 
 ## Archiving
 
