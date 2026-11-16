@@ -1,25 +1,10 @@
 {% extends "appbuilder/base.html" %}
-{% macro money(x) %}{% if x < 0 %}-${{ '%.2f'|format(-x) }}{% else %}${{ '%.2f'|format(x) }}{% endif %}{% endmacro %}
+{% from "reports/_macros.html" import money %}
 {% macro mp_name(name) %}{{ name or 'Other' }}{% endmacro %}
 {% block content %}
 <h2>Profit &amp; Loss <small>{{ period.label() }}</small></h2>
 {% if period.notice %}<div class="alert alert-warning">{{ period.notice }} Showing {{ period.label() }}.</div>{% endif %}
-<p>
-  {% for key, label in presets %}
-  <a class="btn btn-xs {{ 'btn-primary' if period.preset == key else 'btn-default' }}"
-     href="?{{ {'period': key, 'group': period.group}|urlencode }}">{{ label }}</a>
-  {% endfor %}
-</p>
-<form class="form-inline" method="get" style="margin-bottom: 15px">
-  <label>From <input type="date" class="form-control input-sm" name="from" value="{{ period.start or '' }}"></label>
-  <label>to <input type="date" class="form-control input-sm" name="to" value="{{ period.end or '' }}"></label>
-  <label>Group by
-    <select class="form-control input-sm" name="group">
-      {% for key, label in groups %}<option value="{{ key }}" {{ 'selected' if period.group == key }}>{{ label }}</option>{% endfor %}
-    </select>
-  </label>
-  <button class="btn btn-default btn-sm" type="submit">Show</button>
-</form>
+{% include "reports/_period.html" %}
 
 <h3>Sales</h3>
 <table class="table table-bordered table-condensed" style="width: auto">

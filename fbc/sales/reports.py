@@ -1,6 +1,6 @@
 """
-The Reports: money for a chosen period, not for all time. Slice 1 is the
-period and the profit and loss; see issue #69 for the rest.
+The Reports: money for a chosen period, not for all time. So far the period,
+the profit and loss, the inventory and the Lots; see issue #69 for the rest.
 
 Plain Python over the database, like fbc.sales.finance, which it builds on:
 everything is loaded once and totalled in Python, so the number of queries
@@ -358,3 +358,134 @@ def profit_and_loss(period):
         else []
     )
     return result
+
+
+# --- Inventory ---------------------------------------------------------------
+
+
+def _stock_units():
+    """
+    ([(came in, went out, cost, retail)], flags): one entry per Unit that is
+    or was in stock. A Unit comes in on its Lot's date and goes out on its
+    Sales Receipt's date; a Unit with no Lot has no date to come in on, so it
+    is in stock from the beginning, at no cost. Cost is the Unit's share of its
+    Lot's price. `flags` counts the Units that don't fit, which are left out.
+    """
+    inv = finance.Inventory()
+    lots = {
+        lot_id: (day, price)
+        for lot_id, day, price in db.session.query(
+            PurchaseLot.id, PurchaseLot.date, PurchaseLot.price
+        )
+    }
+    receipt_dates = dict(db.session.query(SalesReceipt.id, SalesReceipt.date))
+    flags = {"unset": 0, "no_receipt": 0, "no_lot": 0, "sold_first": 0}
+    units = []
+    for u in inv.units:
+        if u.sold is None:
+            flags["unset"] += 1
+            continue
+        lot = lots.get(u.purchase_lot_id)
+        came_in = lot[0] if lot else None
+        cost = lot[1] / inv.units_per_lot[u.purchase_lot_id] if lot else 0.0
+        went_out = None
+        if u.sold:
+            went_out = receipt_dates.get(u.sales_receipt_id)
+            if went_out is None:
+                flags["no_receipt"] += 1
+                continue
+        if not lot:
+            flags["no_lot"] += 1
+        if came_in and went_out and went_out < came_in:
+            flags["sold_first"] += 1
+        units.append((came_in, went_out, cost, u.retail_price or 0.0))
+    return units, flags
+
+
+def _sum(units):
+    return {
+        "units": len(units),
+        "cost": round(sum(u[2] for u in units), 2),
+        "retail": round(sum(u[3] for u in units), 2),
+    }
+
+
+def _held_before(units, day):
+    """The Units in stock when `day` began; None for before everything."""
+    return [
+        u
+        for u in units
+        if (u[0] is None or (day is not None and u[0] < day))
+        and not (u[1] is not None and day is not None and u[1] < day)
+    ]
+
+
+def _stock_figures(units, start, end):
+    """Opening, bought, sold and closing stock for start to end."""
+    after = end + datetime.timedelta(days=1) if end else datetime.date.max
+    bought = [u for u in units if u[0] and _within(u[0], start, end)]
+    sold = [u for u in units if u[1] and _within(u[1], start, end)]
+    return {
+        "opening": _sum(_held_before(units, start)),
+        "bought": _sum(bought),
+        "sold": _sum(sold),
+        "closing": _sum(_held_before(units, after)),
+    }
+
+
+def inventory(period):
+    """
+    {"total", "columns", "flags"}: stock figures for the whole Period, and for
+    each of its columns ([(label, figures)]). Each figure is {"units", "cost",
+    "retail"}. Cost of goods sold is "sold"'s cost, as in profit_and_loss().
+    """
+    units, flags = _stock_units()
+    dates = [d for u in units for d in u[:2] if d]
+    first = period.start or (min(dates) if dates else None)
+    last = period.end or max([today(), *dates])
+    return {
+        "total": _stock_figures(units, period.start, period.end),
+        "columns": (
+            [
+                (label, _stock_figures(units, a, b))
+                for label, a, b in buckets(first, last, period.group)
+            ]
+            if first and first <= last
+            else []
+        ),
+        "flags": flags,
+    }
+
+
+# --- Lots --------------------------------------------------------------------
+
+
+def lots_report(period):
+    """
+    {"rows", "total"}: the Purchase Lots dated in the Period, newest first,
+    with the figures of the Purchase Lots list (all their sales so far, not
+    just the period's) and the cost of the Units still in stock.
+    """
+    lots = [
+        lot
+        for lot in db.session.query(PurchaseLot).order_by(PurchaseLot.date.desc())
+        if _within(lot.date, period.start, period.end)
+    ]
+    figures = finance.lot_figures(lots)
+    rows = []
+    for lot in lots:
+        f = dict(figures[lot.id])
+        f["lot"] = lot
+        f["stock_cost"] = (
+            round(f["instock"] * f["capital"] / f["units"], 2) if f["units"] else 0.0
+        )
+        rows.append(f)
+    total = {
+        k: sum(r[k] for r in rows)
+        for k in ("capital", "units", "sold_units", "instock", "gross", "net")
+    }
+    total["stock_cost"] = round(sum(r["stock_cost"] for r in rows), 2)
+    total["fees"] = round(total["gross"] - total["net"], 2)
+    total["profit"] = round(total["net"] - total["capital"], 2)
+    total["roi"] = finance.percent(total["profit"], total["capital"])
+    return {"rows": rows, "total": total}
