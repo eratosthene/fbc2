@@ -50,6 +50,9 @@ class EbayListing(Model):
     pick_from_box_id = Column(Integer, ForeignKey("storage_box.id"), index=True)
     pick_from_box = relationship("StorageBox")
     pick_count = Column(Integer)
+    # When End and park ended it to save an insertion (UTC). Null for every
+    # ordinary ending, such as a sale; see fbc/sync/ending.py end_and_park.
+    parked_at = Column(DateTime)
     # Hidden from the lists by default; see fbc/sales/archive.py.
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True

@@ -118,6 +118,27 @@ def renewal_time(item, fetched):
     return when
 
 
+def _month_renewal(start, saved, now, month_start, month_end):
+    """
+    When a listing that started at `start` renews in the month of `now`: one
+    renewal a month, on the start's day and Pacific time, or `saved` (eBay's
+    own date, see renewal_time) when that falls in the month. Whether it has
+    happened is for the caller to say.
+    """
+    local_now = to_pacific(now)
+    days_in_month = calendar.monthrange(local_now.year, local_now.month)[1]
+    local_start = to_pacific(start)
+    local_renewal = local_start.replace(
+        year=local_now.year,
+        month=local_now.month,
+        day=min(local_start.day, days_in_month),
+    )
+    renewal = local_renewal - pacific_offset_local(local_renewal)
+    if saved and month_start <= saved < month_end:
+        renewal = saved
+    return renewal
+
+
 def count_insertions(listings, now, limit=DEFAULT_LIMIT, adjustment=0):
     """
     This month's insertions, from `listings`: (start_time, end_time or None)
@@ -130,8 +151,6 @@ def count_insertions(listings, now, limit=DEFAULT_LIMIT, adjustment=0):
     the eBay app showed less fbc's own count, from calibrate().
     """
     month_start, month_end = month_bounds(now)
-    local_now = to_pacific(now)
-    days_in_month = calendar.monthrange(local_now.year, local_now.month)[1]
     used = due = 0
     for start, end, *more in listings:
         if start is None:
@@ -142,16 +161,7 @@ def count_insertions(listings, now, limit=DEFAULT_LIMIT, adjustment=0):
         # The start is an insertion of its own.
         if month_start <= start < month_end:
             events.append(start)
-        # Then one renewal a month, on the start's day and Pacific time.
-        local_start = to_pacific(start)
-        local_renewal = local_start.replace(
-            year=local_now.year,
-            month=local_now.month,
-            day=min(local_start.day, days_in_month),
-        )
-        renewal = local_renewal - pacific_offset_local(local_renewal)
-        if saved and month_start <= saved < month_end:
-            renewal = saved
+        renewal = _month_renewal(start, saved, now, month_start, month_end)
         if renewal > start:
             events.append(renewal)
         for t in events:
@@ -294,3 +304,83 @@ def uncovered_insertion_fee(result):
         if fee.get("name") == "InsertionFee" and fee.get("net", 0) > 0:
             return fee["net"]
     return None
+
+
+# How many listings to offer to end when Publish would go over the limit.
+END_CHOICES = 5
+
+
+def _end_pool(now):
+    """
+    The active listings that ending would save an insertion on: those whose
+    renewal is still to come this month (the same renewal count_insertions
+    uses). Each is a dict with the listing, its Unit (or None), `renews`, and
+    `views`, which is None, meaning unknown, until the views step (#208)
+    brings counts. Left out: mystery boxes, Other Items, archived and ended
+    listings, a listing with more than one Unit, and one whose Unit has sold.
+    """
+    from fbc import db
+    from fbc.models.ebay import EbayListing
+    from fbc.models.inventory import Unit
+    from fbc.models.other import OtherItem
+
+    month_start, month_end = month_bounds(now)
+    other = {
+        r[0]
+        for r in db.session.query(OtherItem.ebay_listing_id).filter(
+            OtherItem.ebay_listing_id.isnot(None)
+        )
+    }
+    units = {}
+    for unit in db.session.query(Unit).filter(Unit.ebay_listing_id.isnot(None)):
+        units.setdefault(unit.ebay_listing_id, []).append(unit)
+    pool = []
+    listings = (
+        db.session.query(EbayListing)
+        .filter(
+            EbayListing.ended.is_(False),
+            EbayListing.archived.is_(False),
+            EbayListing.start_time.isnot(None),
+        )
+        .all()
+    )
+    for listing in listings:
+        if listing.is_mystery_box() or listing.item_id in other:
+            continue
+        on_it = units.get(listing.item_id, [])
+        if len(on_it) > 1 or any(u.sold for u in on_it):
+            continue
+        renews = _month_renewal(
+            listing.start_time, listing.renews_at, now, month_start, month_end
+        )
+        if renews <= now or renews <= listing.start_time:
+            continue
+        pool.append(
+            {
+                "listing": listing,
+                "unit": on_it[0] if on_it else None,
+                "renews": renews,
+                "views": None,
+            }
+        )
+    return pool
+
+
+def end_candidates(now=None, count=END_CHOICES):
+    """
+    Up to `count` listings to offer to end to make room, each a dict (see
+    _end_pool). Fewest views first, ties to the sooner renewal, unknown views
+    after every known count and never read as 0. Until views are built they
+    are all unknown, so this is the soonest renewals.
+    """
+    now = now or localtime.utcnow()
+    pool = _end_pool(now)
+    pool.sort(
+        key=lambda c: (
+            c["views"] is None,
+            c["views"] or 0,
+            c["renews"],
+            c["listing"].item_id,
+        )
+    )
+    return pool[:count]

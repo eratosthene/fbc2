@@ -123,16 +123,32 @@ def _end_discogs(listing):
     return True, message
 
 
-def _end_ebay(listing):
-    """End an eBay listing: (ok, message)."""
+def _end_ebay(listing, park=False):
+    """End an eBay listing: (ok, message). With `park`, it was ended to save
+    an insertion and not because it sold, so parked_at says so; a listing
+    eBay says was already closed isn't ours to park."""
     from fbc import db
 
     ok, message = publish.end_listing(listing.item_id)
     if ok:
+        now = localtime.utcnow()
         listing.ended = True
-        listing.end_time = localtime.utcnow()
+        listing.end_time = now
+        if park and message != publish.ALREADY_ENDED:
+            listing.parked_at = now
         db.session.commit()
     return ok, message
+
+
+def end_and_park(listing):
+    """
+    End an active eBay listing by hand to make room for a new one (the Draft
+    page's End and park), and mark it parked. (ok, message). Only ever called
+    for a click: fbc never ends a listing for this on its own.
+    """
+    if listing.ended:
+        return False, "That listing had already ended."
+    return _end_ebay(listing, park=True)
 
 
 def _ebay_sales(listing_id, since):

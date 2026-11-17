@@ -77,6 +77,10 @@ def publish_draft(draft):
     return summary
 
 
+# What end_listing says when eBay had already closed the listing.
+ALREADY_ENDED = "eBay says it had already ended."
+
+
 def end_listing(item_id):
     """
     End an active fixed price listing on eBay because the Unit sold
@@ -92,5 +96,5 @@ def end_listing(item_id):
     errors = "; ".join(summary["errors"]) or "eBay gave no answer."
     # eBay's error 1047: the listing has closed, which is what's wanted.
     if "already been closed" in errors or "already ended" in errors.lower():
-        return True, "eBay says it had already ended."
+        return True, ALREADY_ENDED
     return False, errors

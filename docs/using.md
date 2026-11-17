@@ -436,6 +436,20 @@ shows a warning and needs Publish anyway ticked, but still goes ahead. If the
 last Check with eBay reported an insertion fee that no discount covered, the
 draft page says so too: that is eBay saying the free ones are used up.
 
+When that warning shows, the draft page also lists up to 5 active listings you
+could end first, in place of the bare warning. Only a listing whose renewal is
+still due this month is offered, since ending one saves that renewal and
+nothing else. Mystery boxes, Other Items, listings with more than one Unit,
+archived ones and ones whose Unit has sold are left out. Each row shows the
+title, price, age in days, when it renews (your timezone), whether the Unit
+is also on Discogs, and **End this one**. For now views are unknown, so the
+listings renewing soonest come first. **End this one** asks to confirm,
+ends the listing on eBay and marks it Parked (the date is kept in
+`parked_at`). A listing ended by a sale or by hand is never parked. fbc
+never ends a listing on its own. In Dev Mode the end is refused with the Dev
+Mode message. With no such listing, the page shows the warning and Publish
+anyway as before.
+
 ### Pictures on a Unit
 
 Every Unit has a **Pictures** page (#140): the Pictures link in the Units list's
