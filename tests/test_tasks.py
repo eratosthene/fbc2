@@ -376,7 +376,7 @@ def test_a_parked_listing_is_a_task_while_its_unit_is_unsold_and_unlisted():
 
 def test_the_parked_list_is_longest_out_first_with_the_marker_and_dates(client):
     _parked("100", days_ago=2, title="Newest Park")
-    _parked("200", days_ago=25, title="Oldest Park")
+    _parked("200", days_ago=85, title="Oldest Park")
     _parked("300", days_ago=10, title="Middle Park")
 
     html = client.get("/parkedlistingsview/list/").get_data(as_text=True)
@@ -386,28 +386,26 @@ def test_the_parked_list_is_longest_out_first_with_the_marker_and_dates(client):
         < html.index("Middle Park")
         < html.index("Newest Park")
     )
-    assert "25 days" in html and "2 days" in html
+    assert "85 days" in html and "2 days" in html
     assert "Unit 200" in html and "$12.50" in html
-    # 25 days out of 30 is 5 days from the re-list by date: soon.
+    # 85 days out of 90 is 5 days from the re-list by date: soon.
     row = html[html.index("Oldest Park") : html.index("Middle Park")]
     assert "re-list soon" in row
     assert "re-list soon" not in html[html.index("Middle Park") :]
-    # Reading only: no re-list button yet.
-    assert "Re-list</" not in html and "/relist" not in html
 
 
-def test_the_re_list_window_is_a_setting_with_a_default_of_30_days(client):
+def test_the_re_list_window_is_a_setting_with_a_default_of_90_days(client):
     from fbc.core import relist
 
     ended = datetime.datetime(2026, 1, 1)
-    assert relist.relist_by(ended) == datetime.datetime(2026, 1, 31)
+    assert relist.relist_by(ended) == datetime.datetime(2026, 4, 1)
     old = fbc.app.config.get("EBAY_RELIST_DAYS")
     try:
-        fbc.app.config["EBAY_RELIST_DAYS"] = 90
-        assert relist.relist_by(ended) == datetime.datetime(2026, 4, 1)
+        fbc.app.config["EBAY_RELIST_DAYS"] = 30
+        assert relist.relist_by(ended) == datetime.datetime(2026, 1, 31)
         for bad in (0, -5, "30", None, True):
             fbc.app.config["EBAY_RELIST_DAYS"] = bad
-            assert relist.window_days() == 30
+            assert relist.window_days() == 90
     finally:
         fbc.app.config.pop("EBAY_RELIST_DAYS", None)
         if old is not None:
@@ -419,9 +417,9 @@ def test_re_list_soon_is_within_a_week_of_the_re_list_by_date_or_past_it():
 
     now = datetime.datetime(2026, 6, 1)
     day = datetime.timedelta(days=1)
-    assert not relist.is_soon(now - 22 * day, now)
-    assert relist.is_soon(now - 23 * day, now)
-    assert relist.is_soon(now - 40 * day, now)
+    assert not relist.is_soon(now - 82 * day, now)
+    assert relist.is_soon(now - 83 * day, now)
+    assert relist.is_soon(now - 100 * day, now)
     assert not relist.is_soon(None, now)
     assert relist.days_out(now - 3 * day, now) == 3
 

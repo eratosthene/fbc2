@@ -207,6 +207,8 @@ def home_totals():
         )
     else:
         breakeven_per_unit = 0.0
+    listings = insertions.listing_summary()
+    waiting = tasks.stock_waiting()
     return {
         "stock_total": stock_total,
         "lots": lots,
@@ -222,9 +224,14 @@ def home_totals():
         "unit_total": unit_total,
         "box_totals": box_totals,
         "low_supplies": Supply.low_list(),
-        "listings": insertions.listing_summary(),
+        "listings": listings,
         "tasks": tasks.counts(),
-        "waiting": tasks.stock_waiting(),
+        "waiting": waiting,
+        "parked_suggestion": (
+            tasks.nothing_better_to_list(listings["room"], waiting["total"])
+            if listings["synced"]
+            else None
+        ),
         "marketplace_sales": marketplace_sales(),
         "other_sales": other_sales,
         "ytd": reports.year_to_date(),

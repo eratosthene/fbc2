@@ -75,18 +75,23 @@ work is done, so there is nothing to tick off:
 
 - **Orders to Ship**: eBay Orders that have no Sales Receipt yet. Use Ship This
   on each. Archived orders are left out.
+
 - **Discogs Orders to Ship**: Discogs Orders that aren't cancelled and have no
   Sales Receipt yet. Use Ship This on each.
+
 - **Listings to End by Hand**: a listing fbc tried to end and couldn't, after its
   Unit sold on the other marketplace (see "Selling on both eBay and Discogs").
   The home page shows these in a red banner of their own. The task clears
   when the listing is gone.
+
 - **Releases to Make Units**: Discogs Releases with more copies in your Discogs
   collection than unsold Units. Add a Unit for the new copy and price it. A
   copy that sold leaves the collection, so its sold Unit doesn't count.
+
 - **Units to Draft (eBay)**: unsold Units priced over $2, with no eBay Listing
   and no eBay Draft. (Cheaper Units go in the discount boxes.) Make an eBay
   Draft from the Unit.
+
 - **Parked Listings**: listings that End this one ended to make room (see
   "Active listings and free insertions" below), whose Unit hasn't sold and has no
   other listing. They are in the order they should be listed again: the one
@@ -95,15 +100,31 @@ work is done, so there is nothing to tick off:
   Unit, and **Re-list By**, the last day eBay lets it be re-listed. A row
   within a week of that date, or past it, says "re-list soon"; that doesn't
   change the order. The re-list window is `EBAY_RELIST_DAYS` in `config.py`
-  (30 days unless set; whether eBay's real limit is 30 or 90 is still being
-  checked). For now the list only shows what is waiting: there is no re-list
-  button yet.
+  (90 days unless set, which is what eBay's docs say; eBay accepted a
+  re-list of a listing that ended 83 days before).
+
+  Each row has a **Re-list** button, which asks to confirm. Inside the window
+  it re-lists the old listing on eBay (this uses a free insertion, like any new
+  listing), and fbc links the new listing to the Unit and its last eBay Draft
+  at once. Past the window, or if eBay refuses, it makes a new eBay Draft for the
+  Unit instead and opens it, starting from the title, description, item
+  specifics and price of the Unit's last Draft (or built from the Unit if it
+  has none), for you to finish and publish. In Dev Mode the re-list is refused.
+  fbc never re-lists by itself.
+
+  When the home page's Listings block shows more free insertions left than
+  Units waiting, it also names the listing that has been off eBay longest, as
+  "Nothing better to list". New stock always comes first: with as many Units
+  waiting as free insertions, it says nothing.
+
 - **Drafts to List (eBay)**: eBay Drafts that aren't published yet. Take the
   pictures and publish.
+
 - **Units to Draft (Discogs)**: unsold Units priced over $2 that are in your
   Discogs collection and have no Discogs Draft or For Sale listing. Press List
   on Discogs on the Unit. A Unit that is on eBay shows here too, since it can
   be sold in both places; List on Discogs warns you about it.
+
 - **Drafts to List (Discogs)**: Discogs listings that are still a Draft. Add
   the pictures on Discogs, then press Make it For Sale. It leaves the list
   once Sync Discogs Listings sees it is For Sale.

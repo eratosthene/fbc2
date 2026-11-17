@@ -162,21 +162,6 @@ os.environ.setdefault("FBC_SKIP_VIEWS", "1")
 from fbc import app, db
 ```
 
-`scripts/spike_relist.py` is a one-off for #208: it asks eBay, for ended
-listings of different ages, whether a re-list would be accepted
-(`VerifyRelistFixedPriceItem`, which creates no listing and uses no
-insertion), how each ended, and what fees it would show. That settles
-`EBAY_RELIST_DAYS` and which ending reason allows a re-list. It only reads (it
-refuses to send anything but `GetItem` and the Verify call), saves nothing and
-prints no tokens. It needs the live `config.py` and dev mode off (dev mode
-refuses). From `scripts/`:
-
-```bash
-pipenv run python spike_relist.py
-```
-
-Delete it once the re-list button is built.
-
 A new `flask` command that doesn't need the views goes in
 `SKIP_VIEWS_COMMANDS` in `fbc/__init__.py`; it can't set the variable itself,
 as the app is imported first.

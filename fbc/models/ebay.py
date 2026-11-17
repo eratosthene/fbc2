@@ -98,6 +98,21 @@ class EbayListing(Model):
             return Markup("{} <strong>(re-list soon)</strong>").format(text)
         return text
 
+    def fmt_relist_button(self):
+        try:
+            from flask_wtf.csrf import generate_csrf
+
+            token = generate_csrf()
+        except Exception:
+            token = ""
+        return Markup(
+            '<form method="post" action="{}" style="display: inline"'
+            " onsubmit=\"return confirm('Re-list this on eBay? It uses an"
+            " insertion.')\">"
+            '<input type="hidden" name="csrf_token" value="{}">'
+            '<button class="btn btn-sm btn-default">Re-list</button></form>'
+        ).format(url_for("ParkedListingsView.relist", item_id=self.item_id), token)
+
     def fmt_parked_unit(self):
         from fbc import db
         from fbc.models.inventory import Unit

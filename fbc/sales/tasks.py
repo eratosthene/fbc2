@@ -123,6 +123,29 @@ def ids_parked_listings():
     )
 
 
+def first_parked():
+    """The listing the Parked Listings queue puts first (the longest out), or None."""
+    from fbc import db
+    from fbc.models.ebay import EbayListing
+
+    return db.session.scalars(
+        sa.select(EbayListing)
+        .where(EbayListing.item_id.in_(ids_parked_listings()))
+        .order_by(EbayListing.parked_at, EbayListing.item_id)
+        .limit(1)
+    ).first()
+
+
+def nothing_better_to_list(room, waiting_total):
+    """
+    The parked listing to suggest re-listing, only when there are more free
+    insertions left than Units waiting: new stock always comes first (#208).
+    """
+    if room is None or room <= waiting_total:
+        return None
+    return first_parked()
+
+
 def ids_drafts_to_list():
     from fbc.models.ebay import EbayDraft
 

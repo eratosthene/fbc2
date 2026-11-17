@@ -197,10 +197,9 @@ ARCHIVE_AFTER_DAYS = {
 }
 
 # How many days after a listing ended eBay still lets it be re-listed. The
-# Parked Listings task counts its "re-list by" date from this. 30 is the
-# owner's belief; eBay's API docs say 90. The spike scripts/spike_relist.py
-# finds out (see "Spikes" in docs/development.md); set it to what it shows.
-# EBAY_RELIST_DAYS = 30
+# Parked Listings task counts its "re-list by" date from this. eBay's API docs
+# say 90, and eBay accepted a re-list of one that ended 83 days before.
+# EBAY_RELIST_DAYS = 90
 
 # ebay settings
 EBAY_SETTINGS = {
