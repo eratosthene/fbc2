@@ -98,3 +98,60 @@ def end_listing(item_id):
     if "already been closed" in errors or "already ended" in errors.lower():
         return True, ALREADY_ENDED
     return False, errors
+
+
+def relist_listing(listing):
+    """
+    Re-list an ended fixed price listing with RelistFixedPriceItem, which
+    makes a new listing (and uses an insertion) under a new ItemID, then link
+    it in fbc straight away: a new EbayListing, the old one's unsold Units and
+    its last eBay Draft pointed at it, and `parked_at` cleared on the old one
+    (it is no longer waiting). Returns (new item id or None, summary); on
+    failure nothing is changed. Goes through api._call, so Dev Mode refuses.
+    """
+    from fbc import db
+    from fbc.models.ebay import EbayDraft, EbayListing
+    from fbc.models.inventory import Unit
+
+    resp, summary = api._call(
+        "RelistFixedPriceItem", {"Item": {"ItemID": listing.item_id}}
+    )
+    if resp is None or summary["errors"] or not resp.get("ItemID"):
+        if not summary["errors"]:
+            summary["errors"].append("eBay gave no new listing.")
+        return None, summary
+    item_id = resp["ItemID"]
+    start_time = None
+    if resp.get("StartTime"):
+        start_time = datetime.datetime.strptime(
+            resp["StartTime"], "%Y-%m-%dT%H:%M:%S.%fZ"
+        )
+    new = db.session.get(EbayListing, item_id)
+    if new is None:
+        new = EbayListing(
+            item_id=item_id,
+            title=listing.title,
+            price=listing.price,
+            url="https://www.ebay.com/itm/" + item_id,
+            start_time=start_time,
+            category_id=listing.category_id,
+        )
+        db.session.add(new)
+        db.session.flush()
+    db.session.query(Unit).filter_by(ebay_listing_id=listing.item_id).filter(
+        Unit.sold.isnot(True)
+    ).update({"ebay_listing_id": item_id})
+    draft = (
+        db.session.query(EbayDraft)
+        .filter_by(ebay_listing_id=listing.item_id)
+        .order_by(EbayDraft.id.desc())
+        .first()
+    )
+    if draft is not None:
+        draft.ebay_listing_id = item_id
+        draft.status = "published"
+    listing.parked_at = None
+    db.session.commit()
+    logger.info("Re-listed " + listing.item_id + " as " + item_id)
+    summary["source"] = "relist"
+    return item_id, summary

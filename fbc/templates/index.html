@@ -78,6 +78,14 @@
     Next month starts with {{ listings.next_projected }} renewal{{ "" if listings.next_projected == 1 else "s" }}
     ({{ [listings.next_room, 0] | max }} of {{ listings.limit }} free insertions left).
   </p>
+  {% if parked_suggestion %}
+  <p>
+    <strong>Nothing better to list:</strong> there is room for more than the
+    Units waiting. The listing that has been off eBay longest is
+    <a href="{{ url_for('ParkedListingsView.list') }}">{{ parked_suggestion.title }}</a>,
+    out {{ parked_suggestion.fmt_out_for() }}.
+  </p>
+  {% endif %}
   {% call lib.accordion_tag("calibrateinsertions","Calibrate with the eBay app", False) %}
   <form method="post" action="{{ url_for('MyIndexView.calibrateinsertions') }}" class="form-inline">
     <label for="remaining">The eBay app shows</label>

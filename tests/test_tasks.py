@@ -392,8 +392,6 @@ def test_the_parked_list_is_longest_out_first_with_the_marker_and_dates(client):
     row = html[html.index("Oldest Park") : html.index("Middle Park")]
     assert "re-list soon" in row
     assert "re-list soon" not in html[html.index("Middle Park") :]
-    # Reading only: no re-list button yet.
-    assert "Re-list</" not in html and "/relist" not in html
 
 
 def test_the_re_list_window_is_a_setting_with_a_default_of_30_days(client):

@@ -20,7 +20,14 @@ def spike():
 
 @pytest.mark.parametrize(
     "verb",
-    ["RelistFixedPriceItem", "EndFixedPriceItem", "AddFixedPriceItem", "ReviseItem"],
+    [
+        "RelistFixedPriceItem",
+        "RelistItem",
+        "VerifyRelistFixedPriceItem",
+        "EndFixedPriceItem",
+        "AddFixedPriceItem",
+        "ReviseItem",
+    ],
 )
 def test_it_refuses_to_send_anything_but_a_verify_or_a_read(spike, monkeypatch, verb):
     sent = []

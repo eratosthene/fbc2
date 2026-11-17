@@ -396,13 +396,13 @@ class EbayListingModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView
 class ParkedListingsBaseView(CustomModelView):
     """
     eBay Listings that End and park ended (the Parked listings Task, see
-    fbc/views/tasks.py). Read only for now: re-listing is by hand. Longest
+    fbc/views/tasks.py). The Re-list button is the only change it makes. Longest
     out first, so the one that has waited longest is at the top; "re-list
     soon" is only a marker and never changes the order.
     """
 
     datamodel = SQLAInterface(EbayListing)
-    base_permissions = ["can_list"]
+    base_permissions = ["can_list", "can_relist"]
     base_order = ("parked_at", "asc")
     list_columns = [
         "title",
@@ -411,14 +411,42 @@ class ParkedListingsBaseView(CustomModelView):
         "fmt_out_for",
         "fmt_parked_unit",
         "fmt_relist_by",
+        "fmt_relist_button",
     ]
     label_columns = {
+        "fmt_relist_button": "",
         "fmt_price": "Price",
         "fmt_parked_at": "Ended",
         "fmt_out_for": "Out For",
         "fmt_parked_unit": "Unit",
         "fmt_relist_by": "Re-list By",
     }
+
+    @expose("/relist/<item_id>", methods=["POST"])
+    @has_access
+    def relist(self, item_id):
+        """
+        Re-list one parked listing, or make a Draft for its Unit when eBay
+        won't (fbc/sales/relisting.py). Only a listing in the queue.
+        """
+        from fbc import db
+        from fbc.sales import relisting, tasks
+
+        listing = db.session.get(EbayListing, item_id)
+        if listing is None or not db.session.scalar(
+            tasks.ids_parked_listings().where(EbayListing.item_id == item_id)
+        ):
+            abort(404)
+        result = relisting.relist_or_draft(listing)
+        outcome = result["outcome"]
+        flash(
+            result["message"], "danger" if outcome == relisting.REFUSED else "success"
+        )
+        for text in result.get("warnings") or []:
+            flash(text, "warning")
+        if outcome == relisting.DRAFTED:
+            return redirect(url_for("EbayDraftModelView.show", pk=result["draft"].id))
+        return redirect(url_for(self.__class__.__name__ + ".list"))
 
 
 class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):

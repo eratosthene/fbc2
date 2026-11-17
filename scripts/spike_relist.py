@@ -1,8 +1,11 @@
 """
-Throwaway spike for #208 step 4: does eBay accept a re-list of an ended
+Throwaway spike for #208 step 4 (second version: the first asked for
+VerifyRelistFixedPriceItem, which eBay says doesn't exist; this asks for
+VerifyRelistItem, which may or may not accept a fixed price listing, and
+that is part of what it finds out): does eBay accept a re-list of an ended
 listing, and for how long after it ended? Read-only: for each ended listing
 it makes two calls, GetItem (how it ended, and whether it was already
-re-listed) and VerifyRelistFixedPriceItem, which has eBay check a re-list
+re-listed) and VerifyRelistItem, which has eBay check a re-list
 without creating a listing or using an insertion. It never calls
 RelistFixedPriceItem or any end, add or revise call (the script refuses to
 send any other), saves nothing to the database or to a file, and prints no
@@ -35,6 +38,7 @@ lengths and fees, never the access token or the refresh token. At most about
 """
 
 import argparse
+import datetime
 import json
 import os
 import sys
@@ -54,7 +58,7 @@ context = app.app_context()
 context.push()
 
 # The only calls this script may send. Anything else is a bug and stops it.
-ALLOWED = {"GetItem", "VerifyRelistFixedPriceItem"}
+ALLOWED = {"GetItem", "VerifyRelistItem"}
 
 calls = 0
 
@@ -88,8 +92,13 @@ def pick(limit):
         step = (len(items) - 1) / (n - 1) if n > 1 else 0
         return [items[round(i * step)] for i in range(n)]
 
+    # eBay stops answering for listings ended long ago, and fbc's end dates are
+    # rough, so the most recent ones are always tried, then a spread of the rest.
     keep = spread(parked, limit)
-    keep += spread(others, max(limit - len(keep), 0))
+    recent = others[-min(15, max(limit - len(keep), 0)) :] if others else []
+    keep += recent
+    older = others[: len(others) - len(recent)]
+    keep += spread(older, max(limit - len(keep), 0))
     return sorted(keep, key=lambda r: r.parked_at or r.end_time)
 
 
@@ -119,9 +128,19 @@ def get_item(item_id):
     }, None
 
 
+def real_end(info):
+    """eBay's EndTime as a naive UTC datetime, or None."""
+    if not info or not info.get("end"):
+        return None
+    try:
+        return datetime.datetime.strptime(info["end"], "%Y-%m-%dT%H:%M:%S.%fZ")
+    except ValueError:
+        return None
+
+
 def verify(item_id):
-    """(accepted?, errors, warnings, fees) from VerifyRelistFixedPriceItem."""
-    resp, summary = call("VerifyRelistFixedPriceItem", {"Item": {"ItemID": item_id}})
+    """(accepted?, errors, warnings, fees) from VerifyRelistItem."""
+    resp, summary = call("VerifyRelistItem", {"Item": {"ItemID": item_id}})
     accepted = resp is not None and not summary["errors"]
     return accepted, summary["errors"], summary["warnings"], summary
 
@@ -183,6 +202,11 @@ def main():
             )
         )
         info, error = get_item(row.item_id)
+        real = real_end(info)
+        if real:
+            # fbc's own end date is only "no later than"; eBay's is exact.
+            days = (now - real).days
+            say("   eBay's own end time puts it at %d days ago" % days)
         if info is None:
             say("   GetItem failed:", error)
             info = {"reason": "(unknown)", "end": None, "relisted_as": None}
