@@ -102,13 +102,10 @@ Record chooses that folder for you on its add-to-Discogs form, and nothing is
 added or moved on Discogs until you press that form's button. Run Sync Discogs
 first if a folder you made on Discogs isn't offered.
 
-The Purchase Lots list shows each lot's Units, how many are sold, its
-Profit and its B/E (the price a Unit must sell for to cover the lot after
-fees). Open a lot for its Breakdown. These come from the same maths as the
-home page's Purchase Lots table, so the two always agree: a Sales Receipt's
-money is split between its Units, and a lot's price evenly between its
-Units. Fee % and ROI are percents, and B/E is worked out from the lot's own
-fee %.
+The Purchase Lots list and a lot's page show no money figures. Reports >
+Lots has them for every lot (price, Units, sold, profit, ROI and a forecast),
+and a lot's page links to it. A Sales Receipt's money is split between its
+Units, and a lot's price evenly between its Units.
 
 Adding a Unit without a Retail Price still saves it, but warns, with a link to
 edit the Unit and add one.
@@ -116,7 +113,7 @@ edit the Unit and add one.
 ### Archiving
 
 Old, finished records can be archived so the long lists leave them out. It
-only changes the lists. The home page, Purchase Lot figures and earnings
+only changes the lists. The home page, the Lots report and earnings
 totals still count archived records, so no money figure changes.
 
 The Units, eBay Listings, eBay Orders, Discogs Orders and Sales Receipts lists
@@ -675,7 +672,7 @@ and marks them sold, takes out supplies for all of them and removes each
 Unit's own copy from Discogs. The receipt's price is split evenly over the
 Units.
 
-Sales > Mystery Boxes, and the listing's page, show how many
+Sales > Mystery Boxes shows how many
 more boxes the Storage Box can fill: its unsold Units without a listing of
 their own, divided by the Units per sale, rounded down. eBay keeps selling as
 many boxes as the listing's quantity says, so lower the quantity on eBay when
@@ -976,8 +973,8 @@ treated:
 
 ### Lots
 
-The Purchase Lots bought in the period, newest first, with the Purchase Lots
-list's figures: price, Units, cost per Unit, sold, in stock, the cost of what's
+The Purchase Lots bought in the period, newest first, with the same
+figures the home page uses: price, Units, cost per Unit, sold, in stock, the cost of what's
 still in stock, Sold For, Net Sold, profit and ROI, and a totals row. Their
 sales are all the sales so far, not just the period's, because a Lot's result
 isn't known until it's sold. Click a heading to sort.

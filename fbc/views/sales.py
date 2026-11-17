@@ -336,7 +336,6 @@ class EbayListingModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView
         "fmt_url": "URL",
         "pick_from_box": "Mystery Box: Pick From Storage Box",
         "pick_count": "Mystery Box: Units Per Sale",
-        "fmt_boxes_available": "Mystery Boxes Available",
     }
     description_columns = {
         "pick_from_box": "For a mystery box listing: the Storage Box its Units are"
@@ -353,7 +352,6 @@ class EbayListingModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView
         "ended",
         "pick_from_box",
         "pick_count",
-        "fmt_boxes_available",
     ]
     add_columns = [
         "item_id",

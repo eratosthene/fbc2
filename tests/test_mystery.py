@@ -72,7 +72,7 @@ def test_boxes_available_counts_unsold_units_without_their_own_listing(app):
 
     # 12, less one sold and one on an active listing; the ended one counts.
     assert len(mystery.available_units(box.id)) == 10
-    assert listing.fmt_boxes_available() == 2
+    assert mystery.boxes_available(listing) == 2
     assert [x.item_id for x in mystery.active_listings()] == ["900"]
     listing.ended = True
     db.session.commit()

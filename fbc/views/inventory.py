@@ -182,10 +182,6 @@ class PurchaseLotModelView(CustomModelView):
         "purchase_price",
         "folder",
         "notes",
-        "list_total",
-        "list_sold",
-        "list_profit",
-        "list_breakeven",
     ]
     show_columns = [
         "name",
@@ -193,26 +189,9 @@ class PurchaseLotModelView(CustomModelView):
         "purchase_price",
         "folder",
         "notes",
-        "breakdown",
     ]
-    label_columns = {
-        "folder": "Discogs Folder",
-        "breakdown": "Breakdown",
-        "list_total": "Units",
-        "list_sold": "Sold",
-        "list_profit": "Profit",
-        "list_breakeven": "B/E",
-    }
-
-    def _get_list_widget(self, *args, **kwargs):
-        # Work every lot's figures out once, rather than a set of queries
-        # per row. They live in g, so for this request only, and the rows
-        # are read from them as the page renders, after this returns.
-        from flask import g
-        from fbc.sales import finance
-
-        g.lot_figures = finance.lot_figures()
-        return super()._get_list_widget(*args, **kwargs)
+    label_columns = {"folder": "Discogs Folder"}
+    show_template = "crud/purchase_lot_show.html"
 
 
 class StorageBoxModelView(CustomModelView):

@@ -1,6 +1,6 @@
 """
-The money maths for Purchase Lots, shared by the home page and the
-Purchase Lots list and Breakdown, and for the Reports to build on.
+The money maths for Purchase Lots, shared by the home page and
+the Reports.
 
 This is plain Python over the database: nothing here knows about views or
 requests, so keep it that way. It loads the columns it needs once, and
@@ -111,10 +111,7 @@ def lot_figures(lots=None, inventory=None):
     """
     {lot id: figures} for `lots` (all of them when None). Figures:
     capital, units, sold_units, instock, perunit (capital per Unit, to the
-    cent), gross (sold for), net, fees, feepc, profit, roi, breakeven (the
-    price a Unit must sell for to cover the lot after fees, per Unit),
-    retail_total, avg_sold_price, potential_profit, avg_profit_per_unit and
-    likely_profit.
+    cent), gross (sold for), net, fees, feepc, profit and roi.
     """
     if lots is None:
         lots = db.session.query(PurchaseLot).all()
@@ -130,9 +127,6 @@ def lot_figures(lots=None, inventory=None):
             "perunit": round(lot.price / count, 2) if count else 0,
             "gross": 0,
             "net": 0,
-            "retail_total": 0.0,
-            "_gross_of_sold": 0.0,
-            "_sold_with_sale": 0,
         }
     for u in inv.units:
         f = figures.get(u.purchase_lot_id)
@@ -142,33 +136,14 @@ def lot_figures(lots=None, inventory=None):
             f["sold_units"] += 1
         if u.sold is False:
             f["instock"] += 1
-        if u.retail_price:
-            f["retail_total"] += u.retail_price
         sale = inv.sale(u)
         if sale:
             f["gross"] += sale[0]
             f["net"] += sale[1]
-            if u.sold:
-                f["_gross_of_sold"] += sale[0]
-                f["_sold_with_sale"] += 1
     for lot in lots:
         f = figures[lot.id]
         f["fees"] = round(f["gross"] - f["net"], 2)
         f["feepc"] = percent(f["fees"], f["gross"])
         f["profit"] = round(f["net"] - lot.price, 2)
         f["roi"] = percent(f["profit"], lot.price) if lot.price > 0 else 0.0
-        fee_factor = 1 - f["feepc"] / 100
-        if f["units"] and fee_factor > 0:
-            f["breakeven"] = lot.price / f["units"] / fee_factor
-        else:
-            f["breakeven"] = 0
-        # Average over the sold Units that have a receipt.
-        sold_with_sale = f.pop("_sold_with_sale")
-        gross_of_sold = f.pop("_gross_of_sold")
-        f["avg_sold_price"] = gross_of_sold / sold_with_sale if sold_with_sale else 0
-        f["potential_profit"] = (
-            f["retail_total"] - f["retail_total"] * f["feepc"] / 100 - lot.price
-        )
-        f["avg_profit_per_unit"] = f["avg_sold_price"] - f["breakeven"]
-        f["likely_profit"] = f["units"] * f["avg_profit_per_unit"]
     return figures

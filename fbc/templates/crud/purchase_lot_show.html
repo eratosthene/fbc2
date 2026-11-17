@@ -1,0 +1,5 @@
+{% extends "crud/show.html" %}
+{% block show_form %}
+{{ super() }}
+<p><a href="{{ url_for('LotsReportView.report', period='all') }}" class="btn btn-default">Profit, ROI and the rest of this Lot's figures: Reports &gt; Lots</a></p>
+{% endblock %}

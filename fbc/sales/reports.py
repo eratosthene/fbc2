@@ -560,7 +560,7 @@ def _stock_chart(columns):
 def lots_report(period):
     """
     {"rows", "total"}: the Purchase Lots dated in the Period, newest first,
-    with the figures of the Purchase Lots list (all their sales so far, not
+    with the figures of finance.lot_figures (all their sales so far, not
     just the period's), the cost of the Units still in stock, "forecast" and
     "shop_rate_only" (see _forecasts()) and "to_break_even",
     the Units still to sell to cover the Lot's price (see breakeven()).

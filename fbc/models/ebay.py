@@ -70,14 +70,6 @@ class EbayListing(Model):
     def is_mystery_box(self):
         return bool(self.pick_from_box_id and self.pick_count)
 
-    def fmt_boxes_available(self):
-        """How many more mystery boxes the Storage Box can fill, or blank."""
-        from fbc.ebay import mystery
-
-        if not self.is_mystery_box():
-            return ""
-        return mystery.boxes_available(self)
-
 
 class InsertionCalibration(Model):
     """
