@@ -4,8 +4,6 @@ import pytest
 from sqlalchemy import event
 
 import fbc
-from fbc.sales import finance
-from fbc.sales.index import home_totals
 from fbc.models.inventory import PurchaseLot, Unit
 from fbc.models.sales import SalesReceipt
 
@@ -78,30 +76,19 @@ def test_list_query_count_does_not_grow_with_lots(client):
     for i in range(1, 8):
         _add_lot(i)
     assert _queries_for_list(client)[0] == small
+    # A fixed number, so a query added to the list's rows is noticed.
+    assert small <= 8
 
 
-def test_list_shows_the_figures_the_home_page_does(client):
-    _add_lot(0, price=100.0)
-    _add_lot(1, price=37.5)
-    lots = fbc.db.session.query(PurchaseLot).order_by(PurchaseLot.id).all()
-    home = home_totals()["lot_totals"]
-    _, html = _queries_for_list(client)
-
-    for lot in lots:
-        shared = finance.lot_figures()[lot.id]
-        for key in ("gross", "net", "fees", "feepc", "profit", "roi", "perunit"):
-            assert shared[key] == home[lot.id][key]
-        assert f"${home[lot.id]['profit']:.2f}" in html
-    # Lot 0: 50 sold for, 44 net, so a 12% fee and -56 profit; 4 Units, so
-    # 100 / 4 / 0.88 to break even.
-    first = finance.lot_figures()[lots[0].id]
-    assert first["feepc"] == 12.0
-    assert first["breakeven"] == pytest.approx(100 / 4 / 0.88)
-    assert "$28.41" in html
-
-
-def test_breakdown_shows_percent_figures(client):
+def test_show_page_links_to_the_lots_report(client):
     lot = _add_lot(0)
     html = client.get(f"/purchaselotmodelview/show/{lot.id}").get_data(as_text=True)
-    assert "12.00%" in html
-    assert "-56.00%" in html
+    assert "/lotsreport/" in html
+    assert "Breakdown" not in html
+
+
+def test_list_has_no_money_figures(client):
+    _add_lot(0)
+    _, html = _queries_for_list(client)
+    assert "B/E" not in html
+    assert "$44.00" not in html

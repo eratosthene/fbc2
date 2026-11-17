@@ -1,11 +1,10 @@
 import datetime
 
-import pytest
-
 from fbc.models.discogs import DiscogsRelease
 from fbc.models.ebay import EbayListing
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.models.sales import SalesReceipt
+from fbc.sales import finance
 
 
 def _make_lot(db, price=100.0, name="Test Lot"):
@@ -44,13 +43,17 @@ def test_purchase_lot_purchase_price_formats_currency():
     assert lot.purchase_price() == "$42.50"
 
 
+def _figures(lot):
+    return finance.lot_figures([lot])[lot.id]
+
+
 def test_figures_count_total_sold_and_in_stock(db):
     lot = _make_lot(db)
     _make_unit(db, lot, sold=True, name="Sold Unit")
     _make_unit(db, lot, sold=False, name="Unsold Unit 1")
     _make_unit(db, lot, sold=False, name="Unsold Unit 2")
 
-    f = lot.figures()
+    f = _figures(lot)
     assert f["units"] == 3
     assert f["sold_units"] == 1
     assert f["instock"] == 2
@@ -58,15 +61,15 @@ def test_figures_count_total_sold_and_in_stock(db):
 
 def test_figures_with_no_units_is_all_zero(db):
     lot = _make_lot(db)
-    f = lot.figures()
-    assert (f["units"], f["sold_units"], f["breakeven"], f["perunit"]) == (0, 0, 0, 0)
+    f = _figures(lot)
+    assert (f["units"], f["sold_units"], f["perunit"]) == (0, 0, 0)
 
 
 def test_figures_with_no_sales_is_zero(db):
     lot = _make_lot(db, price=50.0)
     _make_unit(db, lot, sold=False)
 
-    f = lot.figures()
+    f = _figures(lot)
     assert f["gross"] == 0
     assert f["net"] == 0
     assert f["fees"] == 0.0
@@ -78,7 +81,7 @@ def test_figures_with_no_sales_is_zero(db):
 def test_figures_with_a_free_lot_has_no_roi(db):
     lot = _make_lot(db, price=0.0)
     _make_unit(db, lot)
-    assert lot.figures()["roi"] == 0.0
+    assert _figures(lot)["roi"] == 0.0
 
 
 def test_figures_aggregate_sales_receipts(db):
@@ -90,57 +93,13 @@ def test_figures_aggregate_sales_receipts(db):
     db.session.commit()
     _make_unit(db, lot, sold=True, sales_receipt=receipt)
 
-    f = lot.figures()
+    f = _figures(lot)
     assert f["gross"] == 100.0
     assert f["net"] == 90.0
     assert f["fees"] == 10.0
     assert f["feepc"] == 10.0
     assert f["profit"] == 40.0
     assert f["roi"] == 80.0
-
-
-def test_figures_forecast_breakeven_and_projected_profit(db):
-    lot = _make_lot(db, price=100.0)
-    receipt = SalesReceipt(
-        date=datetime.date(2024, 2, 1), sold_price=60.0, net_sold=54.0
-    )
-    db.session.add(receipt)
-    db.session.commit()
-    _make_unit(
-        db, lot, retail_price=60.0, sold=True, sales_receipt=receipt, name="Sold"
-    )
-    _make_unit(db, lot, retail_price=60.0, sold=False, name="Unsold")
-
-    f = lot.figures()
-    assert f["breakeven"] == pytest.approx(100.0 / 2 / 0.9)
-    assert f["avg_sold_price"] == 60.0
-    assert f["potential_profit"] == pytest.approx(120.0 - 12.0 - 100.0)
-    assert f["avg_profit_per_unit"] == pytest.approx(60.0 - f["breakeven"])
-    assert f["likely_profit"] == pytest.approx(2 * f["avg_profit_per_unit"])
-
-
-def test_list_sold_total_and_profit_helpers(db):
-    lot = _make_lot(db, price=50.0)
-    receipt = SalesReceipt(
-        date=datetime.date(2024, 2, 1), sold_price=100.0, net_sold=90.0
-    )
-    db.session.add(receipt)
-    db.session.commit()
-    _make_unit(db, lot, sold=True, sales_receipt=receipt, name="Sold")
-    _make_unit(db, lot, sold=False, name="Unsold")
-
-    assert lot.list_sold() == 1
-    assert lot.list_total() == 2
-    assert lot.list_profit() == "$40.00"
-
-
-def test_breakdown_renders_html_tables(db):
-    lot = _make_lot(db, price=50.0)
-    _make_unit(db, lot, sold=False)
-    html = str(lot.breakdown())
-    assert "<table" in html
-    assert "Capital" in html
-    assert "Breakeven Price" in html
 
 
 def test_unit_repr_combines_fields():

@@ -69,7 +69,7 @@ def home_totals():
     from fbc.models.supplies import PurchaseOrder, Supply
 
     # The Units and receipts are loaded once, in fbc.sales.finance, and the
-    # per-lot figures come from there too, so the Purchase Lots list
+    # per-lot figures come from there too, so the Lots report
     # shows the same numbers.
     inv = finance.Inventory()
     units = inv.units

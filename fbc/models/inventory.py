@@ -14,7 +14,7 @@ from sqlalchemy import (
     false,
 )
 from sqlalchemy.orm import relationship
-from fbc.core.formatting import fpercent, fprice
+from fbc.core.formatting import fprice
 
 
 class PurchaseLot(Model):
@@ -38,77 +38,6 @@ class PurchaseLot(Model):
 
     def __repr__(self):
         return self.name
-
-    def figures(self):
-        """
-        This lot's money figures (see fbc.sales.finance.lot_figures). The list
-        view works them out once for every lot and leaves them in
-        `flask.g` for that request, so a row doesn't query for its own.
-        """
-        from flask import g, has_app_context
-        from fbc.sales import finance
-
-        cached = g.get("lot_figures") if has_app_context() else None
-        if cached and self.id in cached:
-            return cached[self.id]
-        return finance.lot_figures([self])[self.id]
-
-    def breakdown(self):
-        f = self.figures()
-        ret = '<table class="table table-bordered table-condensed table-hover" style="width: auto">'
-        ret = (
-            ret
-            + "<tr><th>Capital</th><th>Sold For</th><th>Fees</th><th>Fee %</th><th>Net Sold</th><th>Profit</th><th>ROI</th></tr>"
-        )
-        ret = ret + "<tr>"
-        ret = ret + "<td>" + fprice(self.price) + "</td>"
-        ret = ret + "<td>" + fprice(f["gross"]) + "</td>"
-        ret = ret + "<td>" + fprice(f["fees"]) + "</td>"
-        ret = ret + "<td>" + fpercent(f["feepc"] / 100) + "</td>"
-        ret = ret + "<td>" + fprice(f["net"]) + "</td>"
-        ret = ret + "<td>" + fprice(f["profit"]) + "</td>"
-        ret = ret + "<td>" + fpercent(f["roi"] / 100) + "</td>"
-        ret = ret + "</tr></table>"
-        ret = (
-            ret
-            + '<table class="table table-bordered table-condensed table-hover" style="width: auto">'
-        )
-        ret = (
-            ret + "<tr><th>Total Units</th><th>Sold Units</th><th>Units Left</th></tr>"
-        )
-        ret = ret + "<tr>"
-        ret = ret + "<td>" + str(f["units"]) + "</td>"
-        ret = ret + "<td>" + str(f["sold_units"]) + "</td>"
-        ret = ret + "<td>" + str(f["units"] - f["sold_units"]) + "</td>"
-        ret = ret + "</tr></table>"
-        ret = (
-            ret
-            + '<table class="table table-bordered table-condensed table-hover" style="width: auto">'
-        )
-        ret = (
-            ret
-            + "<tr><th>Breakeven Price</th><th>Potential Profit</th><th>Avg. Sold Price</th><th>Avg. Profit/Unit</th><th>Likely Profit</th></tr>"
-        )
-        ret = ret + "<tr>"
-        ret = ret + "<td>" + fprice(f["breakeven"]) + "</td>"
-        ret = ret + "<td>" + fprice(f["potential_profit"]) + "</td>"
-        ret = ret + "<td>" + fprice(f["avg_sold_price"]) + "</td>"
-        ret = ret + "<td>" + fprice(f["avg_profit_per_unit"]) + "</td>"
-        ret = ret + "<td>" + fprice(f["likely_profit"]) + "</td>"
-        ret = ret + "</tr></table>"
-        return Markup(ret)
-
-    def list_sold(self):
-        return self.figures()["sold_units"]
-
-    def list_total(self):
-        return self.figures()["units"]
-
-    def list_profit(self):
-        return fprice(self.figures()["profit"])
-
-    def list_breakeven(self):
-        return fprice(self.figures()["breakeven"])
 
 
 class StorageBox(Model):
