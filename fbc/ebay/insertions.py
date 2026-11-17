@@ -30,6 +30,8 @@ import calendar
 import datetime
 import re
 
+from fbc.core import localtime
+
 # A GTC listing's Time Left is never more than a month.
 MAX_TIME_LEFT_DAYS = 31
 # Warn when the projected count is this close to the limit.
@@ -211,11 +213,11 @@ def listing_summary(now=None):
     `calibration` is this month's entry from the eBay app, or None.
     """
     from fbc import db
-    from fbc.sync import state
+    from fbc.models.sync import SyncRecord
     from fbc.models.ebay import EbayListing, InsertionCalibration
 
-    now = now or state.utcnow()
-    synced = state.last_finished(state.LISTINGS_SYNC)
+    now = now or localtime.utcnow()
+    synced = SyncRecord.last_finished(SyncRecord.LISTINGS_SYNC)
     month_start, _ = month_bounds(now)
     calibration = db.session.get(InsertionCalibration, month_start)
     summary = count_insertions(
@@ -244,10 +246,9 @@ def calibrate(remaining, now=None):
     fbc's count is current. Returns the adjustment.
     """
     from fbc import db
-    from fbc.sync import state
     from fbc.models.ebay import InsertionCalibration
 
-    now = now or state.utcnow()
+    now = now or localtime.utcnow()
     limit = free_insertions_limit()
     month_start, _ = month_bounds(now)
     own = count_insertions(_listing_pairs(now), now, limit)["used"]

@@ -41,10 +41,6 @@ ALLOWED = {
     # A model's list column that runs a query, whose code imports the models.
     ("fbc.models.ebay", "fbc.ebay.mystery"): "EbayListing.fmt_boxes_available",
     ("fbc.models.inventory", "fbc.sales.finance"): "PurchaseLot.figures",
-    # eBay and Discogs code that needs "now" and "when did that sync last
-    # finish" from the sync's record.
-    ("fbc.ebay.insertions", "fbc.sync.state"): "utcnow, last_finished",
-    ("fbc.discogs.listing", "fbc.sync.state"): "utcnow",
 }
 
 
