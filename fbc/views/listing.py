@@ -14,7 +14,6 @@ from fbc.ebay.drafts import check_ready, describe_template, listing_details, new
 from fbc.ebay.publish import publish_draft, verify_draft
 from fbc.models.ebay import EbayDraft
 from fbc.pictures import store
-from fbc.sync import ending
 from fbc.core.forms import CustomModelView
 from fbc.core.widgets import EbayDraftListWidget, TallTextAreaWidget
 
@@ -306,6 +305,11 @@ class EbayDraftModelView(CustomModelView):
         """
         from fbc import db
         from fbc.models.ebay import EbayListing
+
+        # Inside the method: sync.ending imports models.sync, and a model
+        # imported before AppBuilder starts gets its table made by it, which
+        # breaks the migration that creates it.
+        from fbc.sync import ending
 
         draft = self._draft(pk)
         listing = db.session.get(EbayListing, item_id)
