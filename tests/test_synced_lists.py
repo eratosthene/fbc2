@@ -6,7 +6,7 @@ import pytest
 
 import fbc
 from fbc import db
-from fbc.sync import jobs, state
+from fbc.sync import jobs
 from fbc.models.sync import SyncRecord
 
 # 5:45 PM in Central, in winter.
@@ -32,7 +32,7 @@ NAMES = {
     "Discogs collection": jobs.DISCOGS_SYNC,
     "Discogs listings": jobs.DISCOGS_LISTINGS_SYNC,
     "Discogs orders": jobs.DISCOGS_ORDERS_SYNC,
-    "eBay listings": state.LISTINGS_SYNC,
+    "eBay listings": SyncRecord.LISTINGS_SYNC,
     "eBay orders": jobs.ORDERS_SYNC,
 }
 

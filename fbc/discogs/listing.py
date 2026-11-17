@@ -123,11 +123,6 @@ def defaults(unit):
     }
 
 
-def open_listing(unit):
-    """The Unit's DiscogsListing that is a Draft or For Sale, or None."""
-    return DiscogsListing.open_for(unit)
-
-
 def problem_with(unit):
     """Why `unit` can't be listed on Discogs at all, or None."""
     if unit.sold:
@@ -140,7 +135,7 @@ def problem_with(unit):
             " collection are listed on Discogs, so the collection stays a"
             " record of what you have."
         )
-    existing = open_listing(unit)
+    existing = DiscogsListing.open_for(unit)
     if existing:
         return (
             "This Unit already has a Discogs listing ("

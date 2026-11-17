@@ -268,7 +268,7 @@ class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
         if not unit:
             abort(404)
         problem = discogs_listing.problem_with(unit)
-        existing = discogs_listing.open_listing(unit)
+        existing = DiscogsListing.open_for(unit)
         if existing:
             flash(problem, "warning")
             return redirect(

@@ -9,6 +9,7 @@ import sqlalchemy as sa
 from fake_discogs import FakeAccount, FakeDiscogs, failing
 
 from fbc import db
+from fbc.models.sync import SyncRecord
 from fbc.sync import jobs, state
 from fbc.discogs import client as discogs_client
 from fbc.models.discogs import DiscogsListing
@@ -201,7 +202,9 @@ def test_a_listing_synced_as_not_ended_before_it_sold_is_ended_by_the_next_sync(
 def test_a_short_read_marks_nothing_ended_and_records_nothing(app, inventory):
     inventory([_item(1), _item(2)])
     jobs.sync_discogs_listings()
-    state.record_finished(jobs.DISCOGS_LISTINGS_SYNC, datetime.datetime(2020, 1, 1))
+    SyncRecord.record_finished(
+        jobs.DISCOGS_LISTINGS_SYNC, datetime.datetime(2020, 1, 1)
+    )
     inventory(
         [_item(1)],
         fail=failing(
@@ -213,7 +216,7 @@ def test_a_short_read_marks_nothing_ended_and_records_nothing(app, inventory):
         jobs.sync_discogs_listings()
 
     assert not db.session.get(DiscogsListing, 2).ended
-    assert state.last_finished(jobs.DISCOGS_LISTINGS_SYNC) == datetime.datetime(
+    assert SyncRecord.last_finished(jobs.DISCOGS_LISTINGS_SYNC) == datetime.datetime(
         2020, 1, 1
     )
 
@@ -224,7 +227,7 @@ def test_an_empty_inventory_is_fine(app, inventory):
     jobs.sync_discogs_listings()
 
     assert db.session.query(DiscogsListing).count() == 0
-    assert state.last_finished(jobs.DISCOGS_LISTINGS_SYNC) is not None
+    assert SyncRecord.last_finished(jobs.DISCOGS_LISTINGS_SYNC) is not None
 
 
 def test_the_job_is_the_one_the_button_command_and_scheduler_share(app):

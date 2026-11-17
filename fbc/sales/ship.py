@@ -453,14 +453,14 @@ def other_marketplace_notes(units, here):
     from flask import url_for
 
     from fbc import db
-    from fbc.discogs import listing as discogs_listing
+    from fbc.models.discogs import DiscogsListing
     from fbc.models.ebay import EbayDraft
     from fbc.models.sales import FAILED, ListingEnd
 
     notes = []
     for unit in units:
         if here == "eBay":
-            listing = discogs_listing.open_listing(unit)
+            listing = DiscogsListing.open_for(unit)
             if listing:
                 notes.append(
                     (

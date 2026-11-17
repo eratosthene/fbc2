@@ -23,17 +23,8 @@ import tempfile
 import threading
 import time
 
-from fbc.core import localtime
-from fbc.models.sync import SyncRecord
 
 logger = logging.getLogger()
-
-# These live in core/localtime.py and models/sync.py, which the code below
-# this layer uses; the names stay here for the sync code and the tests.
-LISTINGS_SYNC = SyncRecord.LISTINGS_SYNC
-utcnow = localtime.utcnow
-record_finished = SyncRecord.record_finished
-last_finished = SyncRecord.last_finished
 
 # Job files older than this are deleted when the next job starts.
 KEEP_SECONDS = 24 * 60 * 60
