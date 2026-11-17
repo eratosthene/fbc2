@@ -817,3 +817,102 @@ def test_chart_pages_and_home_summary_render(app):
         home = client.get("/").get_data(as_text=True)
         assert "Year to date" in home and "$34.00" in home
         assert "/profitandloss/" in home and "/suppliesreport/" in home
+
+
+# --- Lots: Forecast profit ---------------------------------------------------
+
+
+def _sold_unit(lot, retail, net, day=D(2026, 2, 1)):
+    receipt = SalesReceipt(date=day, sold_price=net + 1.0, net_sold=net)
+    db.session.add(receipt)
+    db.session.commit()
+    return _unit(lot, sold=True, receipt=receipt, retail=retail)
+
+
+def _forecast_rows():
+    got = reports.lots_report(reports.Period({"period": "all"}))
+    return {r["lot"].name: r for r in got["rows"]}, got["total"]
+
+
+def _named(name, price):
+    lot = _lot(price, D(2026, 1, 5))
+    lot.name = name
+    db.session.commit()
+    return lot
+
+
+def test_forecast_profit_worked_examples(app):
+    a = _named("A", 100.0)
+    _sold_unit(a, 20.0, 12.0)
+    _sold_unit(a, 30.0, 18.0)  # A: net 30 on retail 50, rate 0.6
+    _unit(a, retail=40.0)
+    _unit(a)  # no retail price
+    b = _named("B", 50.0)
+    _sold_unit(b, 50.0, 20.0)  # B: rate 0.4
+    _unit(b, retail=20.0)
+    c = _named("C", 30.0)  # no sales
+    _unit(c, retail=10.0)
+    d = _named("D", 10.0)  # nothing in stock
+    _sold_unit(d, 5.0, 4.0)
+    # The shop: net 30 + 20 + 4 = 54 on retail 50 + 50 + 5 = 105.
+    rate = 54 / 105
+    rows, total = _forecast_rows()
+    # A sold 2: blended rate (2 * 0.6 + 5 * rate) / 7. Its stock of $40 retail
+    # nets 40 * that; the Unit with no retail price nets A's average, $15.
+    a_rate = (2 * 0.6 + 5 * rate) / 7
+    assert rows["A"]["forecast"] == round(30 + 40 * a_rate + 15 - 100, 2)
+    assert rows["A"]["forecast"] == pytest.approx(-33.45, abs=0.01)
+    assert rows["A"]["shop_rate_only"] is False
+    b_rate = (1 * 0.4 + 5 * rate) / 6
+    assert rows["B"]["forecast"] == round(20 + 20 * b_rate - 50, 2)
+    # No sales: the shop rate alone, and the marker.
+    assert rows["C"]["forecast"] == round(10 * rate - 30, 2)
+    assert rows["C"]["shop_rate_only"] is True
+    # Nothing in stock: blank.
+    assert rows["D"]["forecast"] is None and rows["D"]["shop_rate_only"] is False
+    # The total adds the rest; a blank adds nothing.
+    assert total["forecast"] == round(sum(rows[n]["forecast"] for n in "ABC"), 2)
+
+
+def test_forecast_profit_exact_numbers(app):
+    # A hand-worked case with round figures. Shop: net 50 on retail 100 (rate
+    # 0.5). Lot X sold one Unit, net 10 on retail 20 (rate 0.5), so its blend
+    # is 0.5 too: its $30 of stock nets 15, and 10 + 15 - 40 = -15.
+    x = _named("X", 40.0)
+    _sold_unit(x, 20.0, 10.0)
+    _unit(x, retail=30.0)
+    y = _named("Y", 10.0)
+    _sold_unit(y, 80.0, 40.0)
+    rows, total = _forecast_rows()
+    assert rows["X"]["forecast"] == -15.0
+    assert rows["Y"]["forecast"] is None
+    assert total["forecast"] == -15.0
+
+
+def test_forecast_profit_is_blank_when_the_shop_has_no_sales(app):
+    lot = _named("Z", 20.0)
+    _unit(lot, retail=10.0)
+    rows, total = _forecast_rows()
+    assert rows["Z"]["forecast"] is None
+    assert total["forecast"] == 0.0
+
+
+def test_forecast_profit_in_the_page_and_the_csv(app):
+    from fbc.sales import report_csv
+
+    x = _named("X", 40.0)
+    _sold_unit(x, 20.0, 10.0)
+    _unit(x, retail=30.0)
+    c = _named("C", 30.0)
+    _unit(c, retail=10.0)
+    with signed_in_client(app) as client:
+        html = client.get("/lotsreport/?period=all").data
+        assert b"Forecast profit" in html
+        assert b"This Lot has no sales yet" in html
+    _name, rows = report_csv.lots(reports.Period({"period": "all"}))
+    head = rows[0]
+    assert "Forecast profit" in head
+    by_lot = {r[1]: r for r in rows[1:]}
+    i = head.index("Forecast profit")
+    assert by_lot["X"][i] == -15.0 and by_lot["X"][i + 1] == ""
+    assert by_lot["C"][i + 1] == "yes"

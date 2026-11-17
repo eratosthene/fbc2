@@ -103,6 +103,8 @@ def lots(period):
             "Net sold",
             "Profit",
             "ROI %",
+            "Forecast profit",
+            "Forecast used shop rate alone",
             "Units to break even",
         ]
     ]
@@ -121,6 +123,8 @@ def lots(period):
                 r["net"],
                 r["profit"],
                 r["roi"],
+                r["forecast"],
+                "yes" if r["shop_rate_only"] else "",
                 r["to_break_even"],
             ]
         )

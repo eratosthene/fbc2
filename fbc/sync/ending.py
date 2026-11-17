@@ -29,7 +29,6 @@ import logging
 from fbc.core import devmode, localtime
 from fbc.discogs import client as discogs_client
 from fbc.discogs.client import ApiError, DiscogsAuthError
-from fbc.discogs.listing import OPEN_STATUSES as DISCOGS_OPEN
 from fbc.ebay import publish
 
 logger = logging.getLogger()
@@ -161,7 +160,7 @@ def end_discogs_after_ebay():
     Returns the ListingEnds written.
     """
     from fbc import db
-    from fbc.models.discogs import DiscogsListing
+    from fbc.models.discogs import OPEN_STATUSES as DISCOGS_OPEN, DiscogsListing
     from fbc.models.inventory import Unit
 
     results = []
@@ -276,7 +275,7 @@ def end_ebay_after_discogs():
 def _still_open(row):
     """Whether what a failed ListingEnd tried to end is still there."""
     from fbc import db
-    from fbc.models.discogs import DiscogsListing
+    from fbc.models.discogs import OPEN_STATUSES as DISCOGS_OPEN, DiscogsListing
     from fbc.models.ebay import EbayListing
 
     if row.ended_on == DISCOGS:

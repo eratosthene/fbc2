@@ -20,6 +20,12 @@ from fbc.ebay.api import listing_settings
 from fbc.ebay.describe import build_item_specifics, disc_count, split_grading
 from fbc.ebay.drafts import default_weight
 from fbc.ebay.skus import sku
+from fbc.models.discogs import (
+    DRAFT,
+    FOR_SALE,
+    OPEN_STATUSES,
+    DiscogsListing,
+)
 
 logger = logging.getLogger()
 
@@ -55,11 +61,6 @@ CONDITION_FOR_GRADE = {
 }
 
 GRAMS_PER_OUNCE = 28.3495
-
-DRAFT = "Draft"
-FOR_SALE = "For Sale"
-# A Unit with a listing in either state can't be listed again.
-OPEN_STATUSES = (DRAFT, FOR_SALE)
 
 # How many of the newest inventory items to read before creating a listing,
 # looking for one that an earlier, timed-out attempt already made.
@@ -124,18 +125,7 @@ def defaults(unit):
 
 def open_listing(unit):
     """The Unit's DiscogsListing that is a Draft or For Sale, or None."""
-    from fbc import db
-    from fbc.models.discogs import DiscogsListing
-
-    return (
-        db.session.query(DiscogsListing)
-        .filter(
-            DiscogsListing.unit_id == unit.id,
-            DiscogsListing.ended.is_(False),
-            DiscogsListing.status.in_(OPEN_STATUSES),
-        )
-        .first()
-    )
+    return DiscogsListing.open_for(unit)
 
 
 def problem_with(unit):

@@ -11,7 +11,11 @@
   sold. These are the Purchase Lots list's figures. Click a heading to sort.
   <b>To break even</b> is the Units still to sell to cover the Lot's price, at
   the average net per Unit sold in the period (or in all time, if the period
-  sold none); it is blank when nothing has ever sold.
+  sold none); it is blank when nothing has ever sold. <b>Forecast profit</b>
+  is Net sold plus what the Units in stock should net, less the Lot's price.
+  It assumes everything in stock sells, so it is probably optimistic. A
+  <sup>*</sup> means the Lot has no sales yet, so the shop-wide rate alone was
+  used. It is blank when nothing is in stock.
 </p>
 {% if rows %}
 {{ draw("lot-payback", "Payback of the " ~ (rows|length if rows|length < 5 else 5) ~ " dearest Lots: net sold so far as a % of the Lot's price", payback) }}
@@ -19,7 +23,7 @@
 <div style="overflow-x: auto">
 <table class="table table-bordered table-condensed" id="lots-report" style="width: auto">
   <thead><tr>
-    {% for h in ['Date', 'Lot', 'Price', 'Units', 'Per Unit', 'Sold', 'In stock', 'Stock at cost', 'Sold for', 'Net sold', 'Profit', 'ROI', 'To break even'] %}
+    {% for h in ['Date', 'Lot', 'Price', 'Units', 'Per Unit', 'Sold', 'In stock', 'Stock at cost', 'Sold for', 'Net sold', 'Profit', 'ROI', 'Forecast profit', 'To break even'] %}
     <th class="text-right" style="cursor: pointer">{{ h }}</th>
     {% endfor %}
   </tr></thead>
@@ -38,6 +42,7 @@
     <td class="text-right" data-sort="{{ r.net }}">{{ money(r.net) }}</td>
     <td class="text-right" data-sort="{{ r.profit }}">{{ money(r.profit) }}</td>
     <td class="text-right" data-sort="{{ r.roi }}">{{ '%.2f'|format(r.roi) }}%</td>
+    <td class="text-right" data-sort="{{ r.forecast if r.forecast is not none else -999999999 }}">{% if r.forecast is not none %}{{ money(r.forecast) }}{% if r.shop_rate_only %}<sup title="This Lot has no sales yet, so the shop-wide rate alone was used.">*</sup>{% endif %}{% endif %}</td>
     <td class="text-right" data-sort="{{ r.to_break_even if r.to_break_even is not none else 999999999 }}">{{ '' if r.to_break_even is none else r.to_break_even }}</td>
   </tr>
   {% endfor %}
@@ -53,6 +58,7 @@
     <th class="text-right">{{ money(total.net) }}</th>
     <th class="text-right">{{ money(total.profit) }}</th>
     <th class="text-right">{{ '%.2f'|format(total.roi) }}%</th>
+    <th class="text-right">{{ money(total.forecast) }}</th>
     <th class="text-right">{{ '' if total.to_break_even is none else total.to_break_even }}</th>
   </tr></tfoot>
 </table>
