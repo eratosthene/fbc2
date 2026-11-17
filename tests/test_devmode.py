@@ -12,7 +12,7 @@ from fbc import db
 from fbc.ebay import finances
 from fbc.discogs import client as discogs_client, removal
 from fbc.ebay import api, drafts, oauth
-from fbc.core import devmode
+from fbc.core import devmode, localtime
 from fbc.discogs.client import DiscogsAuthError
 from fbc.ebay.oauth import OAuthError
 from fbc.models.discogs import DiscogsInstance, DiscogsOAuthToken
@@ -195,7 +195,7 @@ def test_no_ebay_token_is_used_in_dev_mode(app, dev_mode, monkeypatch):
         {
             oauth.MEDIA_SCOPE: {
                 "token": "minted-before",
-                "expires": datetime.datetime.utcnow() + datetime.timedelta(hours=1),
+                "expires": localtime.utcnow() + datetime.timedelta(hours=1),
             }
         },
     )

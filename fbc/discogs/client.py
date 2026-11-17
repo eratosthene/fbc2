@@ -24,7 +24,7 @@ import datetime
 import logging
 from urllib.parse import urlencode
 
-from fbc.core import devmode
+from fbc.core import devmode, localtime
 
 logger = logging.getLogger()
 
@@ -182,7 +182,7 @@ def exchange_verifier(request_token, request_secret, verifier):
         token=token,
         secret=secret,
         username=username,
-        created=datetime.datetime.utcnow(),
+        created=localtime.utcnow(),
     )
     db.session.add(saved)
     db.session.commit()

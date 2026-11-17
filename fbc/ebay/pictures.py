@@ -3,7 +3,7 @@
 import datetime
 import logging
 
-from fbc.core import devmode
+from fbc.core import devmode, localtime
 from fbc.ebay import api, oauth
 
 # The picture handling that isn't eBay's moved to fbc/pictures/images.py;
@@ -93,10 +93,6 @@ def fetch_picture(url):
     return r.content, None
 
 
-def _utcnow():
-    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-
-
 def _current(picture, now):
     if not picture.ebay_url or not picture.ebay_uploaded_at:
         return False
@@ -114,7 +110,7 @@ def ensure_uploaded(draft):
     from fbc import db
 
     summary = api._empty_summary()
-    now = _utcnow()
+    now = localtime.utcnow()
     todo = [p for p in draft.stored_pictures() if not _current(p, now)]
     if todo and devmode.on():
         summary["errors"].append(devmode.message("uploading pictures to eBay"))

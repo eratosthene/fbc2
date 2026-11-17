@@ -26,7 +26,7 @@ syncs that call it don't run.
 import datetime
 import logging
 
-from fbc.core import devmode
+from fbc.core import devmode, localtime
 from fbc.discogs import client as discogs_client
 from fbc.discogs.client import ApiError, DiscogsAuthError
 from fbc.ebay import publish
@@ -48,10 +48,6 @@ DRAFT_DAYS = 30
 CANCELLED = "Cancelled"
 
 
-def _now():
-    return datetime.datetime.utcnow()
-
-
 def _after(when, since):
     """Whether `when` is at or after `since`; a missing date counts as yes."""
     return when is None or since is None or when >= since
@@ -67,7 +63,7 @@ def _record(unit, sold_on, ended_on, ref, order_id, ok, message):
         .filter_by(ended_on=ended_on, listing_ref=str(ref))
         .first()
     )
-    now = _now()
+    now = localtime.utcnow()
     if row is None:
         row = ListingEnd(
             unit_id=unit.id,
@@ -103,7 +99,9 @@ def _recently_ended(ended_on, ref):
         .filter_by(ended_on=ended_on, listing_ref=str(ref), status=ENDED)
         .first()
     )
-    return bool(row and _now() - row.updated < datetime.timedelta(hours=RETRY_HOURS))
+    return bool(
+        row and localtime.utcnow() - row.updated < datetime.timedelta(hours=RETRY_HOURS)
+    )
 
 
 def _end_discogs(listing):
@@ -132,7 +130,7 @@ def _end_ebay(listing):
     ok, message = publish.end_listing(listing.item_id)
     if ok:
         listing.ended = True
-        listing.end_time = _now()
+        listing.end_time = localtime.utcnow()
         db.session.commit()
     return ok, message
 
@@ -213,7 +211,11 @@ def _discogs_sale(unit, since, recent_only=False):
         .order_by(DiscogsOrder.created_time)
         .all()
     )
-    floor = _now() - datetime.timedelta(days=DRAFT_DAYS) if recent_only else None
+    floor = (
+        localtime.utcnow() - datetime.timedelta(days=DRAFT_DAYS)
+        if recent_only
+        else None
+    )
     for row in rows:
         if (row.status or "").startswith(CANCELLED):
             continue
@@ -295,7 +297,7 @@ def clear_gone():
         if not _still_open(row):
             row.status = ENDED
             row.message = "The listing is no longer up, ended by hand or by a sync."
-            row.updated = _now()
+            row.updated = localtime.utcnow()
     db.session.commit()
 
 

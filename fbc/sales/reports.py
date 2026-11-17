@@ -61,9 +61,7 @@ MARKETPLACES = ["eBay", "Discogs", ""]
 
 
 def today():
-    return localtime.local_naive(
-        datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-    ).date()
+    return localtime.local_naive(localtime.utcnow()).date()
 
 
 def _month_start(day):
