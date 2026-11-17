@@ -128,7 +128,7 @@ def test_every_card_is_on_the_page_in_the_order_it_always_was(app):
         ">Discogs</a>",
         ">Other</a>",
         "<h2>All Time: Profit &amp; Breakeven</h2>",
-        "Profit: <strong>",
+        "Net Profit: <strong>",
         "profit margin",
         "Breakeven per unit, including supplies",
         "Profit Details (by Purchase Lot and Storage Box)",

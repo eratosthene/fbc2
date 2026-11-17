@@ -1,6 +1,6 @@
 {% import 'appbuilder/general/lib.html' as lib %}
 <p>
-  Profit:
+  Net Profit:
   <strong>{% if (f.total_net_profit|float < 0) %}<span style="color: red">{% endif %}{{ "${:,.2f}".format(f.total_net_profit|float) }} ({{
   "{:,.2f}%".format(f.profit_margin|float) }} profit margin){% if (f.total_net_profit|float < 0) %}</span>{% endif %}</strong>
 </p>
