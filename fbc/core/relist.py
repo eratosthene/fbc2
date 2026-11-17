@@ -1,8 +1,10 @@
 """
-When an ended eBay listing can still be re-listed (see #208). eBay's window
-is a setting, EBAY_RELIST_DAYS, because it isn't settled whether it is 30
-days (the owner's belief) or 90 (eBay's API docs); the spike
-scripts/spike_relist.py finds out. The dates are UTC, as the listings are.
+When an ended eBay listing can still be re-listed (see #208). The window is
+90 days, as eBay's API docs say; a spike on the live account had eBay accept
+re-lists up to 83 days after they ended (the oldest it found that still
+existed), so the owner's belief of 30 days was wrong. It stays a setting,
+EBAY_RELIST_DAYS, in case eBay changes it. The dates are UTC, as the listings
+are.
 """
 
 import datetime
@@ -11,7 +13,7 @@ from flask import current_app
 
 from fbc.core import localtime
 
-DEFAULT_DAYS = 30
+DEFAULT_DAYS = 90
 # A listing this close to its re-list by date gets a "re-list soon" marker.
 SOON_DAYS = 7
 

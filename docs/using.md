@@ -100,8 +100,8 @@ work is done, so there is nothing to tick off:
   Unit, and **Re-list By**, the last day eBay lets it be re-listed. A row
   within a week of that date, or past it, says "re-list soon"; that doesn't
   change the order. The re-list window is `EBAY_RELIST_DAYS` in `config.py`
-  (30 days unless set; whether eBay's real limit is 30 or 90 is still being
-  checked).
+  (90 days unless set, which is what eBay's docs say; eBay accepted a
+  re-list of a listing that ended 83 days before).
 
   Each row has a **Re-list** button, which asks to confirm. Inside the window
   it re-lists the old listing on eBay (this uses a free insertion, like any new

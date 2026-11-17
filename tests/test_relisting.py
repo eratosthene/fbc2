@@ -118,7 +118,7 @@ def test_ebay_refusing_the_relist_makes_a_draft_from_the_old_one(client, monkeyp
 
 def test_outside_the_window_it_never_calls_ebay(client, monkeypatch):
     calls = _ebay(monkeypatch)
-    _parked("100", days_ago=45)
+    _parked("100", days_ago=95)
 
     response = _post(client, "100")
 
@@ -130,8 +130,8 @@ def test_outside_the_window_it_never_calls_ebay(client, monkeypatch):
 
 def test_the_window_follows_the_setting(client, monkeypatch):
     calls = _ebay(monkeypatch)
-    monkeypatch.setitem(fbc.app.config, "EBAY_RELIST_DAYS", 90)
-    _parked("100", days_ago=45)
+    monkeypatch.setitem(fbc.app.config, "EBAY_RELIST_DAYS", 120)
+    _parked("100", days_ago=100)
 
     _post(client, "100")
 
