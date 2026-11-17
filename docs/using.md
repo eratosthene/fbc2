@@ -19,8 +19,8 @@ range (`100-200`) or a mix (`5, 100-200`).
 It has the alerts first (supplies to reorder, a To do banner, and free
 insertions close to or over the limit), then these sections, in order:
 
-- **Listings**: the active listings and this month's free insertions (see
-  below).
+- **Listings**: the active listings, this month's free insertions, the room
+  left and the Units waiting (see below).
 - **Stock**: the Units in stock.
 - **Year to date**: this calendar year's net sold, Sales Receipts and Units
   sold, and profit and margin (cost of goods, as in Profit & Loss), with links
@@ -407,6 +407,18 @@ is within 10 of the limit. Nothing shows until the first listings sync, as
 every listing looks active before it. After a sync, the Ended flags are right
 for the listings fbc already had, so the first one after an upgrade ends all
 the old listings that aren't on eBay now.
+
+Under it, a second line says how many free insertions are left this month
+(the limit less the projected total, so the renewals still due are already
+taken off), and how many Units are waiting for a listing: the Units with no
+eBay listing and no eBay Draft (the To do list's Units needing eBay Drafts),
+plus the Units whose eBay Draft isn't published yet, each counted once. Other
+Items and mystery boxes aren't Units, so they never count. It also says how
+many renewals next month already has, from the active listings' start days and
+the dates eBay gave, and how many free insertions that leaves. That is the most
+next month starts with: a listing that ends before then takes its renewal with
+it, and new listings aren't known yet. It shows once the listings sync has
+run, like the rest of the block.
 
 The count is fbc's estimate, from these assumptions:
 

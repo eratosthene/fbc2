@@ -146,6 +146,29 @@ def _count(select):
     return db.session.scalar(sa.select(sa.func.count()).select_from(select.subquery()))
 
 
+def stock_waiting():
+    """
+    {"units", "drafts", "total"}: the Units with no eBay listing or Draft, and
+    the Units whose eBay Draft isn't published yet, each Unit once. Other
+    Items and mystery boxes aren't Units, so they never count.
+    """
+    from fbc import db
+    from fbc.models.ebay import EbayDraft
+
+    needing = set(db.session.scalars(ids_units_needing_drafts()))
+
+    drafted = set(
+        db.session.scalars(
+            sa.select(EbayDraft.unit_id).where(EbayDraft.id.in_(ids_drafts_to_list()))
+        )
+    )
+    return {
+        "units": len(needing),
+        "drafts": len(drafted - needing),
+        "total": len(needing | drafted),
+    }
+
+
 def counts():
     """How many of each task there are, by key."""
     return {

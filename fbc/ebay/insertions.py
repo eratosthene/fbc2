@@ -182,6 +182,52 @@ def count_insertions(listings, now, limit=DEFAULT_LIMIT, adjustment=0):
     }
 
 
+def renewals_next_month(listings, now):
+    """
+    How many renewals fall in the Pacific month after the one containing
+    `now`, from `listings` as count_insertions takes them. Only a listing
+    still active (end_time None) renews, and each is taken to stay active, so
+    this is the most the month can start with: what ends before then isn't
+    known. The date eBay gave (renews_at) is used when it falls in that
+    month, else the start's day and Pacific time, as count_insertions does.
+    New listings aren't counted, since none are known yet.
+    """
+    local_now = to_pacific(now)
+    first = datetime.datetime(
+        local_now.year + (local_now.month == 12), local_now.month % 12 + 1, 1
+    )
+    # Anywhere in that month gives its bounds.
+    start_of, end_of = month_bounds(first + datetime.timedelta(days=14))
+    days = calendar.monthrange(first.year, first.month)[1]
+    count = 0
+    for start, end, *more in listings:
+        if start is None or end is not None:
+            continue
+        saved = more[0] if more else None
+        local_start = to_pacific(start)
+        local_renewal = local_start.replace(
+            year=first.year, month=first.month, day=min(local_start.day, days)
+        )
+        renewal = local_renewal - pacific_offset_local(local_renewal)
+        if saved and start_of <= saved < end_of:
+            renewal = saved
+        if renewal > start:
+            count += 1
+    return count
+
+
+def look_ahead(summary, next_renewals):
+    """
+    Add the room to a count_insertions result: `room`, the limit less the
+    projected count (negative when over), and `next_projected`, the renewals
+    already known for next month, with `next_room` against the limit.
+    """
+    summary["room"] = summary["limit"] - summary["projected"]
+    summary["next_projected"] = next_renewals
+    summary["next_room"] = summary["limit"] - next_renewals
+    return summary
+
+
 def free_insertions_limit():
     from fbc.ebay.api import listing_settings
 
@@ -236,6 +282,7 @@ def listing_summary(now=None):
         free_insertions_limit(),
         calibration.adjustment if calibration else 0,
     )
+    look_ahead(summary, renewals_next_month(_listing_pairs(now), now))
     summary["active"] = db.session.query(EbayListing).filter_by(ended=False).count()
     summary["synced"] = synced
     summary["calibration"] = None
