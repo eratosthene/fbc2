@@ -87,6 +87,17 @@ work is done, so there is nothing to tick off:
 - **Units to Draft (eBay)**: unsold Units priced over $2, with no eBay Listing
   and no eBay Draft. (Cheaper Units go in the discount boxes.) Make an eBay
   Draft from the Unit.
+- **Parked Listings**: listings that End this one ended to make room (see
+  "Active listings and free insertions" below), whose Unit hasn't sold and has no
+  other listing. They are in the order they should be listed again: the one
+  that has been off eBay longest first, so every Unit gets its turn. Each row
+  shows the title, price, when it ended, how many days it has been out, the
+  Unit, and **Re-list By**, the last day eBay lets it be re-listed. A row
+  within a week of that date, or past it, says "re-list soon"; that doesn't
+  change the order. The re-list window is `EBAY_RELIST_DAYS` in `config.py`
+  (30 days unless set; whether eBay's real limit is 30 or 90 is still being
+  checked). For now the list only shows what is waiting: there is no re-list
+  button yet.
 - **Drafts to List (eBay)**: eBay Drafts that aren't published yet. Take the
   pictures and publish.
 - **Units to Draft (Discogs)**: unsold Units priced over $2 that are in your

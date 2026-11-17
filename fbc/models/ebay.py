@@ -1,7 +1,7 @@
 import logging
 
 from flask_appbuilder import Model
-from fbc.core import localtime
+from fbc.core import localtime, relist
 from markupsafe import Markup
 from flask import url_for
 from sqlalchemy import (
@@ -78,6 +78,41 @@ class EbayListing(Model):
 
     def is_mystery_box(self):
         return bool(self.pick_from_box_id and self.pick_count)
+
+    # The Parked listings Task's columns (see fbc/sales/tasks.py).
+    def fmt_parked_at(self):
+        return localtime.fmt_datetime(self.parked_at)
+
+    def fmt_out_for(self):
+        days = relist.days_out(self.parked_at)
+        if days is None:
+            return ""
+        return "%d day%s" % (days, "" if days == 1 else "s")
+
+    def fmt_relist_by(self):
+        by = relist.relist_by(self.parked_at)
+        if by is None:
+            return ""
+        text = localtime.fmt_date(by)
+        if relist.is_soon(self.parked_at):
+            return Markup("{} <strong>(re-list soon)</strong>").format(text)
+        return text
+
+    def fmt_parked_unit(self):
+        from fbc import db
+        from fbc.models.inventory import Unit
+
+        unit = (
+            db.session.query(Unit)
+            .filter_by(ebay_listing_id=self.item_id)
+            .filter(Unit.sold.isnot(True))
+            .first()
+        )
+        if unit is None:
+            return ""
+        return Markup('<a href="{}">{}</a>').format(
+            url_for("UnitModelView.show", pk=unit.id), unit.name
+        )
 
 
 class InsertionCalibration(Model):

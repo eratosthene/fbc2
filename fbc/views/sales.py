@@ -393,6 +393,34 @@ class EbayListingModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView
     pre_update = _check_mystery_box
 
 
+class ParkedListingsBaseView(CustomModelView):
+    """
+    eBay Listings that End and park ended (the Parked listings Task, see
+    fbc/views/tasks.py). Read only for now: re-listing is by hand. Longest
+    out first, so the one that has waited longest is at the top; "re-list
+    soon" is only a marker and never changes the order.
+    """
+
+    datamodel = SQLAInterface(EbayListing)
+    base_permissions = ["can_list"]
+    base_order = ("parked_at", "asc")
+    list_columns = [
+        "title",
+        "fmt_price",
+        "fmt_parked_at",
+        "fmt_out_for",
+        "fmt_parked_unit",
+        "fmt_relist_by",
+    ]
+    label_columns = {
+        "fmt_price": "Price",
+        "fmt_parked_at": "Ended",
+        "fmt_out_for": "Out For",
+        "fmt_parked_unit": "Unit",
+        "fmt_relist_by": "Re-list By",
+    }
+
+
 class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
     # An order links to its listing, which the listings sync keeps.
     synced_by = [EBAY_ORDERS, EBAY_LISTINGS]

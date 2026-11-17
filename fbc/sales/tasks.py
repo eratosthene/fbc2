@@ -13,6 +13,9 @@ when it's done and there's no to-do table to keep in step:
   listing is gone;
 - an unsold Unit with no eBay Listing and no eBay Draft, priced over $2 (the
   rest go in the discount boxes), needs an eBay Draft;
+- a listing ended to make room (End and park, fbc/sync/ending.py) whose Unit
+  is unsold and still linked to it, so it has no active listing, is parked
+  and waits to be listed again (the Parked listings Task, #208);
 - an eBay Draft that isn't published yet needs pictures and a listing;
 - an unsold Unit in the Discogs collection, priced over $2, with no Discogs
   Draft or For Sale listing, needs a Discogs Draft (List on Discogs);
@@ -97,6 +100,29 @@ def ids_units_needing_drafts():
     )
 
 
+def ids_parked_listings():
+    """
+    The listings End and park ended, whose Unit hasn't sold and still points
+    at the ended listing (a re-list that sync linked up moves the Unit to the
+    new listing, which takes it out). Mystery boxes and Other Items have no
+    Unit linked, so never show. The list view orders them, longest out first.
+    """
+    from fbc.models.ebay import EbayListing
+    from fbc.models.inventory import Unit
+
+    return sa.select(EbayListing.item_id).where(
+        EbayListing.parked_at.isnot(None),
+        EbayListing.ended.is_(True),
+        EbayListing.item_id.in_(
+            sa.select(Unit.ebay_listing_id).where(
+                Unit.ebay_listing_id.isnot(None),
+                Unit.sold.isnot(True),
+                Unit.archived.is_(False),
+            )
+        ),
+    )
+
+
 def ids_drafts_to_list():
     from fbc.models.ebay import EbayDraft
 
@@ -178,6 +204,7 @@ def counts():
         "releases": _count(ids_releases_needing_units()),
         "units": _count(ids_units_needing_drafts()),
         "drafts": _count(ids_drafts_to_list()),
+        "parked": _count(ids_parked_listings()),
         "discogs_units": _count(ids_units_needing_discogs_drafts()),
         "discogs_drafts": _count(ids_discogs_drafts_to_list()),
     }

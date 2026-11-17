@@ -8,7 +8,8 @@ import fbc
 from fbc import db
 from fbc.sales import tasks
 from fbc.models.discogs import DiscogsInstance, DiscogsListing, DiscogsRelease
-from fbc.models.ebay import EbayDraft, EbayOrder
+from fbc.core import localtime
+from fbc.models.ebay import EbayDraft, EbayListing, EbayOrder
 from fbc.models.inventory import Unit
 from fbc.models.sales import SalesReceipt
 
@@ -234,6 +235,7 @@ def test_counts_count_each_task():
         "releases": 1,
         "units": 0,
         "drafts": 1,
+        "parked": 0,
         "discogs_units": 0,
         "discogs_drafts": 0,
     }
@@ -329,3 +331,107 @@ def test_the_discogs_task_lists_show_only_their_tasks(client):
     drafts = client.get(link).get_data(as_text=True)
     assert "DRAFT-ROW" in drafts
     assert "SALE-ROW" not in drafts and "ENDED-ROW" not in drafts
+
+
+def _parked(item_id, unit=None, days_ago=1, title=None, **fields):
+    """An ended, parked listing, linked to `unit` unless it's False."""
+    fields.setdefault("ended", True)
+    fields.setdefault(
+        "parked_at", localtime.utcnow() - datetime.timedelta(days=days_ago)
+    )
+    listing = EbayListing(
+        item_id=item_id,
+        title=title or "Parked " + item_id,
+        price=12.5,
+        url="https://www.ebay.com/itm/" + item_id,
+        **fields,
+    )
+    db.session.add(listing)
+    if unit is None:
+        unit = _unit("Unit " + item_id)
+    if unit:
+        unit.ebay_listing_id = item_id
+    db.session.commit()
+    return listing
+
+
+def test_a_parked_listing_is_a_task_while_its_unit_is_unsold_and_unlisted():
+    _parked("1")
+    _parked("2", unit=_unit("sold", sold=True))
+    _parked("3", unit=False)
+    _parked("4", ended=False)
+    # Ended in the ordinary way, not parked.
+    _parked("5", parked_at=None)
+    # Re-listed: the Unit moved to a new, active listing.
+    old = _parked("6")
+    db.session.add(EbayListing(item_id="7", title="New", price=1.0, url="u"))
+    db.session.query(Unit).filter_by(
+        ebay_listing_id=old.item_id
+    ).one().ebay_listing_id = "7"
+    db.session.commit()
+
+    assert _ids(tasks.ids_parked_listings()) == ["1"]
+    assert tasks.counts()["parked"] == 1
+
+
+def test_the_parked_list_is_longest_out_first_with_the_marker_and_dates(client):
+    _parked("100", days_ago=2, title="Newest Park")
+    _parked("200", days_ago=25, title="Oldest Park")
+    _parked("300", days_ago=10, title="Middle Park")
+
+    html = client.get("/parkedlistingsview/list/").get_data(as_text=True)
+
+    assert (
+        html.index("Oldest Park")
+        < html.index("Middle Park")
+        < html.index("Newest Park")
+    )
+    assert "25 days" in html and "2 days" in html
+    assert "Unit 200" in html and "$12.50" in html
+    # 25 days out of 30 is 5 days from the re-list by date: soon.
+    row = html[html.index("Oldest Park") : html.index("Middle Park")]
+    assert "re-list soon" in row
+    assert "re-list soon" not in html[html.index("Middle Park") :]
+    # Reading only: no re-list button yet.
+    assert "Re-list</" not in html and "/relist" not in html
+
+
+def test_the_re_list_window_is_a_setting_with_a_default_of_30_days(client):
+    from fbc.core import relist
+
+    ended = datetime.datetime(2026, 1, 1)
+    assert relist.relist_by(ended) == datetime.datetime(2026, 1, 31)
+    old = fbc.app.config.get("EBAY_RELIST_DAYS")
+    try:
+        fbc.app.config["EBAY_RELIST_DAYS"] = 90
+        assert relist.relist_by(ended) == datetime.datetime(2026, 4, 1)
+        for bad in (0, -5, "30", None, True):
+            fbc.app.config["EBAY_RELIST_DAYS"] = bad
+            assert relist.window_days() == 30
+    finally:
+        fbc.app.config.pop("EBAY_RELIST_DAYS", None)
+        if old is not None:
+            fbc.app.config["EBAY_RELIST_DAYS"] = old
+
+
+def test_re_list_soon_is_within_a_week_of_the_re_list_by_date_or_past_it():
+    from fbc.core import relist
+
+    now = datetime.datetime(2026, 6, 1)
+    day = datetime.timedelta(days=1)
+    assert not relist.is_soon(now - 22 * day, now)
+    assert relist.is_soon(now - 23 * day, now)
+    assert relist.is_soon(now - 40 * day, now)
+    assert not relist.is_soon(None, now)
+    assert relist.days_out(now - 3 * day, now) == 3
+
+
+def test_the_home_page_banner_counts_parked_listings(client):
+    _parked("1")
+    _parked("2")
+
+    html = client.get("/").get_data(as_text=True)
+
+    assert "2 parked listings" in " ".join(html.split())
+    assert "/parkedlistingsview/list/" in html
+    assert "Parked Listings" in html
