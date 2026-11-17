@@ -9,6 +9,7 @@ from fbc import db
 from fbc.core import localtime
 from fbc.ebay import api, insertions
 from fbc.models.ebay import EbayDraft, EbayListing
+from fbc.models.inventory import Unit
 from fbc.models.sync import SyncRecord
 from fbc.ebay.listings import mark_ended_listings
 from fake_pictures import give_pictures
@@ -315,6 +316,67 @@ def test_the_second_sync_ends_a_listing_from_the_first_syncs_time(
 
     db.session.expire_all()
     assert row.end_time == first
+
+
+# --- Room left and next month ---
+
+
+def test_room_is_the_limit_less_the_projected_count():
+    # Started Oct 20: renewal due Nov 19. Started Nov 10: used, no renewal.
+    result = insertions.count_insertions(
+        [(D(2026, 10, 20), None), (D(2026, 11, 10), None)], NOW, 10
+    )
+    assert result["projected"] == 2
+    assert insertions.look_ahead(result, 0)["room"] == 8
+
+
+def test_a_month_with_no_room_has_none_or_less():
+    full = insertions.look_ahead(
+        insertions.count_insertions([(D(2026, 11, 3), None)] * 3, NOW, 3), 0
+    )
+    assert full["room"] == 0
+    over = insertions.look_ahead(
+        insertions.count_insertions([(D(2026, 11, 3), None)] * 4, NOW, 3), 0
+    )
+    assert over["room"] == -1
+
+
+def test_next_month_has_a_renewal_for_each_active_listing_on_its_start_day():
+    listings = [
+        (D(2026, 11, 3, 12), None),  # renews Dec 3
+        (D(2026, 8, 20, 12), None),  # Dec 20
+        (D(2026, 8, 20, 12), D(2026, 11, 1)),  # ended: none
+    ]
+    assert insertions.renewals_next_month(listings, NOW) == 2
+
+
+def test_the_date_ebay_gave_wins_next_month_too():
+    # Started Oct 31 12:00 UTC, so Dec 1 by the start; eBay says Dec 5.
+    # Dec 5 is next month, so it counts once either way.
+    listings = [(D(2026, 10, 31, 12), None, D(2026, 12, 5, 12))]
+    assert insertions.renewals_next_month(listings, NOW) == 1
+    # A date in this month (Nov 20) isn't next month's: the start's day is.
+    listings = [(D(2026, 10, 20, 12), None, D(2026, 11, 20, 12))]
+    assert insertions.renewals_next_month(listings, NOW) == 1
+
+
+def test_next_month_in_december_is_january():
+    now = D(2026, 12, 15, 12)
+    # Jan 31 is the last day, so a 31st start has its renewal then.
+    assert insertions.renewals_next_month([(D(2026, 10, 31, 12), None)], now) == 1
+
+
+def test_a_start_on_the_31st_renews_on_the_last_day_of_a_short_month():
+    # Next month from Jan 15 is February, which has 28 days in 2026.
+    now = D(2026, 1, 15, 12)
+    result = insertions.renewals_next_month([(D(2025, 12, 31, 12), None)], now)
+    assert result == 1
+
+
+def test_a_listing_starting_next_month_is_not_a_renewal():
+    # Nothing known starts next month, but a start after its own renewal
+    # day wouldn't be a renewal; renewal must come after the start.
+    assert insertions.renewals_next_month([(D(2026, 12, 20, 12), None)], NOW) == 0
 
 
 # --- The home page and publishing ---
@@ -667,3 +729,36 @@ def test_a_renewal_keeps_its_pacific_time_across_daylight_saving():
         ]
         == 1
     )
+
+
+def test_the_home_page_says_how_much_room_is_left_and_the_units_waiting(app):
+    SyncRecord.record_finished(SyncRecord.LISTINGS_SYNC, localtime.utcnow())
+    _listing("1", start=localtime.utcnow())
+    unit = Unit(name="U", unit_type='12" LP', pressing="", grading="")
+    unit.sold, unit.retail_price = False, 10.0
+    db.session.add(unit)
+    db.session.commit()
+
+    html = " ".join(signed_in_client(app).get("/").get_data(as_text=True).split())
+
+    assert "<strong>249</strong> free insertions left this month," in html
+    assert "<strong>1</strong> Unit waiting." in html
+    assert "Next month starts with" in html
+
+
+def test_the_home_page_says_when_no_free_insertions_are_left(app, monkeypatch):
+    monkeypatch.setitem(
+        fbc.app.config["EBAY_SETTINGS"], "LISTING", {"FREE_INSERTIONS": 1}
+    )
+    SyncRecord.record_finished(SyncRecord.LISTINGS_SYNC, localtime.utcnow())
+    _listing("1", start=localtime.utcnow())
+
+    html = " ".join(signed_in_client(app).get("/").get_data(as_text=True).split())
+
+    assert "<strong>No</strong> free insertions left this month," in html
+    assert "<strong>0</strong> Units waiting." in html
+
+
+def test_the_room_line_waits_for_the_first_sync_like_the_rest(app):
+    html = signed_in_client(app).get("/").get_data(as_text=True)
+    assert "Units waiting" not in html
