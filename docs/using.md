@@ -24,20 +24,22 @@ range (`100-200`) or a mix (`5, 100-200`).
 ## The home page
 
 It has the alerts first (supplies to reorder, a To do banner, and free
-insertions close to or over the limit), then these sections, in order:
+insertions close to or over the limit). They stay at the top. Below them are
+cards, in this order:
 
 - **Listings**: the active listings, this month's free insertions, the room
-  left and the Units waiting (see below).
+  left and the Units waiting (see below). Before the first listings sync it
+  says "No data yet" and links to that sync.
 - **Stock**: the Units in stock.
 - **Year to date**: this calendar year's net sold, Sales Receipts and Units
   sold, and profit and margin (cost of goods, as in Profit & Loss), with links
   to every report.
-- **All time**, which holds the rest, over every date:
-- **Sales by marketplace**: Sales Receipts, Sold Price and Net Sold for eBay,
-  Discogs and sales not linked to an order.
-- **Net profit** and the **breakeven price per Unit**, then **Profit Details**
-  to open: a table by Purchase Lot and one by Storage Box, each with its
-  Units, Units Sold and Stock.
+- **All time: Sales by marketplace**: Sales Receipts, Sold Price and Net Sold
+  for eBay, Discogs and sales not linked to an order, over every date.
+- **All time: Net profit**.
+- **All time: Breakeven per unit**.
+- **All time: Profit Details**, to open: a table by Purchase Lot and one by
+  Storage Box, each with its Units, Units Sold and Stock.
 - **Other items**: shown once an Other Item has sold (see below): how many
   sold and their sales, and profit for those that have a cost. It's apart
   from everything else here.

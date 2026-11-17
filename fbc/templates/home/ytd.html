@@ -1,0 +1,19 @@
+{% set ytd = f.ytd %}
+<p>
+  Net sold: <strong>{{ "${:,.2f}".format(ytd.net|float) }}</strong>
+  from {{ ytd.receipts }} Sales Receipt{{ "" if ytd.receipts == 1 else "s" }}
+  ({{ ytd.units_sold }} Unit{{ "" if ytd.units_sold == 1 else "s" }}).
+  Profit:
+  <strong>{% if ytd.profit|float < 0 %}<span style="color: red">{% endif %}{{ "${:,.2f}".format(ytd.profit|float) }} ({{
+  "{:,.2f}%".format(ytd.margin|float) }} profit margin){% if ytd.profit|float < 0 %}</span>{% endif %}</strong>,
+  after the cost of the Units sold, supplies and expenses.
+</p>
+<p>
+  Reports:
+  <a href="{{ url_for('ProfitAndLossView.report') }}">Profit &amp; Loss</a>,
+  <a href="{{ url_for('InventoryReportView.report') }}">Inventory</a>,
+  <a href="{{ url_for('LotsReportView.report') }}">Lots</a>,
+  <a href="{{ url_for('SalesReportView.report') }}">Sales</a>,
+  <a href="{{ url_for('AgingReportView.report') }}">Aging</a>,
+  <a href="{{ url_for('SuppliesReportView.report') }}">Supplies</a>.
+</p>
