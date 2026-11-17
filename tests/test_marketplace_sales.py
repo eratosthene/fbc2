@@ -12,7 +12,7 @@ from fake_discogs import FakeAccount, FakeDiscogs, api_error, failing
 
 import fbc
 from fbc import db
-from fbc.core import devmode
+from fbc.core import devmode, localtime
 from fbc.discogs.client import DiscogsAuthError
 from fbc.ebay import publish
 from fbc.models.discogs import DiscogsListing, DiscogsOrder, DiscogsOrderItem
@@ -319,7 +319,7 @@ def test_a_discogs_sale_deletes_an_unpublished_ebay_draft(app, discogs, ebay_end
     unit = _unit()
     db.session.add(EbayDraft(unit_id=unit.id, title="Draft title", status="draft"))
     db.session.commit()
-    _discogs_order(unit, created=datetime.datetime.utcnow())
+    _discogs_order(unit, created=localtime.utcnow())
 
     [row] = ending.end_sold_elsewhere()
 

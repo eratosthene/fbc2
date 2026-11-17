@@ -4,7 +4,7 @@ access token each call needs."""
 import datetime
 import logging
 
-from fbc.core import devmode
+from fbc.core import devmode, localtime
 
 logger = logging.getLogger()
 
@@ -155,7 +155,7 @@ def exchange_code(code):
     from fbc import app, db
     from fbc.models.ebay import EbayOAuthToken
 
-    now = datetime.datetime.utcnow()
+    now = localtime.utcnow()
     try:
         body = _token_request(
             {
@@ -201,7 +201,7 @@ def oauth_token(scope=MEDIA_SCOPE):
     # Before the cache: a token minted before dev mode was turned on would
     # still work.
     devmode.check(OAuthError, "eBay")
-    now = datetime.datetime.utcnow()
+    now = localtime.utcnow()
     cached = _oauth.get(scope)
     if cached and cached["expires"] > now:
         return cached["token"]
