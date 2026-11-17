@@ -463,6 +463,7 @@ def _register_views():
     )
     from fbc.models.sync import SyncRecord  # noqa: F401  (so its table exists)
     from fbc.models.pictures import UnitPicture  # noqa: F401  (likewise)
+    from fbc.models.home import HomeLayout  # noqa: F401  (likewise)
     from fbc.views.connect import ConnectDiscogsView, ConnectEbayView
     from fbc.views.pictures import UnitPicturesView
     from fbc.views.supplies import (

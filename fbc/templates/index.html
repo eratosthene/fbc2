@@ -59,8 +59,33 @@
   {% endif %}
 
   {# The cards, in the order the view gives. A card's piece reads its figures as `f`. #}
+  <div class="clearfix home-toolbar">
+    {% if customize %}
+    <span class="pull-right">
+      <button type="button" class="btn btn-sm btn-default" id="home-reset"
+        data-url="{{ url_for('MyIndexView.layoutreset') }}"
+        data-confirm="Put the cards back in the default order and show every one?">Reset to default</button>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('MyIndexView.index') }}">Done</a>
+    </span>
+    {% else %}
+    <a class="btn btn-sm btn-default pull-right" href="{{ url_for('MyIndexView.index', customize=1) }}">Customize</a>
+    {% endif %}
+  </div>
+  {% if customize %}
+  <p class="text-muted">Drag a card by its handle to move it. Changes save as you make them.</p>
+  {% endif %}
+  <div id="home-cards"{% if customize %} class="customizing"
+    data-order-url="{{ url_for('MyIndexView.layoutorder') }}"
+    data-csrf="{{ csrf_token() if csrf_token is defined else '' }}"{% endif %}>
   {% for shown in cards if shown.visible %}
-  <div class="home-card" id="card-{{ shown.card.key }}">
+  <div class="home-card" id="card-{{ shown.card.key }}" data-key="{{ shown.card.key }}">
+    {% if customize %}
+    <div class="pull-right home-card-tools">
+      <button type="button" class="btn btn-xs btn-default home-hide"
+        data-url="{{ url_for('MyIndexView.layouthide', key=shown.card.key) }}">Hide</button>
+    </div>
+    <span class="home-handle glyphicon glyphicon-move" title="Drag to move" aria-label="Drag to move"></span>
+    {% endif %}
     <h2>{{ shown.card.title }}{% if shown.subtitle %}: {{ shown.subtitle }}{% endif %}</h2>
     {% if shown.is_empty %}
     <p>
@@ -75,5 +100,22 @@
     {% endif %}
   </div>
   {% endfor %}
+  </div>
+  {% if customize %}
+  <div class="well well-sm" id="home-hidden">
+    <strong>Hidden cards</strong>
+    {% for card in hidden_cards %}
+    <div class="home-hidden-card">
+      {{ card.title }}
+      <button type="button" class="btn btn-xs btn-default home-show"
+        data-url="{{ url_for('MyIndexView.layoutshow', key=card.key) }}">Show</button>
+    </div>
+    {% else %}
+    <span class="text-muted">None. Hide a card to put it here.</span>
+    {% endfor %}
+  </div>
+  <script src="{{ url_for('static', filename='js/Sortable.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/home-layout.js') }}"></script>
+  {% endif %}
 </div>
 {% endblock %}

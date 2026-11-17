@@ -1,10 +1,10 @@
 import logging
 
-from flask import flash, jsonify, redirect, request, url_for
+from flask import flash, g, jsonify, redirect, request, url_for
 from flask_appbuilder import IndexView, has_access
 from flask_appbuilder.views import expose
 
-from fbc.sales import cards, tasks
+from fbc.sales import cards, layout, tasks
 from fbc.sync import jobs, state
 from fbc.ebay import insertions
 
@@ -26,27 +26,41 @@ def banner_figures(shared):
     }
 
 
-def home_context(shown_cards=None):
+def home_context(shown_cards=None, user_id=None):
     """
-    What the home page renders: the banner's figures and `cards`, the cards
-    to show in order, each with its figures. Only these cards' figures are
-    worked out. None means every card, in the default order.
+    What the home page renders: the banner's figures, `cards` (the cards to
+    show in order, each with its figures) and `hidden_cards` (the user's
+    hidden ones, with no figures). `shown_cards` None means the cards in the
+    user's layout (`user_id`; the default order for none). Only the cards
+    shown have their figures worked out.
     """
     shared = cards.Shared()
     context = banner_figures(shared)
-    context["cards"] = cards.figures_for(
-        cards.CARDS if shown_cards is None else shown_cards, shared
-    )
+    hidden = []
+    if shown_cards is None:
+        arranged = layout.for_user(user_id)
+        shown_cards, hidden = arranged.visible, arranged.hidden_cards
+    context["cards"] = cards.figures_for(shown_cards, shared)
+    context["hidden_cards"] = hidden
     return context
 
 
 def home_totals():
     """Every figure the home page has, in one dict, for reports and tests."""
     context = home_context()
-    totals = {key: value for key, value in context.items() if key != "cards"}
+    totals = {
+        key: value
+        for key, value in context.items()
+        if key not in ("cards", "hidden_cards")
+    }
     for shown in context["cards"]:
         totals.update(shown.figures)
     return totals
+
+
+def _user_id():
+    user = g.get("user")
+    return getattr(user, "id", None)
 
 
 class MyIndexView(IndexView):
@@ -62,9 +76,48 @@ class MyIndexView(IndexView):
     @has_access
     def index(self):
         self.update_redirect()
+        context = home_context(user_id=_user_id())
         return self.render_template(
-            self.index_template, appbuilder=self.appbuilder, **home_context()
+            self.index_template,
+            appbuilder=self.appbuilder,
+            customize=request.args.get("customize") == "1",
+            **context,
         )
+
+    def _change_layout(self, change):
+        """
+        Run `change(user_id)` on the signed-in user's own layout and answer
+        with JSON. A card key that isn't a card is a 400 and changes nothing.
+        """
+        try:
+            change(g.user.id)
+        except layout.BadKey as e:
+            return jsonify(error=str(e)), 400
+        return jsonify(ok=True)
+
+    @expose("/layout/order", methods=["POST"])
+    @has_access
+    def layoutorder(self):
+        """Save the order the visible cards were dragged into: {"order": [keys]}."""
+        data = request.get_json(silent=True)
+        keys = data.get("order") if isinstance(data, dict) else None
+        return self._change_layout(lambda uid: layout.reorder(uid, keys))
+
+    @expose("/layout/hide/<key>", methods=["POST"])
+    @has_access
+    def layouthide(self, key):
+        return self._change_layout(lambda uid: layout.set_hidden(uid, key, True))
+
+    @expose("/layout/show/<key>", methods=["POST"])
+    @has_access
+    def layoutshow(self, key):
+        return self._change_layout(lambda uid: layout.set_hidden(uid, key, False))
+
+    @expose("/layout/reset", methods=["POST"])
+    @has_access
+    def layoutreset(self):
+        """Delete the saved layout: the default order, nothing hidden."""
+        return self._change_layout(layout.reset)
 
     @expose("/calibrateinsertions", methods=["POST"])
     @has_access
