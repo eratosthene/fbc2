@@ -25,7 +25,7 @@ from fbc.models.sales import (
     SalesReceipt,
     earnings_totals,
 )
-from fbc.sales import index, ship, tasks
+from fbc.sales import cards, ship, tasks
 from fbc.sync import ending, jobs
 from test_listing import _carnaval
 
@@ -483,7 +483,7 @@ def test_the_home_page_shows_discogs_sales_and_failed_endings(client, discogs):
     )
     db.session.commit()
 
-    sales = index.marketplace_sales()
+    sales = cards.marketplace_sales()
     html = client.get("/").get_data(as_text=True)
 
     assert sales == [

@@ -1,0 +1,19 @@
+<table class="table table-condensed" style="width: auto">
+  <tr><th></th><th class="text-right">Sales Receipts</th><th class="text-right">Sold Price</th><th class="text-right">Net Sold</th></tr>
+  {% for m in f.marketplace_sales %}
+  <tr>
+    <td>
+      {% if m.no_order %}
+      <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_0_ebay_orders=1) }}">{{ m.name }}</a>
+      {% elif m.name == "eBay" %}
+      <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_1_ebay_orders=1) }}">{{ m.name }}</a>
+      {% else %}
+      <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_0_discogs_orders=1) }}">{{ m.name }}</a>
+      {% endif %}
+    </td>
+    <td class="text-right">{{ m.receipts }}</td>
+    <td class="text-right">{{ "${:,.2f}".format(m.gross|float) }}</td>
+    <td class="text-right">{{ "${:,.2f}".format(m.net|float) }}</td>
+  </tr>
+  {% endfor %}
+</table>

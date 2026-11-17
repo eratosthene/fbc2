@@ -1,0 +1,85 @@
+{% import 'appbuilder/general/lib.html' as lib %}
+<p>
+  Net Profit:
+  <strong>{% if (f.total_net_profit|float < 0) %}<span style="color: red">{% endif %}{{ "${:,.2f}".format(f.total_net_profit|float) }} ({{
+  "{:,.2f}%".format(f.profit_margin|float) }} profit margin){% if (f.total_net_profit|float < 0) %}</span>{% endif %}</strong>
+</p>
+<p>
+  Breakeven per unit, including supplies (a supply cost of {{ "${:,.2f}".format(f.supply_per_unit|float) }} per unit):
+  <strong>{{ "${:,.2f}".format(f.breakeven_per_unit|float) }}</strong>
+</p>
+{% call lib.accordion_tag("profitdetails","Profit Details (by Purchase Lot and Storage Box)", False) %}
+<table class="table table-bordered table-condensed table-hover" style="width: auto">
+  <tr>
+    <th>Lot</th>
+    <th>Units</th>
+    <th>Units Sold</th>
+    <th>Stock</th>
+    <th>Capital</th>
+    <th>Sold For</th>
+    <th>Fees</th>
+    <th>Fees %</th>
+    <th>Net Sold</th>
+    <th>Profit</th>
+    <th>ROI</th>
+  </tr>
+  {% for lot in f.lots %}
+  <tr>
+    <td>{{ lot.name }}</td>
+    <td>{{ f.lot_totals[lot.id]['units'] }}</td>
+    <td>{{ f.lot_totals[lot.id]['sold_units'] }}</td>
+    <td>{{ f.lot_totals[lot.id]['instock'] }}</td>
+    <td>{{ "${:,.2f}".format(lot.price|float) }}</td>
+    <td>{{ "${:,.2f}".format(f.lot_totals[lot.id]['gross']|float) }}</td>
+    <td>{{ "${:,.2f}".format(f.lot_totals[lot.id]['fees']|float) }}</td>
+    <td>{{ "{:,.2f}%".format(f.lot_totals[lot.id]['feepc']|float) }}</td>
+    <td>{{ "${:,.2f}".format(f.lot_totals[lot.id]['net']|float) }}</td>
+    <td>{{ "${:,.2f}".format(f.lot_totals[lot.id]['profit']|float) }}</td>
+    <td>{{ "{:,.2f}%".format(f.lot_totals[lot.id]['roi']|float) }}</td>
+  </tr>
+  {% endfor %}
+  <tr>
+    <th>Total</th>
+    <th>{{ f.totals['units'] }}</th>
+    <th>{{ f.totals['sold_units'] }}</th>
+    <th>{{ f.totals['instock'] }}</th>
+    <th>{{ "${:,.2f}".format(f.totals['capital']|float) }}</th>
+    <th>{{ "${:,.2f}".format(f.totals['gross']|float) }}</th>
+    <th>{{ "${:,.2f}".format(f.totals['fees']|float) }}</th>
+    <th>{{ "{:,.2f}%".format(f.totals['feepc']|float) }}</th>
+    <th>{{ "${:,.2f}".format(f.totals['net']|float) }}</th>
+    <th>{{ "${:,.2f}".format(f.totals['profit']|float) }}</th>
+    <th>{{ "{:,.2f}%".format(f.totals['roi']|float) }}</th>
+  </tr>
+</table>
+<table class="table table-bordered table-condensed table-hover" style="width: auto">
+  <tr>
+    <th>Storage Box</th>
+    <th>Units</th>
+    <th>Units Sold</th>
+    <th>Stock</th>
+    <th>Capital</th>
+    <th>Sold For</th>
+    <th>Fees</th>
+    <th>Fees %</th>
+    <th>Net Sold</th>
+    <th>Profit</th>
+    <th>ROI</th>
+  </tr>
+  {% for box in f.box_totals %}
+  <tr>
+    <td>{{ f.box_totals[box]['name'] }}</td>
+    <td>{{ f.box_totals[box]['units'] }}</td>
+    <td>{{ f.box_totals[box]['sold_units'] }}</td>
+    <td>{{ f.box_totals[box]['instock'] }}</td>
+    <td>{{ "${:,.2f}".format(f.box_totals[box]['capital']|float) }}</td>
+    <td>{{ "${:,.2f}".format(f.box_totals[box]['gross']|float) }}</td>
+    <td>{{ "${:,.2f}".format(f.box_totals[box]['fees']|float) }}</td>
+    <td>{{ "{:,.2f}%".format(f.box_totals[box]['feepc']|float) }}</td>
+    <td>{{ "${:,.2f}".format(f.box_totals[box]['net']|float) }}</td>
+    <td>{{ "${:,.2f}".format(f.box_totals[box]['profit']|float) }}</td>
+    <td>{{ "{:,.2f}%".format(f.box_totals[box]['roi']|float) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endcall %}

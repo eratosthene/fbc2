@@ -58,214 +58,22 @@
   </div>
   {% endif %}
 
-  <h2>Listings</h2>
-  {% if listings.synced %}
-  <p>
-    <strong>{{ listings.active }}</strong> active on eBay.
-    <strong>{{ listings.used }}</strong> free insertions used this month,
-    <strong>{{ [listings.limit - listings.used, 0] | max }}</strong> of {{ listings.limit }} left,
-    {{ listings.due }} more renewal{{ "" if listings.due == 1 else "s" }}
-    due before the month ends, {{ listings.projected }} projected.
-    Last synced {{ listings.synced | localtime }}.
-  </p>
-  <p>
-    {% if listings.room > 0 %}
-    <strong>{{ listings.room }}</strong> free insertion{{ "" if listings.room == 1 else "s" }} left this month,
+  {# The cards, in the order the view gives. A card's piece reads its figures as `f`. #}
+  {% for shown in cards if shown.visible %}
+  <div class="home-card" id="card-{{ shown.card.key }}">
+    <h2>{{ shown.card.title }}{% if shown.subtitle %}: {{ shown.subtitle }}{% endif %}</h2>
+    {% if shown.is_empty %}
+    <p>
+      No data yet.
+      {% if shown.card.sync %}
+      Run <a href="{{ url_for(shown.card.sync) }}">{{ shown.card.sync_label }}</a>
+      {{ shown.card.sync_why }}.
+      {% endif %}
+    </p>
     {% else %}
-    <strong>No</strong> free insertions left this month,
+    {% with f = shown.figures %}{% include shown.card.template %}{% endwith %}
     {% endif %}
-    <strong>{{ waiting.total }}</strong> Unit{{ "" if waiting.total == 1 else "s" }} waiting.
-    Next month starts with {{ listings.next_projected }} renewal{{ "" if listings.next_projected == 1 else "s" }}
-    ({{ [listings.next_room, 0] | max }} of {{ listings.limit }} free insertions left).
-  </p>
-  {% if parked_suggestion %}
-  <p>
-    <strong>Nothing better to list:</strong> there is room for more than the
-    Units waiting. The listing that has been off eBay longest is
-    <a href="{{ url_for('ParkedListingsView.list') }}">{{ parked_suggestion.title }}</a>,
-    out {{ parked_suggestion.fmt_out_for() }}.
-  </p>
-  {% endif %}
-  {% call lib.accordion_tag("calibrateinsertions","Calibrate with the eBay app", False) %}
-  <form method="post" action="{{ url_for('MyIndexView.calibrateinsertions') }}" class="form-inline">
-    <label for="remaining">The eBay app shows</label>
-    <input type="number" name="remaining" id="remaining" min="0" max="{{ listings.limit }}" required class="form-control" style="width: 6em">
-    <label for="remaining">free listings left.</label>
-    <button class="btn btn-default">Use that number</button>
-  </form>
-  {% endcall %}
-  {% else %}
-  <p>
-    Run <a href="{{ url_for('MyIndexView.syncebaylistings') }}">the eBay listings sync</a>
-    to see how many listings are active and how many free insertions this
-    month has used.
-  </p>
-  {% endif %}
-
-  <h2>Stock</h2>
-  <p>Units in stock: <strong>{{ stock_total }}</strong></p>
-
-  <h2>Year to date <small>{{ ytd.start.year }}</small></h2>
-  <p>
-    Net sold: <strong>{{ "${:,.2f}".format(ytd.net|float) }}</strong>
-    from {{ ytd.receipts }} Sales Receipt{{ "" if ytd.receipts == 1 else "s" }}
-    ({{ ytd.units_sold }} Unit{{ "" if ytd.units_sold == 1 else "s" }}).
-    Profit:
-    <strong>{% if ytd.profit|float < 0 %}<span style="color: red">{% endif %}{{ "${:,.2f}".format(ytd.profit|float) }} ({{
-    "{:,.2f}%".format(ytd.margin|float) }} profit margin){% if ytd.profit|float < 0 %}</span>{% endif %}</strong>,
-    after the cost of the Units sold, supplies and expenses.
-  </p>
-  <p>
-    Reports:
-    <a href="{{ url_for('ProfitAndLossView.report') }}">Profit &amp; Loss</a>,
-    <a href="{{ url_for('InventoryReportView.report') }}">Inventory</a>,
-    <a href="{{ url_for('LotsReportView.report') }}">Lots</a>,
-    <a href="{{ url_for('SalesReportView.report') }}">Sales</a>,
-    <a href="{{ url_for('AgingReportView.report') }}">Aging</a>,
-    <a href="{{ url_for('SuppliesReportView.report') }}">Supplies</a>.
-  </p>
-
-  <h2>All time</h2>
-  {% if marketplace_sales %}
-  <h3>Sales by marketplace</h3>
-  <table class="table table-condensed" style="width: auto">
-    <tr><th></th><th class="text-right">Sales Receipts</th><th class="text-right">Sold Price</th><th class="text-right">Net Sold</th></tr>
-    {% for m in marketplace_sales %}
-    <tr>
-      <td>
-        {% if m.no_order %}
-        <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_0_ebay_orders=1) }}">{{ m.name }}</a>
-        {% elif m.name == "eBay" %}
-        <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_1_ebay_orders=1) }}">{{ m.name }}</a>
-        {% else %}
-        <a href="{{ url_for('SalesReceiptModelView.list', archived='all', _flt_0_discogs_orders=1) }}">{{ m.name }}</a>
-        {% endif %}
-      </td>
-      <td class="text-right">{{ m.receipts }}</td>
-      <td class="text-right">{{ "${:,.2f}".format(m.gross|float) }}</td>
-      <td class="text-right">{{ "${:,.2f}".format(m.net|float) }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% endif %}
-
-  <h3>
-    Net profit:
-    <strong>{% if (total_net_profit|float < 0) %}<span style="color: red">{% endif %}{{ "${:,.2f}".format(total_net_profit|float) }} ({{
-    "{:,.2f}%".format(profit_margin|float) }} profit margin){% if (total_net_profit|float < 0) %}</span>{% endif %}</strong>
-  </h3>
-  <p>
-    Breakeven per unit, including supplies (a supply cost of {{ "${:,.2f}".format(supply_per_unit|float) }} per unit):
-    <strong>{{ "${:,.2f}".format(breakeven_per_unit|float) }}</strong>
-  </p>
-  {% call lib.accordion_tag("profitdetails","Profit Details (by Purchase Lot and Storage Box)", False) %}
-  <table class="table table-bordered table-condensed table-hover" style="width: auto">
-    <tr>
-      <th>Lot</th>
-      <th>Units</th>
-      <th>Units Sold</th>
-      <th>Stock</th>
-      <th>Capital</th>
-      <th>Sold For</th>
-      <th>Fees</th>
-      <th>Fees %</th>
-      <th>Net Sold</th>
-      <th>Profit</th>
-      <th>ROI</th>
-    </tr>
-    {% for lot in lots %}
-    <tr>
-      <td>{{ lot.name }}</td>
-      <td>{{ lot_totals[lot.id]['units'] }}</td>
-      <td>{{ lot_totals[lot.id]['sold_units'] }}</td>
-      <td>{{ lot_totals[lot.id]['instock'] }}</td>
-      <td>{{ "${:,.2f}".format(lot.price|float) }}</td>
-      <td>{{ "${:,.2f}".format(lot_totals[lot.id]['gross']|float) }}</td>
-      <td>{{ "${:,.2f}".format(lot_totals[lot.id]['fees']|float) }}</td>
-      <td>{{ "{:,.2f}%".format(lot_totals[lot.id]['feepc']|float) }}</td>
-      <td>{{ "${:,.2f}".format(lot_totals[lot.id]['net']|float) }}</td>
-      <td>{{ "${:,.2f}".format(lot_totals[lot.id]['profit']|float) }}</td>
-      <td>{{ "{:,.2f}%".format(lot_totals[lot.id]['roi']|float) }}</td>
-    </tr>
-    {% endfor %}
-    <tr>
-      <th>Total</th>
-      <th>{{ totals['units'] }}</th>
-      <th>{{ totals['sold_units'] }}</th>
-      <th>{{ totals['instock'] }}</th>
-      <th>{{ "${:,.2f}".format(totals['capital']|float) }}</th>
-      <th>{{ "${:,.2f}".format(totals['gross']|float) }}</th>
-      <th>{{ "${:,.2f}".format(totals['fees']|float) }}</th>
-      <th>{{ "{:,.2f}%".format(totals['feepc']|float) }}</th>
-      <th>{{ "${:,.2f}".format(totals['net']|float) }}</th>
-      <th>{{ "${:,.2f}".format(totals['profit']|float) }}</th>
-      <th>{{ "{:,.2f}%".format(totals['roi']|float) }}</th>
-    </tr>
-  </table>
-  <table class="table table-bordered table-condensed table-hover" style="width: auto">
-    <tr>
-      <th>Storage Box</th>
-      <th>Units</th>
-      <th>Units Sold</th>
-      <th>Stock</th>
-      <th>Capital</th>
-      <th>Sold For</th>
-      <th>Fees</th>
-      <th>Fees %</th>
-      <th>Net Sold</th>
-      <th>Profit</th>
-      <th>ROI</th>
-    </tr>
-    {% for box in box_totals %}
-    <tr>
-      <td>{{ box_totals[box]['name'] }}</td>
-      <td>{{ box_totals[box]['units'] }}</td>
-      <td>{{ box_totals[box]['sold_units'] }}</td>
-      <td>{{ box_totals[box]['instock'] }}</td>
-      <td>{{ "${:,.2f}".format(box_totals[box]['capital']|float) }}</td>
-      <td>{{ "${:,.2f}".format(box_totals[box]['gross']|float) }}</td>
-      <td>{{ "${:,.2f}".format(box_totals[box]['fees']|float) }}</td>
-      <td>{{ "{:,.2f}%".format(box_totals[box]['feepc']|float) }}</td>
-      <td>{{ "${:,.2f}".format(box_totals[box]['net']|float) }}</td>
-      <td>{{ "${:,.2f}".format(box_totals[box]['profit']|float) }}</td>
-      <td>{{ "{:,.2f}%".format(box_totals[box]['roi']|float) }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% endcall %}
-
-  {% if other_sales.sold %}
-  <h3>Other items</h3>
-  <p>Other items: <strong>{{ other_sales.sold }}</strong> sold,
-  <strong>{{ "${:,.2f}".format(other_sales.gross|float) }}</strong> in sales,
-  <strong>{{ "${:,.2f}".format(other_sales.net|float) }}</strong> net{% if other_sales.profit is not none %};
-  profit <strong>{{ "${:,.2f}".format(other_sales.profit|float) }}</strong> on the
-  {{ other_sales.costed }} that have a cost{% endif %}.</p>
-  <p class="text-muted">Not records: these aren't in the stock, cost or profit figures,
-  and the shipping supplies they used{% if other_sales.supplies %}
-  ({{ "${:,.2f}".format(other_sales.supplies|float) }}){% endif %} aren't in the supply cost.</p>
-  {% endif %}
-
-  <h3>Money</h3>
-  <p>Supply cost: <strong>{{ "${:,.2f}".format(supply_total|float) }}</strong></p>
-  <p>Other expenses: <strong>{{ "${:,.2f}".format(expense_total|float) }}</strong></p>
-  {% call lib.accordion_tag("expensedetails","Expense Details", False) %}
-  <table class="table table-bordered table-condensed table-hover" style="width: auto">
-    <tr>
-      <th>Category</th>
-      <th>Amount</th>
-    </tr>
-    {% for label, amount in expenses %}
-    <tr>
-      <td>{{ label }}</td>
-      <td>{{ "${:,.2f}".format(amount|float) }}</td>
-    </tr>
-    {% else %}
-    <tr>
-      <td colspan="2">No expenses yet.</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% endcall %}
+  </div>
+  {% endfor %}
 </div>
 {% endblock %}

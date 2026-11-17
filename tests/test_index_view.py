@@ -51,6 +51,14 @@ def _unit(lot, box=None, sold=False, sales_receipt=None, name="Unit"):
     return unit
 
 
+def _flat(kwargs):
+    """The render's kwargs with every shown card's figures merged in."""
+    flat = {k: v for k, v in kwargs.items() if k != "cards"}
+    for shown in kwargs["cards"]:
+        flat.update(shown.figures)
+    return flat
+
+
 def _index_page(view):
     """What the home page view renders, without its sign-in check (the view is
     called directly here, with no one signed in)."""
@@ -76,7 +84,7 @@ def test_index_counts_stock_and_unit_totals(app):
 
     class CapturingIndexView(MyIndexView):
         def render_template(self, template, **kwargs):
-            captured.update(kwargs)
+            captured.update(_flat(kwargs))
             return "ok"
 
     with app.test_request_context("/"):
@@ -85,7 +93,7 @@ def test_index_counts_stock_and_unit_totals(app):
         _index_page(view)
 
     assert captured["stock_total"] == 1
-    assert captured["unit_total"] == 2
+    assert captured["totals"]["units"] == 2
 
 
 def test_index_aggregates_totals_across_lots_and_boxes(app):
@@ -103,7 +111,7 @@ def test_index_aggregates_totals_across_lots_and_boxes(app):
 
     class CapturingIndexView(MyIndexView):
         def render_template(self, template, **kwargs):
-            captured.update(kwargs)
+            captured.update(_flat(kwargs))
             return "ok"
 
     with app.test_request_context("/"):
@@ -112,7 +120,7 @@ def test_index_aggregates_totals_across_lots_and_boxes(app):
         _index_page(view)
 
     assert captured["stock_total"] == 1
-    assert captured["unit_total"] == 2
+    assert captured["totals"]["units"] == 2
     assert captured["supply_total"] == 10.0
     assert captured["totals"]["gross"] == 60.0
     assert captured["totals"]["net"] == 54.0
@@ -152,7 +160,7 @@ def test_index_handles_units_without_storage_box(app):
 
     class CapturingIndexView(MyIndexView):
         def render_template(self, template, **kwargs):
-            captured.update(kwargs)
+            captured.update(_flat(kwargs))
             return "ok"
 
     with app.test_request_context("/"):
@@ -177,7 +185,7 @@ def test_index_handles_units_without_purchase_lot(app):
 
     class CapturingIndexView(MyIndexView):
         def render_template(self, template, **kwargs):
-            captured.update(kwargs)
+            captured.update(_flat(kwargs))
             return "ok"
 
     with app.test_request_context("/"):
@@ -192,7 +200,7 @@ def test_index_handles_units_without_purchase_lot(app):
     assert captured["totals"]["gross"] == 20.0
     assert captured["totals"]["net"] == 18.0
     assert captured["lot_totals"][lot.id]["gross"] == 0
-    assert captured["unit_total"] == 3
+    assert captured["totals"]["units"] == 3
 
     with signed_in_client(app) as client:
         assert client.get("/").status_code == 200
@@ -211,7 +219,7 @@ def test_index_splits_a_multi_unit_receipt_across_its_units(app):
 
     class CapturingIndexView(MyIndexView):
         def render_template(self, template, **kwargs):
-            captured.update(kwargs)
+            captured.update(_flat(kwargs))
             return "ok"
 
     with app.test_request_context("/"):
@@ -338,7 +346,7 @@ def test_index_takes_expenses_off_the_net_profit_by_category(app):
 
     class CapturingIndexView(MyIndexView):
         def render_template(self, template, **kwargs):
-            captured.update(kwargs)
+            captured.update(_flat(kwargs))
             return "ok"
 
     with app.test_request_context("/"):
@@ -377,7 +385,7 @@ def test_index_counts_expenses_on_a_purchase_order_as_expenses_not_supplies(app)
 
     class CapturingIndexView(MyIndexView):
         def render_template(self, template, **kwargs):
-            captured.update(kwargs)
+            captured.update(_flat(kwargs))
             return "ok"
 
     with app.test_request_context("/"):
@@ -420,10 +428,11 @@ def test_index_groups_its_alerts_above_the_listings(app):
     assert page.index("Time to reorder") < page.index("<h2>Listings</h2>")
     assert page.index("<h2>Listings</h2>") < page.index("<h2>Stock</h2>")
     assert page.index("<h2>Stock</h2>") < page.index("Year to date")
-    assert page.index("Year to date") < page.index("<h2>All time</h2>")
-    assert page.index("<h2>All time</h2>") < page.index("<h3>Money</h3>")
+    assert page.index("Year to date") < page.index("All time: Sales by marketplace")
+    assert page.index("All time: Sales by marketplace") < page.index("<h2>Money</h2>")
+    assert "<h2>All time</h2>" not in page
     # The shop's name is a small footer, not a heading.
     assert "<h1>" not in page
-    assert page.rindex("Fire &amp; Bones Collectibles") > page.index("<h3>Money</h3>")
+    assert page.rindex("Fire &amp; Bones Collectibles") > page.index("<h2>Money</h2>")
     # One footer, without Flask-AppBuilder's rule.
     assert page.count("<footer") == 1 and "<hr" not in page

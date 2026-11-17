@@ -11,7 +11,7 @@ from fbc import db
 from fbc.models.discogs import DiscogsOrder
 from fbc.models.ebay import EbayOrder
 from fbc.models.sales import SalesReceipt
-from fbc.sales import index
+from fbc.sales import cards
 from types import SimpleNamespace
 
 import pytest
@@ -106,16 +106,16 @@ def test_the_has_no_order_filter_is_first_on_the_ebay_orders_column(app):
 def test_home_lists_ebay_and_discogs_at_zero_and_links_the_no_order_row(app):
     client = signed_in_client(app)
 
-    assert [(r["name"], r["receipts"]) for r in index.marketplace_sales()] == [
+    assert [(r["name"], r["receipts"]) for r in cards.marketplace_sales()] == [
         ("eBay", 0),
         ("Discogs", 0),
     ]
     _receipt(notes="friend")
     _receipt(ebay=True)
-    sales = {r["name"]: r for r in index.marketplace_sales()}
+    sales = {r["name"]: r for r in cards.marketplace_sales()}
     html = client.get("/").get_data(as_text=True)
 
-    assert sales[index.NO_ORDER_NAME]["receipts"] == 1
+    assert sales[cards.NO_ORDER_NAME]["receipts"] == 1
     assert sales["Discogs"]["receipts"] == 0
     assert ">Other</a>" in html
     assert "In person or not linked" not in html

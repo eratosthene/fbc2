@@ -1,0 +1,8 @@
+<p>Other items: <strong>{{ f.other_sales.sold }}</strong> sold,
+<strong>{{ "${:,.2f}".format(f.other_sales.gross|float) }}</strong> in sales,
+<strong>{{ "${:,.2f}".format(f.other_sales.net|float) }}</strong> net{% if f.other_sales.profit is not none %};
+profit <strong>{{ "${:,.2f}".format(f.other_sales.profit|float) }}</strong> on the
+{{ f.other_sales.costed }} that have a cost{% endif %}.</p>
+<p class="text-muted">Not records: these aren't in the stock, cost or profit figures,
+and the shipping supplies they used{% if f.other_sales.supplies %}
+({{ "${:,.2f}".format(f.other_sales.supplies|float) }}){% endif %} aren't in the supply cost.</p>

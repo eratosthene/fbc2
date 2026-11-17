@@ -1,0 +1,37 @@
+{% import 'appbuilder/general/lib.html' as lib %}
+{% set listings = f.listings %}
+{% set waiting = f.waiting %}
+<p>
+  <strong>{{ listings.active }}</strong> active on eBay.
+  <strong>{{ listings.used }}</strong> free insertions used this month,
+  <strong>{{ [listings.limit - listings.used, 0] | max }}</strong> of {{ listings.limit }} left,
+  {{ listings.due }} more renewal{{ "" if listings.due == 1 else "s" }}
+  due before the month ends, {{ listings.projected }} projected.
+  Last synced {{ listings.synced | localtime }}.
+</p>
+<p>
+  {% if listings.room > 0 %}
+  <strong>{{ listings.room }}</strong> free insertion{{ "" if listings.room == 1 else "s" }} left this month,
+  {% else %}
+  <strong>No</strong> free insertions left this month,
+  {% endif %}
+  <strong>{{ waiting.total }}</strong> Unit{{ "" if waiting.total == 1 else "s" }} waiting.
+  Next month starts with {{ listings.next_projected }} renewal{{ "" if listings.next_projected == 1 else "s" }}
+  ({{ [listings.next_room, 0] | max }} of {{ listings.limit }} free insertions left).
+</p>
+{% if f.parked_suggestion %}
+<p>
+  <strong>Nothing better to list:</strong> there is room for more than the
+  Units waiting. The listing that has been off eBay longest is
+  <a href="{{ url_for('ParkedListingsView.list') }}">{{ f.parked_suggestion.title }}</a>,
+  out {{ f.parked_suggestion.fmt_out_for() }}.
+</p>
+{% endif %}
+{% call lib.accordion_tag("calibrateinsertions","Calibrate with the eBay app", False) %}
+<form method="post" action="{{ url_for('MyIndexView.calibrateinsertions') }}" class="form-inline">
+  <label for="remaining">The eBay app shows</label>
+  <input type="number" name="remaining" id="remaining" min="0" max="{{ listings.limit }}" required class="form-control" style="width: 6em">
+  <label for="remaining">free listings left.</label>
+  <button class="btn btn-default">Use that number</button>
+</form>
+{% endcall %}

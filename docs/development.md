@@ -55,8 +55,8 @@ area, and everything else is in a package by area (#157):
   Discogs. `ship.py` is Ship This (eBay orders, and Discogs orders in `discogs_*`
   functions), `stock.py` is the supplies it takes out of
   the Supply List, `combine.py` combines receipts, `archive.py`, `finance.py`
-  (Purchase Lot money), `pricing.py` (what to ask), `tasks.py` and `index.py`
-  (the home page), and `widgets.py` (the Supplies Used field).
+  (Purchase Lot money), `pricing.py` (what to ask), `tasks.py`, `index.py`
+  and `cards.py` (the home page), and `widgets.py` (the Supplies Used field).
 
 The packages sit in layers, lowest first: `core`, `models`, `ebay`,
 `discogs` and `pictures`, `sync`, `sales`, then `views`. A module only imports from its own
@@ -268,6 +268,24 @@ The lists are the existing ones with a filter (`fbc/views/tasks.py`), and eBay
 Drafts to List (eBay) and Drafts to List (Discogs) are filter links on the eBay Drafts and Discogs Listings lists. `fbc/sales/tasks.py` says
 what each one means. A new kind of task is a new function there, a view or
 filter link, and a count for the banner.
+
+## The home page's cards
+
+Under the alerts (the To do banner and the others, which aren't cards), the home
+page is a list of cards. `fbc/sales/cards.py` has `CARDS`, in the default
+order; `index.html` loops over the ones `home_context()` gives it. A `Card` has
+a key, a title, a template piece in `fbc/templates/home/` (which reads its
+figures as `f`), a function that works out the figures, and, if a sync fills
+it, `sync` (a view endpoint) with `sync_label` and `sync_why`. When its
+`empty(figures)` is true the card shows "No data yet", with a link to the sync,
+or nothing at all with `hide_when_empty`.
+
+To add a card: write the piece, the figures function and the `Card` entry. A
+card's figures are only worked out when it is shown. Figures that several
+cards read go through `Shared`: write a function that takes the `Shared` and
+call it with `shared.get(fn)`, so one page works it out once (see `inventory`,
+`money` and `all_time`). `tests/test_home_cards.py` checks the order, that a
+hidden card does no work, and that the page's query count hasn't grown.
 
 ## Signing in
 
