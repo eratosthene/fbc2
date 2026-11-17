@@ -66,9 +66,9 @@ def _api_errors():
 
 
 def _settings():
-    from fbc import app
+    from flask import current_app
 
-    return app.config["DISCOGS_SETTINGS"]
+    return current_app.config["DISCOGS_SETTINGS"]
 
 
 def has_app_keys():

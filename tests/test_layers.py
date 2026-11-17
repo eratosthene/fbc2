@@ -7,6 +7,8 @@ The layout rules for fbc/ (docs/development.md, "How fbc/ is laid out"):
 - models/ may also import the two leaf modules that import nothing from fbc
   when they load.
 - No loose modules in fbc/, and package __init__.py files are empty.
+- Nothing below the top level imports `app` from fbc; it uses Flask's
+  current_app. (`db` may still be imported.)
 
 An import that goes the wrong way fails here, whether at the top of a file or
 inside a function.
@@ -141,3 +143,15 @@ def test_package_init_files_are_empty():
         if p.parent != ROOT and p.read_text().strip()
     ]
     assert filled == []
+
+
+def test_no_module_below_the_top_level_imports_app_from_fbc():
+    found = []
+    for module, path in _modules().items():
+        if module.count(".") < 1:
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.ImportFrom) and node.module == "fbc":
+                if any(a.name == "app" for a in node.names):
+                    found.append(f"{module}:{node.lineno}")
+    assert found == [], "use flask.current_app instead of `from fbc import app`"

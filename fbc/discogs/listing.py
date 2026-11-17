@@ -102,9 +102,9 @@ def weight_grams(unit):
 
 def default_allow_offers():
     """DISCOGS_SETTINGS["ALLOW_OFFERS"], on if it isn't set (as eBay's BEST_OFFER)."""
-    from fbc import app
+    from flask import current_app
 
-    return bool(app.config["DISCOGS_SETTINGS"].get("ALLOW_OFFERS", True))
+    return bool(current_app.config["DISCOGS_SETTINGS"].get("ALLOW_OFFERS", True))
 
 
 def defaults(unit):
