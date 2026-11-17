@@ -22,6 +22,11 @@ DEFAULT = "America/Chicago"
 _zone = ZoneInfo(DEFAULT)
 
 
+def utcnow():
+    """Now as a naive UTC datetime, which is how fbc stores eBay's times."""
+    return datetime.datetime.now(UTC).replace(tzinfo=None)
+
+
 def set_zone(name):
     """Use the IANA timezone `name`. Fails at startup on a name it can't load."""
     global _zone
