@@ -149,6 +149,22 @@ def test_a_unit_needs_a_draft_unless_cheap_listed_sold_or_drafted():
     assert drafted.id not in _ids(tasks.ids_units_needing_drafts())
 
 
+def test_stock_waiting_counts_each_unit_once():
+    _unit("bare")
+    _unit("cheap", retail_price=1.0)
+    _unit("sold", sold=True)
+    drafted = _unit("drafted")
+    _draft(drafted)
+    _draft(drafted)  # two Drafts, still one Unit
+    _draft(_unit("done"), status="published")
+    published = _unit("p")
+    _draft(published, status="published", ebay_listing_id=None)
+
+    assert tasks.stock_waiting() == {"units": 1, "drafts": 1, "total": 2}
+    # Only "bare" has no Draft and "drafted" has an unpublished one. "done" and
+    # "p" have published Drafts, so they aren't waiting.
+
+
 def test_a_draft_is_a_task_until_it_is_published():
     waiting = _draft(_unit("a"))
     _draft(_unit("b"), status="published", ebay_listing_id=None)

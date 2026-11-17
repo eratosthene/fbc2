@@ -224,6 +224,7 @@ def home_totals():
         "low_supplies": Supply.low_list(),
         "listings": insertions.listing_summary(),
         "tasks": tasks.counts(),
+        "waiting": tasks.stock_waiting(),
         "marketplace_sales": marketplace_sales(),
         "other_sales": other_sales,
         "ytd": reports.year_to_date(),
