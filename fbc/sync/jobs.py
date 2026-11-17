@@ -271,13 +271,22 @@ def sync_ebay_listings():
     logger.info("eBay listings sync finished.")
 
 
+def _orders_in(resp):
+    """
+    The orders in a GetOrders reply, as a list. When no order falls in the
+    window eBay sends no OrderArray, which the library gives as None, and a
+    lone order can come as one item, not a list of one.
+    """
+    orders = (resp.get("OrderArray") or {}).get("Order") or []
+    return [orders] if isinstance(orders, dict) else orders
+
+
 def _save_orders(update, api, response):
     from fbc import db
     from fbc.models.ebay import EbayOrder
 
     logging.info("eBay response: " + api.response_status())
-    resp = response.dict()
-    orders = resp["OrderArray"]["Order"]
+    orders = _orders_in(response.dict())
     local_orders = db.session.query(EbayOrder).all()
     logger.info("Total orders: " + str(len(orders)))
     logger.info("Total local orders: " + str(len(local_orders)))

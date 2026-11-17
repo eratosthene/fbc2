@@ -72,12 +72,16 @@ def test_ebay_listings_records_that_it_finished(run, monkeypatch):
 
 
 class _Api:
-    def __init__(self, orders=()):
+    def __init__(self, orders=(), reply=None):
         self.orders = list(orders)
+        # A whole reply, when a test needs one that isn't a list of orders.
+        self.reply = reply
         self.sent = None
 
     def execute(self, verb, data):
         self.sent = (verb, data)
+        if self.reply is not None:
+            return SimpleNamespace(dict=lambda: self.reply)
         return SimpleNamespace(dict=lambda: {"OrderArray": {"Order": self.orders}})
 
     def response_status(self):
@@ -99,6 +103,44 @@ def test_ebay_orders_looks_back_ten_days_unless_deep(run, monkeypatch):
     assert "Deep updating eBay orders..." in result.output
     assert api.sent[1]["CreateTimeFrom"] < ten[0]
     assert SyncRecord.last_finished(jobs.ORDERS_SYNC) is not None
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        {"OrderArray": None},
+        {},
+        {"OrderArray": {}},
+        {"OrderArray": {"Order": None}},
+        {"OrderArray": {"Order": []}},
+    ],
+)
+def test_ebay_orders_with_no_orders_in_the_window_finishes(run, monkeypatch, reply):
+    # eBay sends no OrderArray when nothing completed in the window; that is a
+    # quiet week, not a failure.
+    monkeypatch.setattr(jobs, "trading", lambda compatibility=None: _Api(reply=reply))
+    added = []
+    monkeypatch.setattr(jobs, "add_ebay_order", added.append)
+
+    result = run("ebay-orders")
+
+    assert result.exit_code == 0
+    assert "eBay orders sync finished." in result.output
+    assert added == []
+    assert SyncRecord.last_finished(jobs.ORDERS_SYNC) is not None
+
+
+def test_ebay_orders_with_one_order_as_a_single_item_saves_it(run, monkeypatch):
+    order = {"OrderID": "27-1"}
+    reply = {"OrderArray": {"Order": order}}
+    monkeypatch.setattr(jobs, "trading", lambda compatibility=None: _Api(reply=reply))
+    added = []
+    monkeypatch.setattr(jobs, "add_ebay_order", added.append)
+
+    result = run("ebay-orders")
+
+    assert result.exit_code == 0
+    assert added == [order]
 
 
 def test_ebay_orders_not_connected_is_a_failure(run, monkeypatch):

@@ -1,6 +1,7 @@
 """Re-listing from the Parked Listings Task, with eBay faked (#208 part B)."""
 
 import datetime
+import re
 
 import pytest
 
@@ -207,6 +208,16 @@ def test_each_row_has_a_confirming_relist_button(client):
 
     assert "/parkedlistingsview/relist/100" in html
     assert "confirm(" in html and "Re-list</button>" in html
+
+
+def test_the_button_column_has_a_real_heading(client):
+    _parked("100", days_ago=3)
+
+    html = client.get("/parkedlistingsview/list/").get_data(as_text=True)
+
+    assert "Fmt Relist Button" not in html
+    # In a table heading: "Action" alone could be matched by the page's menus.
+    assert re.search(r"<th[^>]*>\s*Action\s*</th>", html)
 
 
 def test_a_listing_with_a_unit_is_the_one_a_relist_moves(client, monkeypatch):
