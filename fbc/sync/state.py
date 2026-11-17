@@ -33,9 +33,9 @@ _JOB_ID = re.compile(r"[0-9a-f]{32}")
 
 
 def _folder():
-    from fbc import app
+    from flask import current_app
 
-    folder = app.config.get("SYNC_JOB_FOLDER") or os.path.join(
+    folder = current_app.config.get("SYNC_JOB_FOLDER") or os.path.join(
         tempfile.gettempdir(), "fbc-sync-jobs"
     )
     os.makedirs(folder, exist_ok=True)
@@ -205,7 +205,7 @@ def _execute(state, fn, echo=None):
     Run fn() in an app context in this thread, logging to the job's log (and
     to echo, if given), and write the job's final state. Returns it.
     """
-    from fbc import app
+    from flask import current_app
 
     folder = _folder()
     root = logging.getLogger()
@@ -213,7 +213,7 @@ def _execute(state, fn, echo=None):
     root.addHandler(handler)
     status = "failed"
     try:
-        with app.app_context():
+        with current_app.app_context():
             fn()
         status = "done"
     except Exception:
@@ -235,7 +235,16 @@ def start(kind, title, fn, return_url):
     state, running = _claim(kind, title, return_url)
     if running:
         return running
-    _spawn(lambda: _execute(state, fn))
+    # The thread has no app context of its own; give it this request's app.
+    from flask import current_app
+
+    app = current_app._get_current_object()
+
+    def target():
+        with app.app_context():
+            _execute(state, fn)
+
+    _spawn(target)
     return state["id"]
 
 

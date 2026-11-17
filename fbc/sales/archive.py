@@ -165,9 +165,10 @@ def archive_all(apply=False, config=None, now=None, echo=print):
     Archive everything that has aged out. Without `apply` it only counts.
     Returns {model key: how many}.
     """
-    from fbc import app, db
+    from flask import current_app
+    from fbc import db
 
-    cutoff = cutoffs(config if config is not None else app.config, now)
+    cutoff = cutoffs(config if config is not None else current_app.config, now)
     counts = {}
     for key, query in candidates(db, cutoff).items():
         counts[key] = query.count()

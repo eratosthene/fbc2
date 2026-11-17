@@ -40,10 +40,10 @@ def trading(compatibility=TRADING_VERSION):
     partial escaping is left off; they ask for a current API version rather
     than ebaysdk's default, which compatibility=None keeps.
     """
-    from fbc import app
+    from flask import current_app
     from ebaysdk.trading import Connection as Trading
 
-    ebayconfig = app.config["EBAY_SETTINGS"]
+    ebayconfig = current_app.config["EBAY_SETTINGS"]
     return Trading(
         debug=False,
         config_file=None,
@@ -57,9 +57,9 @@ def trading(compatibility=TRADING_VERSION):
 
 
 def listing_settings():
-    from fbc import app
+    from flask import current_app
 
-    return app.config["EBAY_SETTINGS"].get("LISTING", {})
+    return current_app.config["EBAY_SETTINGS"].get("LISTING", {})
 
 
 def _as_list(value):

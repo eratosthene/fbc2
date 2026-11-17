@@ -78,10 +78,10 @@ def forget_access_token(scope):
 def _token_request(data):
     """POST to eBay's OAuth token endpoint; the parsed reply, or OAuthError."""
     import requests
-    from fbc import app
+    from flask import current_app
 
     devmode.check(OAuthError, "eBay")
-    ebayconfig = app.config["EBAY_SETTINGS"]
+    ebayconfig = current_app.config["EBAY_SETTINGS"]
     r = requests.post(
         OAUTH_TOKEN_URL,
         auth=(ebayconfig["APP_ID"], ebayconfig["CERT_ID"]),
@@ -106,9 +106,9 @@ def consent_url(state):
     exchange_code().
     """
     from urllib.parse import urlencode
-    from fbc import app
+    from flask import current_app
 
-    ebayconfig = app.config["EBAY_SETTINGS"]
+    ebayconfig = current_app.config["EBAY_SETTINGS"]
     if not ebayconfig.get("RUNAME"):
         raise OAuthError(
             "Set EBAY_SETTINGS['RUNAME'] in config.py to your app's eBay"
@@ -152,7 +152,8 @@ def exchange_code(code):
     Swap a one-time sign-in code for tokens and save the refresh token.
     Returns the saved EbayOAuthToken; raises OAuthError if eBay says no.
     """
-    from fbc import app, db
+    from flask import current_app
+    from fbc import db
     from fbc.models.ebay import EbayOAuthToken
 
     now = localtime.utcnow()
@@ -161,7 +162,7 @@ def exchange_code(code):
             {
                 "grant_type": "authorization_code",
                 "code": code,
-                "redirect_uri": app.config["EBAY_SETTINGS"].get("RUNAME", ""),
+                "redirect_uri": current_app.config["EBAY_SETTINGS"].get("RUNAME", ""),
             }
         )
     except OAuthError as e:
@@ -196,7 +197,7 @@ def oauth_token(scope=MEDIA_SCOPE):
     call fbc makes uses one: the REST APIs and, through trading(), the
     Trading API.
     """
-    from fbc import app
+    from flask import current_app
 
     # Before the cache: a token minted before dev mode was turned on would
     # still work.
@@ -209,7 +210,7 @@ def oauth_token(scope=MEDIA_SCOPE):
     refresh_token = (
         saved.refresh_token
         if saved
-        else app.config["EBAY_SETTINGS"].get("OAUTH_REFRESH_TOKEN")
+        else current_app.config["EBAY_SETTINGS"].get("OAUTH_REFRESH_TOKEN")
     )
     if not refresh_token:
         raise OAuthError(

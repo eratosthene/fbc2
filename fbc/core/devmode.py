@@ -80,9 +80,9 @@ def init_app(app):
 
 
 def on():
-    from fbc import app
+    from flask import current_app
 
-    return bool(app.config.get("DEV_MODE"))
+    return bool(current_app.config.get("DEV_MODE"))
 
 
 def check(error, what="eBay and Discogs"):

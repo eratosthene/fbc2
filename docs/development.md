@@ -64,6 +64,10 @@ layer or lower, and within a layer the modules don't import each other in a
 circle. Package `__init__.py` files are empty, so importing one module never
 imports its neighbours. `models/` may import `core/` and modules that import
 nothing from `fbc` when they load (`discogs/naming.py`, `ebay/tracking.py`).
+Nothing below the top level imports `app` from `fbc`: it reads the app's
+settings through Flask's `current_app`, so it needs an app context (a request,
+a `flask` command, or the one a sync thread is given). `db` may still be
+imported.
 
 `tests/test_layers.py` checks all of this, so an import that goes the wrong
 way fails the suite, with no exceptions.
