@@ -22,7 +22,7 @@ VIEWS = {
     "releasesneedingunitsview": ["Discogs collection"],
     "discogslistingmodelview": ["Discogs listings"],
     "discogsordermodelview": ["Discogs orders", "Discogs listings"],
-    "ebaylistingmodelview": ["eBay listings"],
+    "ebaylistingmodelview": ["eBay listings", "eBay listing views"],
     "unitsneedingdraftsview": ["eBay listings"],
     "ebayordermodelview": ["eBay orders", "eBay listings"],
     "orderstoshipview": ["eBay orders", "eBay listings"],
@@ -34,6 +34,7 @@ NAMES = {
     "Discogs orders": jobs.DISCOGS_ORDERS_SYNC,
     "eBay listings": SyncRecord.LISTINGS_SYNC,
     "eBay orders": jobs.ORDERS_SYNC,
+    "eBay listing views": jobs.VIEWS_SYNC,
 }
 
 

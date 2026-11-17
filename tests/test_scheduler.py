@@ -63,6 +63,7 @@ def test_everything_is_due_before_any_sync_has_finished(schedule, ran):
         "ebay-listings",
         "discogs",
         "discogs-listings",
+        "ebay-views",
     ]
     assert set(outcomes.values()) == {"done"}
 
@@ -73,8 +74,11 @@ def test_a_sync_is_due_once_its_interval_has_passed(schedule, ran):
     SyncRecord.record_finished("ebay-listings", NOW - 31 * MIN)
     SyncRecord.record_finished("discogs", NOW - 119 * MIN)
     SyncRecord.record_finished("discogs-listings", NOW - 29 * MIN)
+    SyncRecord.record_finished("ebay-views", NOW - 23 * 60 * MIN)
 
     assert scheduler.due(schedule, {}, NOW) == ["ebay-listings"]
+    SyncRecord.record_finished("ebay-views", NOW - 24 * 60 * MIN)
+    assert scheduler.due(schedule, {}, NOW) == ["ebay-listings", "ebay-views"]
 
 
 def test_intervals_come_from_the_settings(app, monkeypatch):
@@ -90,6 +94,8 @@ def test_intervals_come_from_the_settings(app, monkeypatch):
 def test_a_failed_sync_waits_for_the_retry_delay(schedule, ran):
     for name in scheduler.JOBS:
         SyncRecord.record_finished(name, NOW - 1000 * MIN)
+    # Daily, so it would be due again by the real clock below.
+    SyncRecord.record_finished("ebay-views", localtime.utcnow())
     ran.outcome["discogs"] = "fail"
     failed_at = {}
 
@@ -138,6 +144,7 @@ def test_the_loop_runs_what_is_due_then_sleeps(app, ran):
         "ebay-listings",
         "discogs",
         "discogs-listings",
+        "ebay-views",
     ]
 
 
@@ -195,6 +202,7 @@ def test_the_real_jobs_are_the_ones_the_buttons_run():
     assert scheduler.JOBS["ebay-listings"] is jobs.ebay_listings_job
     assert scheduler.JOBS["discogs-listings"] is jobs.discogs_listings_job
     assert scheduler.JOBS["discogs-orders"] is jobs.discogs_orders_job
+    assert scheduler.JOBS["ebay-views"] is jobs.ebay_views_job
 
 
 def test_a_sync_that_logs_an_error_and_records_nothing_waits_to_retry(

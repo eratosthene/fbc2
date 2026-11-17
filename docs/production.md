@@ -118,6 +118,7 @@ docker/live-flask.sh sync discogs-listings
 docker/live-flask.sh sync discogs-orders
 docker/live-flask.sh sync discogs-orders --deep
 docker/live-flask.sh sync ebay-listings
+docker/live-flask.sh sync ebay-views
 docker/live-flask.sh sync ebay-orders
 docker/live-flask.sh sync ebay-orders --deep
 ```
@@ -134,7 +135,7 @@ the eBay listings sync.
 
 The container runs a scheduler next to the web server. It runs the eBay
 orders sync every 15 minutes, the eBay listings sync every 30, the Discogs
-listings sync every 30 and the Discogs sync every 120, counting from when each last finished, whether the scheduler
+listings sync every 30, the eBay views sync every 24 hours (it needs the Analytics permission: press Connect eBay again once) and the Discogs sync every 120, counting from when each last finished, whether the scheduler
 or you started it. A sync that is already running is skipped and tried a
 minute later. One that failed is tried again after 10 minutes. The scheduler's
 messages and each sync's log are in the container's logs:
@@ -151,6 +152,7 @@ SCHEDULER_EBAY_ORDERS_MINUTES = 10   # minutes between syncs, at least 1
 SCHEDULER_EBAY_LISTINGS_MINUTES = 60
 SCHEDULER_DISCOGS_MINUTES = 240
 SCHEDULER_DISCOGS_LISTINGS_MINUTES = 60
+SCHEDULER_EBAY_VIEWS_MINUTES = 1440
 SCHEDULER_DISCOGS_ORDERS_MINUTES = 15
 SCHEDULER_RETRY_MINUTES = 30
 ```

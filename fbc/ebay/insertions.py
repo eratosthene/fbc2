@@ -31,6 +31,7 @@ import datetime
 import re
 
 from fbc.core import localtime
+from fbc.ebay import traffic
 
 # A GTC listing's Time Left is never more than a month.
 MAX_TIME_LEFT_DAYS = 31
@@ -357,13 +358,14 @@ def uncovered_insertion_fee(result):
 END_CHOICES = 5
 
 
-def _end_pool(now):
+def end_pool(now):
     """
     The active listings that ending would save an insertion on: those whose
     renewal is still to come this month (the same renewal count_insertions
-    uses). Each is a dict with the listing, its Unit (or None), `renews`, and
-    `views`, which is None, meaning unknown, until the views step (#208)
-    brings counts. Left out: mystery boxes, Other Items, archived and ended
+    uses). Each is a dict with the listing, its Unit (or None), `renews`,
+    `views` (the saved count, or None for unknown: never counted, or counted
+    too long ago, see traffic.known) and `views_checked`. The views job
+    counts this pool. Left out: mystery boxes, Other Items, archived and ended
     listings, a listing with more than one Unit, and one whose Unit has sold.
     """
     from fbc import db
@@ -407,7 +409,8 @@ def _end_pool(now):
                 "listing": listing,
                 "unit": on_it[0] if on_it else None,
                 "renews": renews,
-                "views": None,
+                "views": traffic.known(listing, now),
+                "views_checked": listing.views_checked,
             }
         )
     return pool
@@ -416,12 +419,12 @@ def _end_pool(now):
 def end_candidates(now=None, count=END_CHOICES):
     """
     Up to `count` listings to offer to end to make room, each a dict (see
-    _end_pool). Fewest views first, ties to the sooner renewal, unknown views
-    after every known count and never read as 0. Until views are built they
-    are all unknown, so this is the soonest renewals.
+    end_pool). Fewest views first, ties to the sooner renewal, unknown views
+    after every known count and never read as 0. When views are unknown for
+    the whole pool this is the soonest renewals.
     """
     now = now or localtime.utcnow()
-    pool = _end_pool(now)
+    pool = end_pool(now)
     pool.sort(
         key=lambda c: (
             c["views"] is None,

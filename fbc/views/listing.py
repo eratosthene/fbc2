@@ -7,7 +7,7 @@ from flask_appbuilder.models.sqla.interface import SQLAInterface
 from markupsafe import Markup
 from wtforms import TextAreaField
 
-from fbc.ebay import insertions
+from fbc.ebay import insertions, traffic
 from fbc.core import devmode, localtime
 from fbc.ebay.api import listing_settings, seller_profiles
 from fbc.ebay.drafts import check_ready, describe_template, listing_details, new_draft
@@ -117,6 +117,11 @@ class EbayDraftModelView(CustomModelView):
                 dict(
                     c,
                     age=(now - c["listing"].start_time).days,
+                    views_age=(
+                        traffic.age_text(c["views_checked"], now)
+                        if c["views"] is not None
+                        else None
+                    ),
                     on_discogs=bool(unit and DiscogsListing.open_for(unit)),
                 )
             )
@@ -128,6 +133,7 @@ class EbayDraftModelView(CustomModelView):
         draft = self._draft(pk)
         widgets = self._show(pk)
         over_warning = insertions.publish_warning(insertions.listing_summary())
+        end_candidates = self._end_candidates(over_warning)
         return self.render_template(
             self.show_template,
             pk=pk,
@@ -139,7 +145,9 @@ class EbayDraftModelView(CustomModelView):
             pictures=draft.stored_pictures(),
             pictures_folder=store.folder() is not None,
             over_warning=over_warning,
-            end_candidates=self._end_candidates(over_warning),
+            end_candidates=end_candidates,
+            views_unknown=bool(end_candidates)
+            and all(c["views"] is None for c in end_candidates),
             uncovered_fee=insertions.uncovered_insertion_fee(
                 json.loads(draft.messages) if draft.messages else None
             ),
@@ -315,6 +323,13 @@ class EbayDraftModelView(CustomModelView):
         listing = db.session.get(EbayListing, item_id)
         if not listing:
             abort(404)
+        # Tell the owner if the views on the list were out of date. It never
+        # stops the ending, and Dev Mode skips it, since ending is refused.
+        if not devmode.on():
+            shown = request.form.get("views_shown", "")
+            note = traffic.recheck(listing, int(shown) if shown.isdigit() else None)
+            if note:
+                flash(note, "info")
         ok, message = ending.end_and_park(listing)
         flash(
             ("Ended " + listing.title + ". " if ok else "Couldn't end it: ") + message,

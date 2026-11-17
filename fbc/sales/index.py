@@ -334,6 +334,11 @@ class MyIndexView(IndexView):
     def syncebaylistings(self):
         return self._start_sync(jobs.ebay_listings_job(), "/ebaylistingmodelview/list/")
 
+    @expose("/syncebayviews")
+    @has_access
+    def syncebayviews(self):
+        return self._start_sync(jobs.ebay_views_job(), "/ebaylistingmodelview/list/")
+
     @expose("/syncebayorders")
     @has_access
     def syncebayorders(self):

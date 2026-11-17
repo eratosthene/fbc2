@@ -34,6 +34,7 @@ from fbc.ebay.listings import (
     save_renewals,
 )
 from fbc.ebay.orders import add_ebay_order
+from fbc.ebay import insertions, traffic
 from fbc.sync import ending
 
 logger = logging.getLogger()
@@ -47,6 +48,7 @@ DISCOGS_SYNC = "discogs"
 ORDERS_SYNC = "ebay-orders"
 DISCOGS_LISTINGS_SYNC = "discogs-listings"
 DISCOGS_ORDERS_SYNC = "discogs-orders"
+VIEWS_SYNC = "ebay-views"
 
 # How far back a plain Discogs orders sync looks. An order's status changes as
 # it is worked through, and the sync refreshes every order it reads.
@@ -84,6 +86,10 @@ def discogs_orders_job(deep=False):
 
 def ebay_listings_job():
     return _job(LISTINGS_SYNC, "eBay listings sync", sync_ebay_listings)
+
+
+def ebay_views_job():
+    return _job(VIEWS_SYNC, "eBay views sync", sync_ebay_views)
 
 
 def ebay_orders_job(update=False, deep=False):
@@ -317,3 +323,36 @@ def sync_ebay_orders(update, days, message):
     _end_sold_elsewhere()
     SyncRecord.record_finished(ORDERS_SYNC, started)
     logger.info("eBay orders sync finished.")
+
+
+def sync_ebay_views():
+    """
+    Read how many views each listing in the end pool (insertions.end_pool:
+    active, with a renewal still due this month) had in the last 30 days, and
+    keep it on the listing. It only reads from eBay. A listing eBay has no
+    data for keeps its old count, which turns unknown once it is too old. It
+    doesn't record finishing if eBay refused, such as before Connect eBay is
+    pressed again for the Analytics permission, so the scheduler retries.
+    """
+    from fbc.models.sync import SyncRecord
+
+    started = localtime.utcnow()
+    logger.info("Updating eBay listing views...")
+    pool = insertions.end_pool(started)
+    ids = [c["listing"].item_id for c in pool]
+    logger.info("Listings with a renewal due this month: " + str(len(ids)))
+    counts, errors = traffic.views(ids, started)
+    saved = traffic.save(counts, started)
+    logger.info(
+        "Saved views for "
+        + str(saved)
+        + " listings; eBay had none for "
+        + str(len(ids) - len(counts))
+        + "."
+    )
+    if errors:
+        for message in errors:
+            logger.error(message)
+        return
+    SyncRecord.record_finished(VIEWS_SYNC, started)
+    logger.info("eBay views sync finished.")

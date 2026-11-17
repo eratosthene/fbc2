@@ -53,6 +53,12 @@ class EbayListing(Model):
     # When End and park ended it to save an insertion (UTC). Null for every
     # ordinary ending, such as a sale; see fbc/sync/ending.py end_and_park.
     parked_at = Column(DateTime)
+    # How many views eBay says the listing had in the 30 days up to the day
+    # before views_checked (Sell Analytics, see fbc/ebay/traffic.py), and
+    # when fbc asked (UTC). Null views_30d means unknown, which is not 0: a
+    # listing with no views comes back from eBay as 0.
+    views_30d = Column(Integer)
+    views_checked = Column(DateTime)
     # Hidden from the lists by default; see fbc/sales/archive.py.
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True

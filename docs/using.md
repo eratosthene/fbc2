@@ -456,15 +456,32 @@ last Check with eBay reported an insertion fee that no discount covered, the
 draft page says so too: that is eBay saying the free ones are used up.
 
 When that warning shows, the draft page also lists up to 5 active listings you
-could end first, in place of the bare warning. Only a listing whose renewal is
-still due this month is offered, since ending one saves that renewal and
-nothing else. Mystery boxes, Other Items, listings with more than one Unit,
-archived ones and ones whose Unit has sold are left out. Each row shows the
-title, price, age in days, when it renews (your timezone), whether the Unit
-is also on Discogs, and **End this one**. For now views are unknown, so the
-listings renewing soonest come first. **End this one** asks to confirm,
-ends the listing on eBay and marks it Parked (the date is kept in
-`parked_at`). A listing ended by a sale or by hand is never parked. fbc
+could end first, in place of the bare warning. The pool is every active
+listing whose renewal is still due this month, since ending one saves that
+renewal and nothing else. Mystery boxes, Other Items, listings with more than
+one Unit, archived ones and ones whose Unit has sold are left out. The 5 shown
+are the ones with the fewest views in the last 30 days, fewest first, and a
+tie goes to the sooner renewal. Each row shows the title, price, the listing's
+age in days (a young listing has had little time to be seen), when it renews
+(your timezone), whether the Unit is also on Discogs, its views and how old
+that count is ("checked 6 hours ago"), and **End this one**.
+
+Views come from eBay's Sell Analytics API, kept on each listing by the
+**eBay views sync**: the Sync views button on the eBay Listings list,
+`flask sync ebay-views`, or the scheduler once a day. It reads views for the
+pool above, 100 listings to a call, and only reads. The Listings list says
+when it last ran. A listing eBay has no views for, or whose count is more than
+3 days old, shows "unknown": it is never read as 0, and it comes after every
+listing with a count. A listing with no views at all is a real 0 and comes
+first. If views are unknown for the whole pool, the 5 renewing soonest are
+shown and the page says so. The views need the permission Connect eBay asks
+for (see the top of this page); until it is pressed again, the sync logs
+eBay's refusal and the page shows views as unknown.
+
+**End this one** asks to confirm, reads that listing's views again from eBay
+and tells you if they changed since the list was made (it never stops the
+ending, and says so if it couldn't read them), ends the listing on eBay and
+marks it Parked (the date is kept in `parked_at`). A listing ended by a sale or by hand is never parked. fbc
 never ends a listing on its own. In Dev Mode the end is refused with the Dev
 Mode message. With no such listing, the page shows the warning and Publish
 anyway as before.
