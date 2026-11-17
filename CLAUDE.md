@@ -75,8 +75,10 @@ file is what they don't say.
   not the library; only `tests/test_discogs_seam.py` fakes the library. New
   Discogs calls go in `fbc/discogs/client.py` (see `docs/development.md`).
 - `tests/test_layers.py` keeps the package layers (see Layout): a new import
-  from a module in a higher layer fails it. Fix the import; the few exceptions
-  are named in the test, and #164 is about removing them.
+  from a module in a higher layer fails it, with no exceptions but the two leaf
+  modules `models/` may import (`LEAVES` in the test). Fix the import. Below
+  the top level, use `flask.current_app`, not `from fbc import app`; the test
+  fails on that too (`db` may still be imported).
 - Custom form fields and list widgets live in `fbc/core/widgets.py`, and the
   base `CustomModelView` and `CustomForm` in `fbc/core/forms.py`. Menu entries
   for a filtered list ("Units w/out Listings") are links built in
