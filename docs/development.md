@@ -162,20 +162,6 @@ os.environ.setdefault("FBC_SKIP_VIEWS", "1")
 from fbc import app, db
 ```
 
-`scripts/spike_traffic_report.py` is a one-off for #208: it asks eBay's Sell
-Analytics API for listing views, to find out how many listings one call takes,
-the longest date range, how stale the numbers are, and what comes back for a
-listing with no views or one eBay doesn't know. It only reads, saves nothing
-and prints no tokens. It needs the live `config.py`, a token from Connect eBay
-pressed after `sell.analytics.readonly` was added, and dev mode off (dev mode
-refuses). From `scripts/`:
-
-```bash
-pipenv run python spike_traffic_report.py
-```
-
-Delete it once `fbc/ebay/traffic.py` exists.
-
 A new `flask` command that doesn't need the views goes in
 `SKIP_VIEWS_COMMANDS` in `fbc/__init__.py`; it can't set the variable itself,
 as the app is imported first.
@@ -213,6 +199,7 @@ thing. A new sync goes there too, with a command beside the others in
 | `flask sync discogs-orders`        | Sync on the Discogs Orders list (reads the Marketplace orders)                  |
 | `flask sync discogs-orders --deep` | Deep Sync on that list: every order, not the last 30 days                       |
 | `flask sync ebay-listings`         | Sync eBay listings                                                              |
+| `flask sync ebay-views`            | Sync views on the eBay Listings list (reads Sell Analytics; read only)          |
 | `flask sync ebay-orders`           | Sync eBay orders (adds new orders, and checks ones without items or tracking)   |
 | `flask sync ebay-orders --update`  | Sync eBay orders with `?doupdate=True`, which also refreshes the orders fbc has |
 | `flask sync ebay-orders --deep`    | Deep sync, looking back 88 days, not 10                                         |

@@ -337,6 +337,14 @@ def sync_ebay_listings_command():
     _run_sync(jobs.ebay_listings_job())
 
 
+@sync_group.command("ebay-views")
+def sync_ebay_views_command():
+    """Read how many views eBay's listings had (read only)."""
+    from fbc.sync import jobs
+
+    _run_sync(jobs.ebay_views_job())
+
+
 @sync_group.command("ebay-orders")
 @click.option("--update", is_flag=True, help="Also refresh the orders fbc already has.")
 @click.option("--deep", is_flag=True, help="Look back 88 days, not 10.")

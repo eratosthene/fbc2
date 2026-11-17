@@ -11,7 +11,12 @@ from wtforms.validators import Optional, ValidationError
 from fbc.ebay import mystery
 from fbc.core import localtime
 from fbc.sales.archive import ArchivableViewMixin
-from fbc.sync.notes import EBAY_LISTINGS, EBAY_ORDERS, SyncedViewMixin
+from fbc.sync.notes import (
+    EBAY_LISTINGS,
+    EBAY_ORDERS,
+    EBAY_VIEWS,
+    SyncedViewMixin,
+)
 from fbc.core.forms import CustomModelView
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 
@@ -322,7 +327,7 @@ class SalesReceiptModelView(ArchivableViewMixin, CustomModelView):
 
 
 class EbayListingModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
-    synced_by = [EBAY_LISTINGS]
+    synced_by = [EBAY_LISTINGS, EBAY_VIEWS]
     datamodel = SQLAInterface(EbayListing)
     # Other Items' listings are on the Other Items list instead.
     base_filters = [["item_id", FilterNotInSelect, other_listing_ids]]

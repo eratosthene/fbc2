@@ -44,6 +44,8 @@ DEFAULT_INTERVALS = {
     SyncRecord.LISTINGS_SYNC: 30,
     jobs.DISCOGS_SYNC: 120,
     jobs.DISCOGS_LISTINGS_SYNC: 30,
+    # Views barely move in a day, and eBay's report is a day behind.
+    jobs.VIEWS_SYNC: 1440,
 }
 INTERVAL_SETTINGS = {
     jobs.ORDERS_SYNC: "SCHEDULER_EBAY_ORDERS_MINUTES",
@@ -51,6 +53,7 @@ INTERVAL_SETTINGS = {
     SyncRecord.LISTINGS_SYNC: "SCHEDULER_EBAY_LISTINGS_MINUTES",
     jobs.DISCOGS_SYNC: "SCHEDULER_DISCOGS_MINUTES",
     jobs.DISCOGS_LISTINGS_SYNC: "SCHEDULER_DISCOGS_LISTINGS_MINUTES",
+    jobs.VIEWS_SYNC: "SCHEDULER_EBAY_VIEWS_MINUTES",
 }
 DEFAULT_RETRY_MINUTES = 10
 
@@ -62,6 +65,8 @@ JOBS = {
     SyncRecord.LISTINGS_SYNC: jobs.ebay_listings_job,
     jobs.DISCOGS_SYNC: jobs.discogs_job,
     jobs.DISCOGS_LISTINGS_SYNC: jobs.discogs_listings_job,
+    # After the listings sync, which saves the listings it counts.
+    jobs.VIEWS_SYNC: jobs.ebay_views_job,
 }
 
 Schedule = namedtuple("Schedule", "intervals retry")

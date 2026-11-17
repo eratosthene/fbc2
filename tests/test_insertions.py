@@ -803,13 +803,72 @@ def test_candidates_leave_out_the_listings_that_must_not_be_ended(app):
     assert _ids() == ["fine"]
 
 
-def test_views_unknown_sort_last_and_never_as_zero(app):
+def _viewed(item_id, day, views, checked=NOW, **kw):
+    row = _active(item_id, day, **kw)
+    row.views_30d, row.views_checked = views, checked
+    db.session.commit()
+    return row
+
+
+def test_candidates_are_the_five_least_viewed_with_ties_to_the_sooner_renewal(app):
+    # The soonest renewals have the most views, so renewal order alone would
+    # pick the wrong five.
+    for item, day, views in [
+        ("a", 16, 40),
+        ("b", 17, 30),
+        ("c", 18, 9),
+        ("d", 19, 0),
+        ("e", 28, 0),
+        ("f", 27, 9),
+        ("g", 26, 1),
+        ("h", 25, 7),
+    ]:
+        _viewed(item, day, views)
+    # d and e tie at 0, c and f at 9: the sooner renewal goes first.
+    assert _ids() == ["d", "e", "g", "h", "c"]
+
+
+def test_a_count_of_zero_is_a_count_not_unknown(app):
+    _viewed("zero", 28, 0)
+    _active("never", 16)
+    assert _ids() == ["zero", "never"]
+
+
+def test_unknown_and_stale_views_sort_after_every_known_count(app):
+    _viewed("known-high", 28, 500)
+    _viewed("stale", 16, 0, checked=NOW - datetime.timedelta(days=4))
+    _active("never", 17)
+    row = _active("no-time", 18)
+    row.views_30d = 0  # a count with no time it was read is unknown too
+    db.session.commit()
+
+    result = insertions.end_candidates(NOW)
+
+    assert [c["listing"].item_id for c in result] == [
+        "known-high",
+        "stale",
+        "never",
+        "no-time",
+    ]
+    assert [c["views"] for c in result] == [500, None, None, None]
+
+
+def test_a_count_a_few_days_old_still_counts(app):
+    _viewed("ok", 28, 3, checked=NOW - datetime.timedelta(days=2, hours=23))
     _active("soon", 16)
-    _active("later", 20)
-    pool = insertions._end_pool(NOW)
-    pool[0]["views"], pool[1]["views"] = None, 5
-    pool.sort(key=lambda c: (c["views"] is None, c["views"] or 0, c["renews"]))
-    assert [c["listing"].item_id for c in pool] == ["later", "soon"]
+    assert _ids() == ["ok", "soon"]
+
+
+def test_with_no_known_views_the_candidates_are_the_soonest_renewals(app):
+    for day in (28, 16, 22, 18, 20, 25, 17):
+        _active("d" + str(day), day)
+    assert _ids() == ["d16", "d17", "d18", "d20", "d22"]
+
+
+def test_a_listing_with_a_young_age_is_not_left_out(app):
+    # Started 26 days before NOW and still renewing this month.
+    _viewed("young", 20, 0)
+    assert "young" in _ids()
 
 
 def _over(monkeypatch):
@@ -830,7 +889,35 @@ def test_the_draft_page_offers_candidates_in_place_of_the_bare_warning(
     )
 
     assert "End this one" in page and "cand" in page and "unknown" in page
+    assert "Views in the last 30 days are unknown for every listing" in page
     assert "Dev Mode is turned on" not in page
+
+
+def test_the_draft_page_shows_views_and_how_old_they_are(client, monkeypatch):
+    draft = _ready_draft(client, monkeypatch)
+    _over(monkeypatch)
+    now = localtime.utcnow()
+    checked = now - datetime.timedelta(hours=6)
+    # eBay's own renewal date, an hour before the month ends.
+    renews = insertions.month_bounds(now)[1] - datetime.timedelta(hours=1)
+    for item_id, views in (("busy", 12), ("quiet", 2), ("unseen", None)):
+        row = _listing(item_id, start=now - datetime.timedelta(days=40))
+        row.renews_at = renews
+        if views is not None:
+            row.views_30d, row.views_checked = views, checked
+    db.session.commit()
+
+    page = " ".join(
+        client.get("/ebaydraftmodelview/show/" + str(draft.id))
+        .get_data(as_text=True)
+        .split()
+    )
+
+    assert "fewest views in the last 30 days" in page
+    assert page.count("(checked 6 hours ago)") == 2
+    assert page.index("quiet") < page.index("busy") < page.index("unseen")
+    assert "40 days" in page
+    assert "unknown for every listing" not in page
 
 
 def test_the_draft_page_keeps_the_warning_and_tick_without_candidates(

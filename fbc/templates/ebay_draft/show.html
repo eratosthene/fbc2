@@ -39,7 +39,9 @@
 </form>
 {% if over_warning and end_candidates %}
 <div class="alert alert-warning" style="margin-top: 10px">
-  {{ over_warning }} Ending one of these first saves a renewal this month. Views are unknown for now, so they are the ones renewing soonest.
+  {{ over_warning }} Ending one of these first saves a renewal this month.
+  {% if views_unknown %}Views in the last 30 days are unknown for every listing that could be ended (the views sync hasn't run or eBay didn't answer), so these are the ones renewing soonest.
+  {% else %}These are the {{ end_candidates|length }} with the fewest views in the last 30 days; a listing whose views are unknown comes after all the others.{% endif %}
   Ending is your call; fbc never does it on its own. End this one ends it on eBay and parks it, so it can be listed again.
   {% if dev_mode %}<br>Dev Mode is turned on, so ending is refused with the Dev Mode message.{% endif %}
 </div>
@@ -52,9 +54,10 @@
     <td>{{ c.age }} days</td>
     <td>{{ c.renews|localtime }}</td>
     <td>{% if not c.unit %}No Unit{% elif c.on_discogs %}Yes{% else %}No{% endif %}</td>
-    <td class="text-muted">unknown</td>
+    <td>{% if c.views is none %}<span class="text-muted">unknown</span>{% else %}{{ c.views }} <span class="text-muted">(checked {{ c.views_age }})</span>{% endif %}</td>
     <td>
       <form method="post" action="{{ url_for('EbayDraftModelView.end_and_park', pk=draft.id, item_id=c.listing.item_id) }}" style="display: inline" onsubmit="return confirm('End this listing on eBay and park it?')">
+        <input type="hidden" name="views_shown" value="{{ '' if c.views is none else c.views }}">
         <button class="btn btn-xs btn-danger">End this one</button>
       </form>
     </td>
