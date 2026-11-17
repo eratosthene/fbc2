@@ -981,7 +981,14 @@ def test_consent_url_asks_for_every_scope_through_the_runame(app, monkeypatch):
         "redirect_uri": ["Chris-fbc-PRD-runame"],
         "response_type": ["code"],
         "scope": [
-            " ".join([oauth.TRADING_SCOPE, oauth.MEDIA_SCOPE, oauth.FINANCES_SCOPE])
+            " ".join(
+                [
+                    oauth.TRADING_SCOPE,
+                    oauth.MEDIA_SCOPE,
+                    oauth.FINANCES_SCOPE,
+                    oauth.ANALYTICS_SCOPE,
+                ]
+            )
         ],
         "state": ["xyz"],
     }

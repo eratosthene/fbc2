@@ -16,7 +16,12 @@ credentials. Copy `config.py.tpl` to start one, and fill in:
 - `EBAY_SETTINGS` and `DISCOGS_SETTINGS`: the eBay and Discogs app keys,
   and the listing defaults. The comments there say where each one comes from.
   Once the app is running, Connect > Connect eBay and Connect > Connect Discogs
-  sign in to each site, and keep the tokens in the database.
+  sign in to each site, and keep the tokens in the database. When fbc starts
+  asking for a new permission, the owner has to press Connect eBay again once
+  after that release is deployed. Until then everything else keeps working and
+  only the new feature says eBay refused. The release that added
+  `sell.analytics.readonly` (listing views, #208) is one: press Connect eBay
+  again after it deploys.
 - `TIMEZONE`: the timezone to show times in, as an IANA name such as
   `America/Chicago` (the default). Use the name, not "CST": it follows daylight
   saving. fbc stores UTC and only converts what it shows. The image carries

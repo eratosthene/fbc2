@@ -162,6 +162,20 @@ os.environ.setdefault("FBC_SKIP_VIEWS", "1")
 from fbc import app, db
 ```
 
+`scripts/spike_traffic_report.py` is a one-off for #208: it asks eBay's Sell
+Analytics API for listing views, to find out how many listings one call takes,
+the longest date range, how stale the numbers are, and what comes back for a
+listing with no views or one eBay doesn't know. It only reads, saves nothing
+and prints no tokens. It needs the live `config.py`, a token from Connect eBay
+pressed after `sell.analytics.readonly` was added, and dev mode off (dev mode
+refuses). From `scripts/`:
+
+```bash
+pipenv run python spike_traffic_report.py
+```
+
+Delete it once `fbc/ebay/traffic.py` exists.
+
 A new `flask` command that doesn't need the views goes in
 `SKIP_VIEWS_COMMANDS` in `fbc/__init__.py`; it can't set the variable itself,
 as the app is imported first.

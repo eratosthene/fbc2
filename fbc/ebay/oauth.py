@@ -45,8 +45,14 @@ FINANCES_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.finances"
 TRADING_SCOPE = "https://api.ebay.com/oauth/api_scope"
 
 
+# Reading how many views each listing had, through the Sell Analytics API
+# (see #208). Until the owner presses Connect eBay again, a saved refresh
+# token lacks it, and only calls that ask for this scope fail.
+ANALYTICS_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.analytics.readonly"
+
+
 # What Connect eBay asks the seller to allow.
-CONSENT_SCOPES = [TRADING_SCOPE, MEDIA_SCOPE, FINANCES_SCOPE]
+CONSENT_SCOPES = [TRADING_SCOPE, MEDIA_SCOPE, FINANCES_SCOPE, ANALYTICS_SCOPE]
 
 
 # The current OAuth access token for each scope and when it stops working.
@@ -101,7 +107,7 @@ def _token_request(data):
 def consent_url(state):
     """
     The eBay sign-in page that asks the seller to let fbc manage their
-    listings and pictures and read their order earnings. eBay then sends the
+    listings and pictures and read their order earnings and listing views. eBay then sends the
     browser to the RuName's "auth accepted" URL with a one-time code for
     exchange_code().
     """
