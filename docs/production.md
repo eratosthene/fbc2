@@ -228,6 +228,32 @@ docker/live-flask.sh archive --apply
 The first only counts. The ages are `ARCHIVE_AFTER_DAYS` in `config.py`;
 see `config.py.tpl`. It changes only which rows the lists show by default.
 
+## Parking listings ended by hand
+
+Only End this one puts a listing in the Parked Listings Task. Listings you
+ended by hand in eBay before that aren't there. `park-ended-listings` adds
+them. It only edits fbc's own rows and never calls eBay. The first only shows
+what it would do:
+
+```bash
+./docker/live-flask.sh park-ended-listings
+```
+
+Then save the changes. `--limit N` does only the N that ended first:
+
+```bash
+./docker/live-flask.sh park-ended-listings --apply
+```
+
+It takes ended listings that are not archived, not mystery boxes or Other
+Items, and have exactly one unsold Unit, with no eBay order and no other
+active listing for the Unit. It sets the parked date to the listing's end
+time, which is when fbc's sync noticed the listing was gone, so it can be a
+little later than the true end. For each listing it prints the days since it
+ended and whether that is past the re-list window (`EBAY_RELIST_DAYS`, 90
+days unless set). A listing past the window still shows in the queue and
+re-lists through a new Draft. Running it again does nothing new.
+
 ## Setting SKUs on old listings
 
 Listings made from eBay Drafts carry `fbc-<unit id>` as their SKU (Custom

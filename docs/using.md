@@ -112,6 +112,12 @@ work is done, so there is nothing to tick off:
   has none), for you to finish and publish. In Dev Mode the re-list is refused.
   fbc never re-lists by itself.
 
+  Listings you ended by hand in eBay are not here, because only End this one
+  parks a listing. `flask park-ended-listings` adds them (see
+  `docs/production.md`). It uses the listing's end time, which is when fbc's
+  sync noticed it was gone, so it can be a little late. Listings that ended
+  long ago show first, and re-list through a new Draft.
+
   When the home page's Listings block shows more free insertions left than
   Units waiting, it also names the listing that has been off eBay longest, as
   "Nothing better to list". New stock always comes first: with as many Units
