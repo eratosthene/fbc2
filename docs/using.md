@@ -283,6 +283,19 @@ Each result has two buttons.
   Discogs, so the Unit has no collection copy (Ship This has nothing to remove
   for it).
 
+Each result also has a small **Not it** button ("This is definitely NOT it").
+It leaves that release out of later searches for the record you're identifying
+now: after you change a field and press Search Discogs again, after Use this
+master, and after Check more versions. The releases are left out before the
+results are ranked and before their matrix is read, so the ones shown are all
+candidates, and Check more versions neither skips nor repeats one. A line above
+the results says how many are left out and gives their Discogs ids, with a
+**Show them** link that brings them all back. If every release found is marked,
+the page says so and offers Show them. Nothing is saved: the marks live only in
+the page's address, so they're gone when you start Identify Record again, and
+never carry over to another record (a release that's wrong for one copy can be
+right for another). Up to 100 can be marked. The Dev Mode sample obeys them too.
+
 Results are kept for five minutes. If Discogs isn't connected, says no or
 asks for fewer requests, the page says so; when the rate limit hits part way,
 the releases not yet checked are listed unchecked. In Dev Mode it says "Not

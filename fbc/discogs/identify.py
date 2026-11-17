@@ -244,6 +244,29 @@ def color_matches(wanted, format_text):
     return bool(wanted) and wanted in (format_text or "").lower()
 
 
+# The most releases one record can have marked "not it". It keeps the page's
+# address a sane length.
+MAX_NOT_IT = 100
+
+
+def parse_not_it(text):
+    """
+    The release ids marked "not it", from the page's `not_it` value: numbers
+    separated by commas (or spaces), in the order given, without repeats.
+    Anything that isn't plain digits is ignored, and only the first
+    MAX_NOT_IT count.
+    """
+    import re
+
+    ids = []
+    for word in re.split(r"[,\s]+", text or ""):
+        if re.fullmatch(r"[0-9]{1,12}", word) and int(word) not in ids:
+            ids.append(int(word))
+            if len(ids) == MAX_NOT_IT:
+                break
+    return ids
+
+
 def keep_hit(hit, type_word, reissue):
     """
     Whether a search hit is the type of vinyl wanted (type_word, None for any
@@ -398,6 +421,7 @@ def search(
     release_id="",
     master="",
     offset=0,
+    not_it=(),
 ):
     """
     Look for releases on Discogs and rank them: {"ok": True, "candidates",
@@ -410,15 +434,19 @@ def search(
     (a number, [m123] or its address) replaces artist, title, catalogue number
     and barcode: its versions are listed, filtered by country, type and
     reissue, and `offset` skips the ones an earlier call already checked.
+    Releases in `not_it` (ids the owner ruled out) are left out before ranking,
+    and before any is checked, so the ones shown are all candidates and the
+    offsets count only what is left. "hidden" is how many it left out.
     """
     if devmode.on():
         return _failure("Not available in dev mode.", dev_mode=True)
+    excluded = frozenset(not_it or ())
     if (release_id or "").strip():
-        return _one_release(release_id, country, matrix, color)
+        return _one_release(release_id, country, matrix, color, excluded)
     type_word = dict(TYPES).get(vinyl_type, "LP")
     if (master or "").strip():
         return _master_search(
-            master, country, matrix, color, type_word, reissue, offset
+            master, country, matrix, color, type_word, reissue, offset, excluded
         )
     params = {"type": "release", "per_page": 50}
     for key, value in (
@@ -472,6 +500,8 @@ def search(
             logger.exception("Discogs search failed")
             return _failure("Couldn't reach Discogs: " + str(e))
         hits = [h for h in hits if keep_hit(h, type_word, reissue)]
+        hidden = len([h for h in hits if h.get("id") in excluded])
+        hits = [h for h in hits if h.get("id") not in excluded]
         limit = MAX_CANDIDATES_WITH_MATRIX if matrix_text else MAX_CANDIDATES
         candidates, note, used = _check(hits[:limit])
         calls += used
@@ -481,9 +511,17 @@ def search(
             "searched": calls,
             "note": note,
             "total": len(hits),
+            "hidden": hidden,
         }
 
-    key = ("search", tuple(sorted(params.items())), type_word, reissue, matrix_text)
+    key = (
+        "search",
+        tuple(sorted(params.items())),
+        type_word,
+        reissue,
+        matrix_text,
+        tuple(sorted(excluded)),
+    )
     found = _cached(key, fetch)
     if not found["ok"]:
         # Failures aren't kept, so fixing the cause and retrying works at once.
@@ -569,16 +607,18 @@ def find_masters(artist="", title=""):
     return found
 
 
-def _master_versions(master_id, country, type_word, reissue, need):
+def _master_versions(master_id, country, type_word, reissue, need, excluded=()):
     """
-    The master's versions that are the wanted vinyl, as search-hit-like
-    dicts, fetching pages until there are `need` of them or none are left:
-    (hits, calls made, whether pages were left unread at the page limit).
+    The master's versions that are the wanted vinyl and not in `excluded`, as
+    search-hit-like dicts, fetching pages until there are `need` of them or
+    none are left: (hits, calls made, whether pages were left unread at the
+    page limit, how many were left out as excluded). Excluded ones don't count
+    toward `need`, so a page isn't short because of them.
     """
     params = {"sort": "released", "format": "Vinyl"}
     if (country or "").strip():
         params["country"] = country.strip()
-    hits, calls, page, pages = [], 0, 0, 1
+    hits, calls, page, pages, hidden = [], 0, 0, 1, 0
     while page < pages and page < MAX_VERSION_PAGES and len(hits) < need:
         page += 1
         calls += 1
@@ -599,11 +639,16 @@ def _master_versions(master_id, country, type_word, reissue, need):
                 "thumb": v.get("thumb"),
             }
             if hit["id"] and keep_hit(hit, type_word, reissue):
-                hits.append(hit)
-    return hits, calls, page < pages and len(hits) < need
+                if hit["id"] in excluded:
+                    hidden += 1
+                else:
+                    hits.append(hit)
+    return hits, calls, page < pages and len(hits) < need, hidden
 
 
-def _master_search(master, country, matrix, color, type_word, reissue, offset):
+def _master_search(
+    master, country, matrix, color, type_word, reissue, offset, excluded=frozenset()
+):
     """
     search() for a master: its versions, filtered, checked 20 at a time. With
     a matrix it carries on to the next 20, up to MASTER_AUTO_MAX, until a
@@ -625,8 +670,8 @@ def _master_search(master, country, matrix, color, type_word, reissue, offset):
 
     def fetch():
         try:
-            hits, calls, truncated = _master_versions(
-                master_id, country, type_word, reissue, offset + reach + 1
+            hits, calls, truncated, hidden = _master_versions(
+                master_id, country, type_word, reissue, offset + reach + 1, excluded
             )
         except discogs_client.DiscogsAuthError as e:
             return _failure(str(e))
@@ -662,6 +707,7 @@ def _master_search(master, country, matrix, color, type_word, reissue, offset):
             "note": note,
             "total": len(hits),
             "master": master_id,
+            "hidden": hidden,
             "next_offset": at if len(hits) > at else None,
         }
 
@@ -673,6 +719,7 @@ def _master_search(master, country, matrix, color, type_word, reissue, offset):
         reissue,
         offset,
         matrix_text,
+        tuple(sorted(excluded)),
     )
     found = _cached(key, fetch)
     if not found["ok"]:
@@ -692,7 +739,7 @@ def release_id_from(text):
     return int(m.group(1)) if m else None
 
 
-def _one_release(text, country, matrix, color):
+def _one_release(text, country, matrix, color, excluded=frozenset()):
     """search() for a release id: that one release, ranked like any other."""
     rid = release_id_from(text)
     if not rid:
@@ -700,6 +747,15 @@ def _one_release(text, country, matrix, color):
             "That isn't a release id. Use the number, [r123456] or the"
             " release's address from Discogs (not a master's)."
         )
+    if rid in excluded:
+        return {
+            "ok": True,
+            "candidates": [],
+            "searched": 0,
+            "note": None,
+            "total": 0,
+            "hidden": 1,
+        }
     try:
         record = _release_record(rid)
     except discogs_client.DiscogsAuthError as e:
@@ -719,6 +775,7 @@ def _one_release(text, country, matrix, color):
         "searched": 1,
         "note": None,
         "total": 1,
+        "hidden": 0,
     }
 
 
