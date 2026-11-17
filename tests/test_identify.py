@@ -892,3 +892,192 @@ def test_the_results_follow_the_lot_and_matrix_changed_after_searching(
     assert 'form[action$="/pick"] input[name="' in html
     assert 'sync("lot")' in html and 'sync("matrix")' in html
     assert 'id="lot"' in html and 'id="matrix"' in html
+
+
+# --- Not it ---
+
+
+def _ids(html):
+    """The release ids of the results on the page, in order."""
+    import re
+
+    return [int(i) for i in re.findall(r'name="release_id" value="(\d+)"', html)]
+
+
+def _not_it_href(html, rid):
+    import html as htmllib
+    import re
+
+    m = re.search(
+        r'href="([^"]*)"\s+title="This is definitely NOT it[^"]*release %d ' % rid, html
+    )
+    assert m, "no Not it button for %d" % rid
+    return htmllib.unescape(m.group(1))
+
+
+def three(monkeypatch):
+    return use(
+        monkeypatch,
+        FakeClient(
+            [hit(i, "Vinyl", "LP") for i in (1, 2, 3)],
+            {i: record(i) for i in (1, 2, 3)},
+        ),
+    )
+
+
+def test_parse_not_it_keeps_only_digits_without_repeats_and_caps_the_list():
+    f = identify.parse_not_it
+    assert f("12,x, 13 ,12,-4,1.5,²,,99999999999999999") == [12, 13]
+    assert f(None) == f("") == []
+    assert len(f(",".join(map(str, range(1, 500))))) == identify.MAX_NOT_IT
+
+
+def test_a_release_marked_not_it_is_left_out_before_ranking(monkeypatch):
+    fake = three(monkeypatch)
+    r = identify.search(artist="Band", not_it=[2])
+    assert [c["id"] for c in r["candidates"]] == [1, 3]
+    assert r["total"] == 2 and r["hidden"] == 1
+    assert "/releases/2" not in fake.urls  # not even fetched
+
+
+def test_not_it_fills_the_places_it_frees_up(monkeypatch):
+    hits = [hit(i, "Vinyl", "LP") for i in range(1, 16)]
+    use(monkeypatch, FakeClient(hits, {i: record(i) for i in range(1, 16)}))
+    r = identify.search(artist="Band", not_it=[1, 2, 3])
+    assert [c["id"] for c in r["candidates"]] == list(range(4, 16))
+    r = identify.search(artist="Band", not_it=[])
+    assert len(r["candidates"]) == identify.MAX_CANDIDATES
+
+
+def test_not_it_does_not_make_a_master_page_short_or_skip_results(monkeypatch):
+    versions = [version(i) for i in range(1, 46)]
+    use(monkeypatch, MasterClient(versions, {i: record(i) for i in range(1, 46)}))
+    gone = [2, 3, 25]
+    first = identify.search(master="1", not_it=gone)
+    assert [c["id"] for c in first["candidates"]] == [1] + list(range(4, 23))
+    assert first["next_offset"] == 20 and first["hidden"] == 3
+    second = identify.search(master="1", offset=20, not_it=gone)
+    assert [c["id"] for c in second["candidates"]] == list(range(23, 25)) + list(
+        range(26, 44)
+    )
+    third = identify.search(master="1", offset=40, not_it=gone)
+    assert [c["id"] for c in third["candidates"]] == [44, 45]
+    assert third["next_offset"] is None
+
+
+def test_a_release_id_marked_not_it_shows_nothing_and_costs_nothing(monkeypatch):
+    fake = three(monkeypatch)
+    r = identify.search(release_id="2", not_it=[2])
+    assert r["ok"] and r["candidates"] == [] and r["hidden"] == 1
+    assert fake.urls == []
+
+
+def test_the_sample_leaves_out_what_is_marked_not_it(dev_mode):
+    r = samples.sample("US", "", "", not_it=[1000001, 1000003])
+    assert 1000001 not in [c["id"] for c in r["candidates"]]
+    assert len(r["candidates"]) == 3 and r["hidden"] == 2 and r["total"] == 3
+
+
+def test_the_page_hides_a_release_and_says_which_and_show_them_brings_it_back(
+    monkeypatch, client
+):
+    three(monkeypatch)
+    html = client.get("/identifyrecord/?go=1&artist=Band").get_data(as_text=True)
+    assert _ids(html) == [1, 2, 3] and "marked" not in html
+    href = _not_it_href(html, 2)
+    html = client.get(href).get_data(as_text=True)
+    assert _ids(html) == [1, 3]
+    flat = " ".join(html.split())
+    assert '1 release marked "Not it" and left out (Discogs 2)' in flat
+    assert 'name="not_it" value="2"' in html  # a changed field keeps it
+    show = [h for h in __import__("re").findall(r'href="([^"]*)">Show them', html)][
+        0
+    ].replace("&amp;", "&")
+    assert "not_it" not in show
+    assert _ids(client.get(show).get_data(as_text=True)) == [1, 2, 3]
+
+
+def test_not_it_survives_a_second_mark_and_a_changed_field(monkeypatch, client):
+    three(monkeypatch)
+    html = client.get("/identifyrecord/?go=1&artist=Band&not_it=2").get_data(
+        as_text=True
+    )
+    html = client.get(_not_it_href(html, 3)).get_data(as_text=True)
+    assert _ids(html) == [1] and "Discogs 2, 3" in html
+    # The form sends the hidden value with whatever else was changed.
+    html = client.get(
+        "/identifyrecord/?go=1&artist=Bandy&country=US&not_it=2,3"
+    ).get_data(as_text=True)
+    assert _ids(html) == [1]
+    # Repeated parameters count as well.
+    html = client.get("/identifyrecord/?go=1&artist=Band&not_it=2&not_it=3")
+    assert _ids(html.get_data(as_text=True)) == [1]
+
+
+def test_not_it_survives_use_this_master_and_check_more_versions(monkeypatch, client):
+    import re
+
+    versions = [version(i) for i in range(1, 46)]
+    masters = [{"id": 84990, "title": "Carpenters - Close To You", "year": "1970"}]
+    use(
+        monkeypatch,
+        MasterClient(versions, {i: record(i) for i in range(1, 46)}, masters),
+    )
+    html = client.get(
+        "/identifyrecord/?find_master=1&artist=Carpenters&title=Close&not_it=5"
+    ).get_data(as_text=True)
+    link = re.search(r'href="([^"]*)">Use this master', html).group(1)
+    assert "not_it=5" in link
+    html = client.get(link.replace("&amp;", "&") + "&go=1").get_data(as_text=True)
+    assert 5 not in _ids(html) and len(_ids(html)) == 20
+    more = re.search(r'href="([^"]*)">Check more versions', html).group(1)
+    assert "not_it=5" in more and "offset=20" in more
+    html = client.get(more.replace("&amp;", "&")).get_data(as_text=True)
+    assert _ids(html) == list(range(22, 42))  # 5 is out, so none is skipped
+    # Marking one on a later page keeps that page.
+    href = _not_it_href(html, 22)
+    assert "offset=20" in href
+    html = client.get(href).get_data(as_text=True)
+    assert _ids(html) == list(range(23, 43))
+
+
+def test_a_bad_not_it_value_is_ignored(monkeypatch, client):
+    three(monkeypatch)
+    html = client.get(
+        "/identifyrecord/?go=1&artist=Band&not_it=abc,2,--,%3Cb%3EX"
+    ).get_data(as_text=True)
+    assert _ids(html) == [1, 3] and "<b>X" not in html
+    html = client.get("/identifyrecord/?go=1&artist=Band&not_it=abc").get_data(
+        as_text=True
+    )
+    assert _ids(html) == [1, 2, 3] and "marked" not in html
+
+
+def test_when_every_release_is_marked_not_it_the_page_says_so(monkeypatch, client):
+    three(monkeypatch)
+    html = client.get("/identifyrecord/?go=1&artist=Band&not_it=1,2,3").get_data(
+        as_text=True
+    )
+    assert _ids(html) == [] and 'Every release found is marked "Not it"' in html
+    assert "Discogs found nothing" not in html and "Show them" in html
+    html = client.get("/identifyrecord/?go=1&artist=Nobody&not_it=9").get_data(
+        as_text=True
+    )
+    assert "Discogs found nothing" not in html or "Every release" not in html
+
+
+def test_the_sample_obeys_not_it_on_the_page(dev_mode, client):
+    html = client.get("/identifyrecord/?sample=1").get_data(as_text=True)
+    assert len(_ids(html)) == 5
+    href = _not_it_href(html, 1000002)
+    assert "sample=1" in href
+    html = client.get(href).get_data(as_text=True)
+    assert 1000002 not in _ids(html) and len(_ids(html)) == 4
+    assert "Discogs 1000002" in html
+
+
+def test_a_fresh_identify_record_page_has_nothing_marked(monkeypatch, client):
+    three(monkeypatch)
+    client.get("/identifyrecord/?go=1&artist=Band&not_it=2")
+    html = client.get("/identifyrecord/?go=1&artist=Band").get_data(as_text=True)
+    assert _ids(html) == [1, 2, 3]

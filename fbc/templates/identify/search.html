@@ -7,6 +7,8 @@ Give what you know; the matrix is read from each release Discogs finds, since
 Discogs can't search on it.</p>
 
 <form method="get" class="form-horizontal" action="{{ url_for('IdentifyRecordView.search') }}">
+  {# Releases marked "Not it" stay left out when a field is changed and searched again. #}
+  {% if not_it %}<input type="hidden" name="not_it" value="{{ not_it|join(',') }}">{% endif %}
   {% macro field(name, label, value, hint='') %}
   <div class="form-group">
     <label class="col-sm-2 control-label" for="{{ name }}">{{ label }}</label>
@@ -78,7 +80,12 @@ Discogs can't search on it.</p>
   {% if found.searched %}It took {{ found.searched }} Discogs call{{ '' if found.searched == 1 else 's' }}
   (Discogs allows 60 a minute).{% endif %}</p>
 {% if found.note %}<div class="alert alert-info">{{ found.note }}</div>{% endif %}
-{% if not found.candidates %}<p>Discogs found nothing. Try fewer fields, or a blank country.</p>{% endif %}
+{% if not_it %}<p class="text-muted">{{ not_it|length }} release{{ '' if not_it|length == 1 else 's' }}
+  marked "Not it" and left out (Discogs {{ not_it|join(', ') }}).
+  <a href="{{ show_url }}">Show them.</a></p>{% endif %}
+{% if not found.candidates and found.hidden %}<div class="alert alert-warning">Every release found is marked "Not it", so none is shown.
+  <a href="{{ show_url }}">Show them.</a></div>
+{% elif not found.candidates %}<p>Discogs found nothing. Try fewer fields, or a blank country.</p>{% endif %}
 {% for c in found.candidates %}
 <div class="panel panel-default"><div class="panel-body"><div class="row">
   <div class="col-sm-3">
@@ -119,6 +126,8 @@ Discogs can't search on it.</p>
       <button class="btn btn-success" formaction="{{ url_for('IdentifyRecordView.collect') }}" formmethod="get">This one: add to Discogs</button>
       <button class="btn btn-default btn-xs" style="margin-top:.5em">Just add the Unit</button>
     </form>
+    {% if not_it_links[c.id] %}<a class="btn btn-link btn-xs" style="margin-top:.5em" href="{{ not_it_links[c.id] }}"
+      title="This is definitely NOT it: leave release {{ c.id }} out of later searches for this record">Not it</a>{% endif %}
     <p class="text-muted" style="font-size:80%;margin-top:.5em">"Add to Discogs" asks for the
       condition and folder first, then adds a copy to your Discogs collection. "Just add the Unit"
       saves the release in fbc only, and adds nothing to Discogs.</p>

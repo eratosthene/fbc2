@@ -74,16 +74,20 @@ SAMPLE_CANDIDATES = [
 SAMPLE_IDS = {c["id"] for c in SAMPLE_CANDIDATES}
 
 
-def sample(country="", matrix="", color=""):
-    """Ranking of the sample candidates, shaped like search()'s answer. Dev
-    mode only, so it never looks like a real result."""
+def sample(country="", matrix="", color="", not_it=()):
+    """Ranking of the sample candidates, shaped like search()'s answer, without
+    the releases in `not_it`. Dev mode only, so it never looks like a real
+    result."""
     if not devmode.on():
         return identify._failure("The sample data is only for Dev Mode.")
+    excluded = set(not_it or ())
+    shown = [c for c in SAMPLE_CANDIDATES if c["id"] not in excluded]
     return {
         "ok": True,
-        "candidates": identify.rank(SAMPLE_CANDIDATES, country, matrix, color),
+        "candidates": identify.rank(shown, country, matrix, color),
         "searched": 0,
         "note": "Sample data, not from Discogs.",
-        "total": len(SAMPLE_CANDIDATES),
+        "total": len(shown),
+        "hidden": len(SAMPLE_CANDIDATES) - len(shown),
         "sample": True,
     }

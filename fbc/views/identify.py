@@ -46,9 +46,19 @@ class IdentifyRecordView(BaseView):
         # Everything on the form but what a link adds, to put it back after a
         # "Use this master" or "Check the next 20" click.
         keep = {k: v for k, v in form.items() if v or k == "country"}
+        # Releases ruled out for this record: in the address, so they last
+        # through a changed field and the links, and end with a fresh page.
+        # Repeated parameters count too.
+        not_it = identify.parse_not_it(",".join(request.args.getlist("not_it")))
+        if not_it:
+            keep["not_it"] = ",".join(map(str, not_it))
         found = None
-        if request.args.get("sample") and devmode.on():
-            found = samples.sample(form["country"], form["matrix"], form["color"])
+        sampling = bool(request.args.get("sample") and devmode.on())
+        offset = request.args.get("offset", 0)
+        if sampling:
+            found = samples.sample(
+                form["country"], form["matrix"], form["color"], not_it=not_it
+            )
         elif request.args.get("go"):
             found = identify.search(
                 **{k: form[k] for k in ("artist", "title", "catno", "barcode")},
@@ -59,16 +69,49 @@ class IdentifyRecordView(BaseView):
                 color=form["color"],
                 release_id=form["release_id"],
                 master=form["master"],
-                offset=request.args.get("offset", 0),
+                offset=offset,
+                not_it=not_it,
             )
         masters = None
         if request.args.get("find_master"):
             masters = identify.find_masters(form["artist"], form["title"])
+        # The same search again, as a link: the page has no POST for it.
+        again = {"sample": 1} if sampling else {"go": 1}
+        if not sampling and str(offset).isdigit() and int(offset):
+            again["offset"] = int(offset)
+        not_it_links = {
+            c["id"]: url_for(
+                "IdentifyRecordView.search",
+                **dict(
+                    keep,
+                    **again,
+                    not_it=",".join(
+                        map(str, [*not_it, c["id"]][-identify.MAX_NOT_IT :])
+                    ),
+                ),
+            )
+            for c in (found or {}).get("candidates", [])
+            if c["id"] not in not_it
+        }
+        show_url = (
+            url_for(
+                "IdentifyRecordView.search",
+                **dict(
+                    {k: v for k, v in keep.items() if k != "not_it"},
+                    **({"sample": 1} if sampling else {"go": 1}),
+                ),
+            )
+            if not_it
+            else None
+        )
         return self.render_template(
             "identify/search.html",
             title="Identify Record",
             form=form,
             found=found,
+            not_it=not_it,
+            not_it_links=not_it_links,
+            show_url=show_url,
             masters=masters,
             master_links={
                 m["id"]: url_for(
