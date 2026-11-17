@@ -15,7 +15,7 @@ import datetime
 import logging
 
 from fbc.discogs import client as discogs_client
-from fbc.core import devmode
+from fbc.core import devmode, localtime
 from fbc.ebay.api import listing_settings
 from fbc.ebay.describe import build_item_specifics, disc_count, split_grading
 from fbc.ebay.drafts import default_weight
@@ -262,10 +262,9 @@ def find_existing(account, unit):
 
 def save_posted(data):
     """Save one item of Discogs's JSON as a DiscogsListing, as the sync would."""
-    from fbc.sync import state
     from fbc.discogs.saving import save_discogs_listing
 
-    return save_discogs_listing(data, state.utcnow())
+    return save_discogs_listing(data, localtime.utcnow())
 
 
 def _as_item(listing_id, payload, url=None):

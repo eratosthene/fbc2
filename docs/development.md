@@ -66,12 +66,10 @@ imports its neighbours. `models/` may import `core/` and modules that import
 nothing from `fbc` when they load (`discogs/naming.py`, `ebay/tracking.py`).
 
 `tests/test_layers.py` checks all of this, so an import that goes the wrong
-way fails the suite. Five imports do go up a layer, each inside a function,
-and the test names them: three list columns on a model that run a query
-(`PurchaseLot.figures`, `Unit._discogs_listing_link` and
-`EbayListing.fmt_boxes_available`), and two uses of `sync/state.py`'s `utcnow`
-and `last_finished` from `ebay/insertions.py` and `discogs/listing.py`. #164
-says how they could be removed.
+way fails the suite. Two imports do go up a layer, each inside a
+function, and the test names them: two list columns on a model that run a query
+(`PurchaseLot.figures` and `EbayListing.fmt_boxes_available`). #164 says how
+they could be removed.
 
 **Where new code goes.** Something that calls eBay is in `ebay/`, and
 something that calls Discogs is in `discogs/`; a new call to Discogs goes in
