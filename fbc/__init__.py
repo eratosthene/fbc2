@@ -225,6 +225,20 @@ def sort_other_items(apply, limit):
         click.echo("This was a dry run. Add --apply to save the changes.")
 
 
+@app.cli.command("park-ended-listings")
+@click.option("--apply", is_flag=True, help="Save the changes; without it, only show.")
+@click.option(
+    "--limit", type=int, help="Park at most this many listings, oldest first."
+)
+def park_ended_listings(apply, limit):
+    """Add listings that were ended by hand to the Parked Listings queue."""
+    from fbc.sales import parking
+
+    parking.park_ended(apply=apply, limit=limit, echo=click.echo)
+    if not apply:
+        click.echo("This was a dry run. Add --apply to park them.")
+
+
 @app.cli.command("pictures-import")
 @click.option("--apply", is_flag=True, help="Copy the pictures; without it, only show.")
 @click.option("--limit", type=int, help="Read at most this many listings.")
