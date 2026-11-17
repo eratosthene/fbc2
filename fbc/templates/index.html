@@ -61,7 +61,7 @@
   {# The cards, in the order the view gives. A card's piece reads its figures as `f`. #}
   {% for shown in cards if shown.visible %}
   <div class="home-card" id="card-{{ shown.card.key }}">
-    <h2>{{ shown.card.title }}{% if shown.subtitle %} <small>{{ shown.subtitle }}</small>{% endif %}</h2>
+    <h2>{{ shown.card.title }}{% if shown.subtitle %}: {{ shown.subtitle }}{% endif %}</h2>
     {% if shown.is_empty %}
     <p>
       No data yet.

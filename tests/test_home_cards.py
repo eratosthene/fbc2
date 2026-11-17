@@ -120,7 +120,7 @@ def test_every_card_is_on_the_page_in_the_order_it_always_was(app):
         "Calibrate with the eBay app",
         "<h2>Stock</h2>",
         "Units in stock: <strong>2</strong>",
-        "<h2>Year to date <small>",
+        "<h2>Year to date: 20",
         "Net sold:",
         "Reports:",
         "<h2>All time: Sales by marketplace</h2>",
