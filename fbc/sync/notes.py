@@ -10,7 +10,6 @@ that sync. Adding a synced view is one line: mix in SyncedViewMixin and set
 from collections import namedtuple
 
 from fbc.sync import jobs
-from fbc.models.sync import SyncRecord
 
 # `name` is the sync_record name, `label` says what synced, `url` starts it.
 Source = namedtuple("Source", "name label url")
@@ -22,13 +21,14 @@ DISCOGS_LISTINGS = Source(
 DISCOGS_ORDERS = Source(
     jobs.DISCOGS_ORDERS_SYNC, "Discogs orders", "/syncdiscogsorders"
 )
-EBAY_LISTINGS = Source(SyncRecord.LISTINGS_SYNC, "eBay listings", "/syncebaylistings")
+EBAY_LISTINGS = Source(jobs.LISTINGS_SYNC, "eBay listings", "/syncebaylistings")
 EBAY_ORDERS = Source(jobs.ORDERS_SYNC, "eBay orders", "/syncebayorders")
 
 
 def lines(sources):
     """[(Source, last finish or None)] for the sources, in one query."""
     from fbc import db
+    from fbc.models.sync import SyncRecord
 
     names = [s.name for s in sources]
     found = {}

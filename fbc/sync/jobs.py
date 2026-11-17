@@ -14,7 +14,6 @@ from collections import namedtuple
 from ebaysdk.exception import ConnectionError
 
 from fbc.core import localtime
-from fbc.models.sync import SyncRecord
 from fbc.discogs import client as discogs_client
 from fbc.core import devmode
 from fbc.ebay.api import fetch_active_items, trading
@@ -41,6 +40,9 @@ logger = logging.getLogger()
 
 # The sync_record names, which are also the job kinds: a button and a command
 # with the same kind never run together.
+# The sync_record names. models/sync.py can't be imported at module level
+# (see the note there), so LISTINGS_SYNC is repeated; a test keeps them equal.
+LISTINGS_SYNC = "ebay-listings"
 DISCOGS_SYNC = "discogs"
 ORDERS_SYNC = "ebay-orders"
 DISCOGS_LISTINGS_SYNC = "discogs-listings"
@@ -81,7 +83,7 @@ def discogs_orders_job(deep=False):
 
 
 def ebay_listings_job():
-    return _job(SyncRecord.LISTINGS_SYNC, "eBay listings sync", sync_ebay_listings)
+    return _job(LISTINGS_SYNC, "eBay listings sync", sync_ebay_listings)
 
 
 def ebay_orders_job(update=False, deep=False):
@@ -104,6 +106,7 @@ def ebay_orders_job(update=False, deep=False):
 
 def sync_discogs():
     from fbc import db
+    from fbc.models.sync import SyncRecord
     from fbc.models.discogs import DiscogsRelease, DiscogsInstance, Folder
 
     started = localtime.utcnow()
@@ -153,6 +156,8 @@ def sync_discogs_listings():
     Read the Discogs Marketplace inventory into DiscogsListings. It only reads
     from Discogs. A listing that's no longer in the inventory is marked ended.
     """
+    from fbc.models.sync import SyncRecord
+
     started = localtime.utcnow()
     logger.info("Updating Discogs listings...")
     # Read in full or not at all (IncompleteRead fails the sync), so nothing
@@ -179,6 +184,8 @@ def sync_discogs_orders(days=DISCOGS_ORDER_DAYS):
     `days` is None). It only reads from Discogs. Orders are added and brought
     up to date, never removed.
     """
+    from fbc.models.sync import SyncRecord
+
     started = localtime.utcnow()
     logger.info("Updating Discogs orders...")
     since = None if days is None else started - datetime.timedelta(days=days)
@@ -210,6 +217,7 @@ def _end_sold_elsewhere():
 
 def sync_ebay_listings():
     from fbc import db
+    from fbc.models.sync import SyncRecord
     from fbc.models.ebay import EbayListing
 
     # Reads all of eBay's active list or raises, which fails the sync
@@ -281,6 +289,8 @@ def _save_orders(update, api, response):
 
 
 def sync_ebay_orders(update, days, message):
+    from fbc.models.sync import SyncRecord
+
     logger.info(message)
     started = localtime.utcnow()
     try:
