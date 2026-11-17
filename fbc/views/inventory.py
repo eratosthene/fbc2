@@ -100,9 +100,18 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
         "retail_price",
         "sold",
         "sales_receipt",
+        "sold_price",
     ]
-    # Archiving is by the command and the list actions, not the form.
-    add_exclude_columns = ["archived"]
+    description_columns = {
+        "sold_price": "Only change this if you need to. It is only for a Sales"
+        " Receipt that covers several Units: it says how much of the receipt"
+        " this Unit's part of the sale was. Ship This and Combine fill it in."
+        " It does nothing for a receipt with one Unit.",
+    }
+    # Archiving is by the command and the list actions, not the form. Sold
+    # Price is only for correcting a sale, so it is on Edit and not on Add
+    # (which Identify Record ends in).
+    add_exclude_columns = ["archived", "sold_price"]
     add_form_extra_fields = UNIT_ADD_FORM_EXTRA_FIELDS
     add_template = "pricing/add_unit.html"
     edit_template = "unit/edit.html"

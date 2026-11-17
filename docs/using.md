@@ -899,6 +899,15 @@ combined receipt the Unit's share of its old receipt. Failing that, it's the
 listing's asking price, then its Retail Price, and last the average of the
 receipt's other Units.
 
+**Sold Price on a Unit.** The first thing the split looks at is the Unit's own
+Sold Price, on Edit Unit (it isn't on Add Unit). Ship This and Combine fill it
+in. Change it only when the split of a receipt is wrong, for example a sale in
+person of several Units whose Retail Prices don't show what each one sold for.
+It only changes how the receipt's money is shared between its Units, so each
+Unit's sold-for figure and the profit by Purchase Lot and Storage Box. The
+receipt's own totals stay the same. On a receipt with one Unit it does
+nothing.
+
 ### SKUs on old listings
 
 Listings made from eBay Drafts get `fbc-<unit id>` as their SKU (Custom
