@@ -195,6 +195,38 @@ def test_finances_token_is_minted_for_its_own_scope(app, monkeypatch):
     assert scopes == [oauth.MEDIA_SCOPE, oauth.FINANCES_SCOPE]
 
 
+def test_a_token_saved_before_analytics_was_asked_for_still_serves_the_rest(
+    app, monkeypatch
+):
+    """Until Connect eBay is pressed again, only the analytics scope is
+    refused; listings, pictures and earnings keep working (#208)."""
+    import requests
+
+    monkeypatch.setitem(
+        fbc.app.config["EBAY_SETTINGS"], "OAUTH_REFRESH_TOKEN", "refresh"
+    )
+    monkeypatch.setattr(oauth, "_oauth", {})
+
+    def fake_post(url, **kwargs):
+        if kwargs["data"]["scope"] == oauth.ANALYTICS_SCOPE:
+            return FakeHTTPResponse(
+                400,
+                {
+                    "error": "invalid_scope",
+                    "error_description": "The requested scope is invalid",
+                },
+            )
+        return FakeHTTPResponse(200, {"access_token": "ok", "expires_in": 7200})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    assert oauth.oauth_token() == "ok"
+    assert oauth.oauth_token(oauth.TRADING_SCOPE) == "ok"
+    assert oauth.oauth_token(oauth.FINANCES_SCOPE) == "ok"
+    with pytest.raises(oauth.OAuthError, match="Connect eBay"):
+        oauth.oauth_token(oauth.ANALYTICS_SCOPE)
+
+
 def test_ship_this_is_offered_until_there_is_a_sales_receipt(app):
     order, unit = _order()
 

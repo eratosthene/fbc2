@@ -7,6 +7,13 @@ see [Running fbc in production](production.md).
 Before syncing, sign in to each site once: Connect > Connect eBay and
 Connect > Connect Discogs. The app keeps the tokens in the database.
 
+Connect eBay asks eBay for permission to manage your listings and pictures,
+read what an order earned, and read how many views each listing had. When a
+release adds a permission, press Connect eBay again once; until you do, the
+rest of fbc works as before and only the part that needs the new permission
+says eBay refused. The views permission (`sell.analytics.readonly`) is the
+latest.
+
 ## Searching by id
 
 Every list can be searched by its id (for eBay Listings and Orders, the item
