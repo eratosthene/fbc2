@@ -563,7 +563,8 @@ def lots_report(period):
     """
     {"rows", "total"}: the Purchase Lots dated in the Period, newest first,
     with the figures of the Purchase Lots list (all their sales so far, not
-    just the period's), the cost of the Units still in stock and "to_break_even",
+    just the period's), the cost of the Units still in stock, "forecast" and
+    "shop_rate_only" (see _forecasts()) and "to_break_even",
     the Units still to sell to cover the Lot's price (see breakeven()).
     """
     lots = [
@@ -574,9 +575,11 @@ def lots_report(period):
     inv = finance.Inventory()
     figures = finance.lot_figures(lots, inv)
     avg, _source = _average_net_per_unit(period)
+    forecasts = _forecasts(inv, figures)
     rows = []
     for lot in lots:
         f = dict(figures[lot.id])
+        f["forecast"], f["shop_rate_only"] = forecasts[lot.id]
         f["lot"] = lot
         f["to_break_even"] = _units_to_cover(f["capital"] - f["net"], avg)
         f["stock_cost"] = (
@@ -592,7 +595,80 @@ def lots_report(period):
     total["fees"] = round(total["gross"] - total["net"], 2)
     total["profit"] = round(total["net"] - total["capital"], 2)
     total["roi"] = finance.percent(total["profit"], total["capital"])
+    # A blank forecast adds nothing.
+    total["forecast"] = round(sum(r["forecast"] or 0.0 for r in rows), 2)
     return {"rows": rows, "total": total, "payback": _payback(rows, inv)}
+
+
+# How many Units' worth of weight the shop-wide rate has when it is blended
+# with a Lot's own.
+FORECAST_WEIGHT = 5
+
+
+def _forecasts(inv, figures):
+    """
+    {lot id: (forecast profit, shop rate alone was used)} for the Lots in
+    `figures`, from the Units `inv` has already loaded (no queries).
+
+    Forecast profit = net sold so far + the net expected from the Units in
+    stock - the Lot's price. A Unit in stock is expected to net its retail
+    price times a realization rate (net per dollar of retail price): the Lot's
+    own, blended toward the shop-wide rate by (n * lot + 5 * shop) / (n + 5),
+    where n is the Units it sold; the shop rate alone when it sold none. A
+    Unit with no retail price is expected to net the Lot's average net per
+    sold Unit, else the shop's, else 0. Blank (None) when nothing is in stock
+    or the shop has no sold Unit with a retail price to base a rate on. Only
+    sold Units with a Sales Receipt and a retail price count toward a rate, so
+    a Unit with no retail price doesn't drag it down.
+    """
+    shop = {"net": 0.0, "retail": 0.0, "avg_net": 0.0, "avg_n": 0}
+    lots = {}
+    for u in inv.units:
+        lot = lots.setdefault(
+            u.purchase_lot_id,
+            {
+                "net": 0.0,
+                "retail": 0.0,
+                "n": 0,
+                "avg_net": 0.0,
+                "avg_n": 0,
+                "stock": [],
+            },
+        )
+        if u.sold is False:
+            lot["stock"].append(u.retail_price or 0.0)
+        elif u.sold:
+            sale = inv.sale(u)
+            if not sale:
+                continue
+            net = sale[1] or 0.0
+            lot["avg_net"] += net
+            lot["avg_n"] += 1
+            if u.retail_price and u.retail_price > 0:
+                lot["net"] += net
+                lot["retail"] += u.retail_price
+                lot["n"] += 1
+    for lot_id, lot in lots.items():
+        if lot_id is None:
+            continue
+        for k in ("net", "retail", "avg_net", "avg_n"):
+            shop[k] += lot[k]
+    shop_rate = shop["net"] / shop["retail"] if shop["retail"] > 0 else None
+    shop_avg = shop["avg_net"] / shop["avg_n"] if shop["avg_n"] else 0.0
+    out = {}
+    for lot_id, f in figures.items():
+        lot = lots.get(lot_id)
+        if not lot or not lot["stock"] or shop_rate is None:
+            out[lot_id] = (None, False)
+            continue
+        n = lot["n"]
+        rate = (
+            n * (lot["net"] / lot["retail"] if n else 0.0) + FORECAST_WEIGHT * shop_rate
+        ) / (n + FORECAST_WEIGHT)
+        avg = lot["avg_net"] / lot["avg_n"] if lot["avg_n"] else shop_avg
+        expected = sum(r * rate if r > 0 else avg for r in lot["stock"])
+        out[lot_id] = (round(f["net"] + expected - f["capital"], 2), n == 0)
+    return out
 
 
 PAYBACK_LOTS = 5
