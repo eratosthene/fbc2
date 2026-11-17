@@ -36,10 +36,10 @@ cards, in this order:
   to every report.
 - **All time: Sales by marketplace**: Sales Receipts, Sold Price and Net Sold
   for eBay, Discogs and sales not linked to an order, over every date.
-- **All time: Net profit**.
-- **All time: Breakeven per unit**.
-- **All time: Profit Details**, to open: a table by Purchase Lot and one by
-  Storage Box, each with its Units, Units Sold and Stock.
+- **All Time: Profit & Breakeven**: the profit and margin over every date,
+  the breakeven price per Unit, then Profit Details to open: a table by
+  Purchase Lot and one by Storage Box, each with its Units, Units Sold and
+  Stock.
 - **Other items**: shown once an Other Item has sold (see below): how many
   sold and their sales, and profit for those that have a cost. It's apart
   from everything else here.

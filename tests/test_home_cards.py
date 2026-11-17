@@ -127,12 +127,11 @@ def test_every_card_is_on_the_page_in_the_order_it_always_was(app):
         ">eBay</a>",
         ">Discogs</a>",
         ">Other</a>",
-        "<h2>All time: Net profit</h2>",
+        "<h2>All Time: Profit &amp; Breakeven</h2>",
+        "Profit: <strong>",
         "profit margin",
-        "<h2>All time: Breakeven per unit</h2>",
         "Breakeven per unit, including supplies",
-        "<h2>All time: Profit Details</h2>",
-        "By Purchase Lot and Storage Box",
+        "Profit Details (by Purchase Lot and Storage Box)",
         "<td>Crate Find</td>",
         "<th>Storage Box</th>",
         "<td>Back Shelf</td>",
@@ -155,15 +154,13 @@ def test_every_card_is_on_the_page_in_the_order_it_always_was(app):
     assert page.count('class="home-card"') == len(cards.CARDS)
 
 
-def test_the_cards_are_the_nine_in_the_owners_order():
+def test_the_cards_are_the_eight_in_the_owners_order():
     assert [card.key for card in cards.CARDS] == [
         "listings",
         "stock",
         "ytd",
         "marketplace_sales",
-        "net_profit",
-        "breakeven",
-        "profit_details",
+        "profit_breakeven",
         "other_items",
         "money",
     ]
@@ -180,7 +177,7 @@ def test_a_card_that_is_not_shown_never_works_out_its_figures(app):
         return figures
 
     watched = [dataclasses.replace(card, figures=spy(card.key)) for card in cards.CARDS]
-    shown = [watched[1], watched[8]]
+    shown = [c for c in watched if c.key in ("stock", "money")]
 
     context = index.home_context(shown)
 
@@ -223,9 +220,7 @@ def test_all_time_cards_share_one_set_of_figures(app, monkeypatch):
 
     monkeypatch.setattr(cards, "inventory", counting)
     all_time_cards = [
-        c
-        for c in cards.CARDS
-        if c.key in ("stock", "net_profit", "breakeven", "profit_details", "money")
+        c for c in cards.CARDS if c.key in ("stock", "profit_breakeven", "money")
     ]
     cards.figures_for(all_time_cards)
     assert len(loads) == 1

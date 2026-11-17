@@ -349,25 +349,10 @@ def _marketplace_figures(shared):
     return {"marketplace_sales": marketplace_sales()}
 
 
-def _net_profit_figures(shared):
-    all_ = shared.get(all_time)
-    return {
-        "total_net_profit": all_["total_net_profit"],
-        "profit_margin": all_["profit_margin"],
-    }
-
-
-def _breakeven_figures(shared):
-    all_ = shared.get(all_time)
-    return {
-        "supply_per_unit": all_["supply_per_unit"],
-        "breakeven_per_unit": all_["breakeven_per_unit"],
-    }
-
-
-def _profit_details_figures(shared):
+def _profit_breakeven_figures(shared):
     inv = shared.get(inventory)
-    return {key: inv[key] for key in ("lots", "lot_totals", "totals", "box_totals")}
+    figures = {key: inv[key] for key in ("lots", "lot_totals", "totals", "box_totals")}
+    return figures | shared.get(all_time)
 
 
 def _other_items_figures(shared):
@@ -407,22 +392,10 @@ CARDS = [
         _marketplace_figures,
     ),
     Card(
-        "net_profit",
-        "All time: Net profit",
-        "home/net_profit.html",
-        _net_profit_figures,
-    ),
-    Card(
-        "breakeven",
-        "All time: Breakeven per unit",
-        "home/breakeven.html",
-        _breakeven_figures,
-    ),
-    Card(
-        "profit_details",
-        "All time: Profit Details",
-        "home/profit_details.html",
-        _profit_details_figures,
+        "profit_breakeven",
+        "All Time: Profit & Breakeven",
+        "home/profit_breakeven.html",
+        _profit_breakeven_figures,
     ),
     Card(
         "other_items",
