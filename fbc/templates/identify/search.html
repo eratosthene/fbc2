@@ -126,7 +126,7 @@ Discogs can't search on it.</p>
       <button class="btn btn-success" formaction="{{ url_for('IdentifyRecordView.collect') }}" formmethod="get">This one: add to Discogs</button>
       <button class="btn btn-default btn-xs" style="margin-top:.5em">Just add the Unit</button>
     </form>
-    {% if not_it_links[c.id] %}<a class="btn btn-link btn-xs" style="margin-top:.5em" href="{{ not_it_links[c.id] }}"
+    {% if not_it_links[c.id] %}<a class="btn btn-default btn-xs" style="margin-top:.5em" href="{{ not_it_links[c.id] }}"
       title="This is definitely NOT it: leave release {{ c.id }} out of later searches for this record">Not it</a>{% endif %}
     <p class="text-muted" style="font-size:80%;margin-top:.5em">"Add to Discogs" asks for the
       condition and folder first, then adds a copy to your Discogs collection. "Just add the Unit"
