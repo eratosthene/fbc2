@@ -982,6 +982,23 @@ still in stock, Sold For, Net Sold, profit and ROI, and a totals row. Their
 sales are all the sales so far, not just the period's, because a Lot's result
 isn't known until it's sold. Click a heading to sort.
 
+**Forecast profit** is what the Lot may make once its Units in stock sell:
+Net Sold so far, plus what the Units in stock are expected to net, less the
+Lot's price. A Unit in stock is expected to net its retail price times a
+*realization rate*, the net the Lot's sold Units brought in per dollar of
+their retail price. The Lot's rate is blended toward the shop-wide rate (all
+sold Units, in all Lots, all time) by how many Units the Lot has sold:
+(Units sold × Lot rate + 5 × shop rate) ÷ (Units sold + 5). A Lot with no
+sales yet uses the shop rate alone, and its cell carries a small `*`. A Unit in
+stock with no retail price is expected to net the Lot's average net per Unit
+sold, or the shop's if the Lot has none sold. Only sold Units with a retail
+price count toward a rate, and a Unit marked sold with no Sales Receipt counts
+nowhere. The column is blank when the Lot has nothing in stock, or when no
+Unit with a retail price has sold anywhere; the totals row adds up the rest.
+It assumes everything in stock sells, so it is probably optimistic. The Lots
+CSV has the column, and another that says "yes" when the shop rate alone was
+used.
+
 ### Sales
 
 Sales Receipts dated in the period (Other Items' are never here): how many,
