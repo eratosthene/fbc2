@@ -47,6 +47,28 @@ cards, in this order:
 
 Every page has the shop's name in small type at the bottom.
 
+### Customizing the home page
+
+Each person arranges the cards for themselves. Press **Customize** above the
+cards. Each card then has a handle to drag it to a new place and a **Hide**
+button; hidden cards wait in a **Hidden cards** box below, each with a
+**Show** button. Changes save as you make them. **Done** goes back to the
+normal page, and **Reset to default** (it asks first) puts the cards back in
+the order above with none hidden. A hidden card isn't worked out, so hiding
+what you don't read makes the page faster.
+
+The alerts at the top can't be moved or hidden. Someone who has never
+customized gets the default order. When a new card is added to fbc it shows
+for everyone, in the place the default puts it (after the card before it in
+the default order), even if they have customized. A card that has no data yet
+still shows, saying so.
+
+Changing the layout needs four permissions on `MyIndexView`
+(`can_layoutorder`, `can_layouthide`, `can_layoutshow`, `can_layoutreset`).
+Admin gets them the first time the app starts after the update; give them to
+any other role that uses the home page, or its Customize button will fail
+with a message.
+
 ### Dates and times
 
 Times show in your timezone (the `TIMEZONE` setting, Central by default), as

@@ -14,3 +14,11 @@ h6 { font-size: 10.2px; margin-top: 8.5px; margin-bottom: 8.5px; }
   table { break-inside: avoid; }
   a[href]:after { content: none !important; }
 }
+
+/* The home page's Customize mode. */
+.home-toolbar { margin-top: 10px; }
+.customizing .home-card { border: 1px dashed #bbb; border-radius: 4px; padding: 0 10px 10px; margin-bottom: 10px; }
+.home-handle { float: left; margin: 20px 8px 0 0; cursor: grab; color: #777; font-size: 18px; touch-action: none; }
+.home-card-tools { margin-top: 18px; }
+.home-hidden-card { margin: 6px 0; }
+.sortable-ghost { opacity: 0.4; }

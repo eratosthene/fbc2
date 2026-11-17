@@ -413,6 +413,9 @@ CARDS = [
 ]
 
 
+BY_KEY = {card.key: card for card in CARDS}
+
+
 def figures_for(cards, shared=None):
     """The cards, each with its figures worked out, in the order given."""
     shared = shared or Shared()

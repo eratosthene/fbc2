@@ -229,7 +229,8 @@ def test_all_time_cards_share_one_set_of_figures(app, monkeypatch):
 # What the home page did before it was split into cards, counted on the same
 # shop with the same test (database statements, leaving out Flask-AppBuilder's
 # own permission and user lookups).
-QUERIES_BEFORE_THE_CARDS = 57
+# One more now: the signed-in user's saved layout, looked up on every page.
+QUERIES_BEFORE_THE_CARDS = 57 + 1
 
 
 def test_the_page_does_no_more_queries_than_before_it_was_cards(app):

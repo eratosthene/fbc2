@@ -287,6 +287,29 @@ call it with `shared.get(fn)`, so one page works it out once (see `inventory`,
 `money` and `all_time`). `tests/test_home_cards.py` checks the order, that a
 hidden card does no work, and that the page's query count hasn't grown.
 
+### Per-user layouts
+
+A user's layout is a row of `home_layout` (`fbc/models/home.py`): `user_id`
+(unique, a foreign key to `ab_user.id`) and `layout` JSON, `{"order": [every card key], "hidden": [keys]}`. No row means the default order from `CARDS`;
+Reset to default deletes the row. `fbc/sales/layout.py` reads and writes it:
+`resolve` drops keys that are no longer cards and puts a card the layout has
+never seen after the card before it in the default order, visible. `home_context( user_id=...)` takes the layout's visible cards and works out only those.
+
+Customize mode is `/?customize=1`, rendered by the server, so out of it the page
+has no handles or buttons. `MyIndexView` has four POST routes that take JSON and
+change only `g.user`'s row: `/layout/order` (`{"order": [visible keys in the new order]}`; the cards take the places those cards had), `/layout/hide/<key>`,
+`/layout/show/<key>` and `/layout/reset`. Every key is checked against the
+registry (400 if not). Each is a permission (`can_layoutorder`, `can_layouthide`,
+`can_layoutshow`, `can_layoutreset`; see Signing in). The script is
+`fbc/static/js/home-layout.js`; it sends the CSRF token in `X-CSRFToken`.
+
+Dragging uses SortableJS 1.15.7 (MIT), `fbc/static/js/Sortable.min.js` with its
+licence beside it as `Sortable.LICENSE.md`. It is `Sortable.min.js` from the
+`sortablejs@1.15.7` package on npm (published 2026-02-11), unchanged, and is
+served from the app, not a CDN, so it works offline. To update it, take a
+release at least two weeks old from npm, replace both files, update this
+paragraph, and try drag, hide, show and reset in a browser, with touch.
+
 ## Signing in
 
 Every page needs signing in, the home page and the Sync buttons' routes
@@ -296,7 +319,8 @@ login page and start nothing. Each route is a permission on `MyIndexView`
 (`can_index`, `can_syncdiscogs`, `can_syncdiscogslistings`,
 `can_syncdiscogsorders`, `can_syncdiscogsordersdeep`,
 `can_syncebaylistings`, `can_syncebayorders`, `can_syncebayordersdeep`,
-`can_syncjob`, `can_calibrateinsertions`). Admin gets them on the next start;
+`can_syncjob`, `can_calibrateinsertions`, `can_layoutorder`, `can_layouthide`,
+`can_layoutshow`, `can_layoutreset`). Admin gets them on the next start;
 give them to any other role that needs the home page or the buttons. In tests,
 `tests/auth.py`'s `signed_in_client()` is an Admin's client.
 
