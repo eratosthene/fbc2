@@ -414,7 +414,9 @@ class ParkedListingsBaseView(CustomModelView):
         "fmt_relist_button",
     ]
     label_columns = {
-        "fmt_relist_button": "",
+        # Not "": Flask-AppBuilder treats an empty label as missing and makes
+        # one from the column name ("Fmt Relist Button").
+        "fmt_relist_button": "Action",
         "fmt_price": "Price",
         "fmt_parked_at": "Ended",
         "fmt_out_for": "Out For",
