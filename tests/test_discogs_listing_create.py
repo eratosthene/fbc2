@@ -517,6 +517,47 @@ def test_unit_without_a_collection_copy_has_no_link(app):
     assert "List&nbsp;on&nbsp;Discogs" not in unit.link_column()
 
 
+def _add_listing(unit, status, ended=False, listing_id=8001):
+    db.session.add(
+        DiscogsListing(
+            listing_id=listing_id, unit_id=unit.id, status=status, ended=ended
+        )
+    )
+    db.session.commit()
+    db.session.refresh(unit)
+
+
+def test_unit_link_shows_a_for_sale_listing(app):
+    unit = _unit()
+    db.session.add(unit)
+    db.session.commit()
+    _add_listing(unit, "For Sale")
+
+    html = str(unit.link_column())
+    assert "Discogs:For&nbsp;Sale" in html
+    assert "List&nbsp;on&nbsp;Discogs" not in html
+
+
+def test_unit_with_only_an_ended_listing_offers_list_on_discogs(app):
+    unit = _unit()
+    db.session.add(unit)
+    db.session.commit()
+    _add_listing(unit, "Draft", ended=True)
+
+    html = str(unit.link_column())
+    assert "List&nbsp;on&nbsp;Discogs" in html
+    assert "Discogs:" not in html
+
+
+def test_sold_unit_has_no_discogs_link(app):
+    unit = _unit(sold=True)
+    db.session.add(unit)
+    db.session.commit()
+    _add_listing(unit, "For Sale")
+
+    assert "Discogs" not in str(unit.link_column())
+
+
 # --- Dev mode ---
 
 

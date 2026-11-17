@@ -315,11 +315,12 @@ class Unit(Model):
         A link to the Unit's open Discogs listing, or to List on Discogs
         when it can be listed (see fbc/discogs/listing.py problem_with).
         """
-        from fbc.discogs import listing as discogs_listing
+        # Inside the method: models.discogs imports this module.
+        from fbc.models.discogs import DiscogsListing
 
         if not self.id or self.sold:
             return ""
-        listing = discogs_listing.open_listing(self)
+        listing = DiscogsListing.open_for(self)
         if listing:
             return (
                 '<a href="'

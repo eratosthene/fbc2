@@ -312,6 +312,12 @@ class DiscogsOAuthToken(Model):
         return "DiscogsOAuthToken " + str(self.id)
 
 
+DRAFT = "Draft"
+FOR_SALE = "For Sale"
+# A Unit with a listing in either state can't be listed again.
+OPEN_STATUSES = (DRAFT, FOR_SALE)
+
+
 class DiscogsListing(Model):
     """
     One item in the seller inventory on the Discogs Marketplace, as the
@@ -364,6 +370,21 @@ class DiscogsListing(Model):
 
     def __repr__(self):
         return str(self.listing_id) + ": " + (self.title or "")
+
+    @classmethod
+    def open_for(cls, unit):
+        """The Unit's listing that is a Draft or For Sale, or None."""
+        from fbc import db
+
+        return (
+            db.session.query(cls)
+            .filter(
+                cls.unit_id == unit.id,
+                cls.ended.is_(False),
+                cls.status.in_(OPEN_STATUSES),
+            )
+            .first()
+        )
 
     def is_for_sale(self):
         """Live on the Marketplace now, as of the last sync."""
