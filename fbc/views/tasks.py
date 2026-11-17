@@ -14,7 +14,11 @@ from fbc.sync.notes import DISCOGS_LISTINGS, EBAY_LISTINGS, SyncedViewMixin
 from fbc.views.discogs import DiscogsReleaseModelBaseView
 from fbc.views.inventory import UnitModelBaseView
 from fbc.views.discogs import DiscogsOrderModelView
-from fbc.views.sales import EbayOrderModelView, ListingEndModelView
+from fbc.views.sales import (
+    EbayOrderModelView,
+    ListingEndModelView,
+    ParkedListingsBaseView,
+)
 
 
 class FilterInSelect(BaseFilter):
@@ -42,6 +46,12 @@ class FailedEndingsView(ListingEndModelView):
     """Listings fbc couldn't end after their Unit sold on the other marketplace."""
 
     base_filters = [["id", FilterInSelect, tasks.ids_failed_endings]]
+
+
+class ParkedListingsView(ParkedListingsBaseView):
+    """Listings ended to make room, to list again. Longest out first."""
+
+    base_filters = [["item_id", FilterInSelect, tasks.ids_parked_listings]]
 
 
 class ReleasesNeedingUnitsView(DiscogsReleaseModelBaseView):

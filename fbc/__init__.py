@@ -441,6 +441,7 @@ def _register_views():
     from fbc.views.tasks import (
         DiscogsOrdersToShipView,
         FailedEndingsView,
+        ParkedListingsView,
         OrdersToShipView,
         ReleasesNeedingUnitsView,
         UnitsNeedingDiscogsDraftsView,
@@ -519,6 +520,7 @@ def _register_views():
         appbuilder.add_view(
             FailedEndingsView, "Listings to End by Hand", category="Tasks"
         )
+        appbuilder.add_view(ParkedListingsView, "Parked Listings", category="Tasks")
         appbuilder.add_view(
             ReleasesNeedingUnitsView, "Releases to Make Units", category="Tasks"
         )
