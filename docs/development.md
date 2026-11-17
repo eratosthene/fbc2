@@ -401,7 +401,7 @@ against Discogs, so check it on the first real Draft. Notes:
   `PostUncertain`. The create always reads the newest `RECENT_ITEMS` items of
   the inventory first (`find_existing`), so a retry adopts a listing a
   timed-out post made. An older listing is found through the database
-  (`open_listing`) instead.
+  (`DiscogsListing.open_for`) instead.
 - A Unit needs a collection instance (`discogs_instance_id`) to be listed.
 - `Unit.grading` maps to Discogs's condition names in
   `CONDITION_FOR_GRADE`; EX isn't mapped, because Discogs has no EX.

@@ -14,6 +14,8 @@ from fbc.discogs import client as discogs_client
 from fbc.discogs.saving import save_discogs_listing
 from fbc.models.discogs import DiscogsOrder, DiscogsOrderItem
 from fbc.models.inventory import PurchaseLot, Unit
+from fbc.core import localtime
+from fbc.models.sync import SyncRecord
 from fbc.sync import jobs, state
 
 VERSIONS = Path(__file__).parent.parent / "migrations" / "versions"
@@ -100,7 +102,7 @@ def test_a_plain_sync_reads_30_days_and_a_deep_one_everything(app, orders):
     jobs.discogs_orders_job(deep=True).fn()
 
     plain, deep = account.calls_to("orders")
-    age = state.utcnow() - plain[0]
+    age = localtime.utcnow() - plain[0]
     assert (
         datetime.timedelta(days=29, hours=23)
         < age
@@ -169,7 +171,7 @@ def test_a_failed_read_saves_nothing_and_records_nothing(app, orders):
         jobs.sync_discogs_orders()
 
     assert db.session.query(DiscogsOrder).count() == 0
-    assert state.last_finished(jobs.DISCOGS_ORDERS_SYNC) is None
+    assert SyncRecord.last_finished(jobs.DISCOGS_ORDERS_SYNC) is None
 
 
 def test_a_finished_sync_records_when(app, orders):
@@ -177,7 +179,7 @@ def test_a_finished_sync_records_when(app, orders):
 
     jobs.sync_discogs_orders()
 
-    assert state.last_finished(jobs.DISCOGS_ORDERS_SYNC) is not None
+    assert SyncRecord.last_finished(jobs.DISCOGS_ORDERS_SYNC) is not None
 
 
 def test_the_sync_has_a_command(app, orders):

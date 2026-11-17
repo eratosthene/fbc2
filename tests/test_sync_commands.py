@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from fake_discogs import FakeAccount, FakeDiscogs
 
+from fbc.models.sync import SyncRecord
 from fbc.sync import jobs, state
 from fbc.discogs.client import DiscogsAuthError
 from fbc.ebay.oauth import OAuthError
@@ -43,7 +44,7 @@ def test_discogs_prints_its_log_and_records_that_it_finished(run, monkeypatch):
     assert result.exit_code == 0
     assert "INFO Updating discogs..." in result.output
     assert "INFO Discogs sync finished." in result.output
-    assert state.last_finished(jobs.DISCOGS_SYNC) is not None
+    assert SyncRecord.last_finished(jobs.DISCOGS_SYNC) is not None
 
 
 def test_a_failed_sync_exits_non_zero_and_records_nothing(run, monkeypatch):
@@ -57,7 +58,7 @@ def test_a_failed_sync_exits_non_zero_and_records_nothing(run, monkeypatch):
     assert result.exit_code == 1
     assert "Connect fbc to Discogs first." in result.output
     assert "Discogs sync failed." in result.output
-    assert state.last_finished(jobs.DISCOGS_SYNC) is None
+    assert SyncRecord.last_finished(jobs.DISCOGS_SYNC) is None
 
 
 def test_ebay_listings_records_that_it_finished(run, monkeypatch):
@@ -67,7 +68,7 @@ def test_ebay_listings_records_that_it_finished(run, monkeypatch):
 
     assert result.exit_code == 0
     assert "eBay listings sync finished." in result.output
-    assert state.last_finished(state.LISTINGS_SYNC) is not None
+    assert SyncRecord.last_finished(SyncRecord.LISTINGS_SYNC) is not None
 
 
 class _Api:
@@ -97,7 +98,7 @@ def test_ebay_orders_looks_back_ten_days_unless_deep(run, monkeypatch):
     assert result.exit_code == 0
     assert "Deep updating eBay orders..." in result.output
     assert api.sent[1]["CreateTimeFrom"] < ten[0]
-    assert state.last_finished(jobs.ORDERS_SYNC) is not None
+    assert SyncRecord.last_finished(jobs.ORDERS_SYNC) is not None
 
 
 def test_ebay_orders_not_connected_is_a_failure(run, monkeypatch):
@@ -111,7 +112,7 @@ def test_ebay_orders_not_connected_is_a_failure(run, monkeypatch):
     # The sync logs the error and returns, which counts as a failure here.
     assert result.exit_code == 1
     assert "Connect fbc to eBay first." in result.output
-    assert state.last_finished(jobs.ORDERS_SYNC) is None
+    assert SyncRecord.last_finished(jobs.ORDERS_SYNC) is None
 
 
 def test_a_sync_that_logs_an_error_and_carries_on_exits_non_zero(run, monkeypatch):
@@ -187,4 +188,4 @@ def test_in_dev_mode_a_command_finishes_without_reaching_out(
 
     assert result.exit_code == 0
     assert "Dev Mode is turned on, external syncing disabled." in result.output
-    assert state.last_finished(jobs.DISCOGS_SYNC) is None
+    assert SyncRecord.last_finished(jobs.DISCOGS_SYNC) is None

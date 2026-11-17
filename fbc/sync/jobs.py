@@ -3,8 +3,8 @@ The Discogs and eBay syncs. Each is one function here, run by both the Sync
 buttons (in the background, see fbc.sync.state.start) and the `flask sync` commands
 (in the foreground, see fbc.sync.state.run), so the two can't drift apart.
 
-Each records when it last finished successfully (state.record_finished), under
-the name in its Job, for a scheduler to read with state.last_finished.
+Each records when it last finished successfully (SyncRecord.record_finished), under
+the name in its Job, for a scheduler to read with SyncRecord.last_finished.
 """
 
 import datetime
@@ -13,7 +13,8 @@ from collections import namedtuple
 
 from ebaysdk.exception import ConnectionError
 
-from fbc.sync import state
+from fbc.core import localtime
+from fbc.models.sync import SyncRecord
 from fbc.discogs import client as discogs_client
 from fbc.core import devmode
 from fbc.ebay.api import fetch_active_items, trading
@@ -80,7 +81,7 @@ def discogs_orders_job(deep=False):
 
 
 def ebay_listings_job():
-    return _job(state.LISTINGS_SYNC, "eBay listings sync", sync_ebay_listings)
+    return _job(SyncRecord.LISTINGS_SYNC, "eBay listings sync", sync_ebay_listings)
 
 
 def ebay_orders_job(update=False, deep=False):
@@ -105,7 +106,7 @@ def sync_discogs():
     from fbc import db
     from fbc.models.discogs import DiscogsRelease, DiscogsInstance, Folder
 
-    started = state.utcnow()
+    started = localtime.utcnow()
     logger.info("Updating discogs...")
     account = discogs_client.account()
     for folder in account.collection_folders():
@@ -143,7 +144,7 @@ def sync_discogs():
                 "Local instance " + str(item.instance_id) + " should be removed"
             )
             forget_discogs_instance(item)
-    state.record_finished(DISCOGS_SYNC, started)
+    SyncRecord.record_finished(DISCOGS_SYNC, started)
     logger.info("Discogs sync finished.")
 
 
@@ -152,7 +153,7 @@ def sync_discogs_listings():
     Read the Discogs Marketplace inventory into DiscogsListings. It only reads
     from Discogs. A listing that's no longer in the inventory is marked ended.
     """
-    started = state.utcnow()
+    started = localtime.utcnow()
     logger.info("Updating Discogs listings...")
     # Read in full or not at all (IncompleteRead fails the sync), so nothing
     # is marked ended on a short read.
@@ -168,7 +169,7 @@ def sync_discogs_listings():
     ended = mark_ended_discogs_listings(seen)
     logger.info("Marked " + str(ended) + " listings as ended.")
     logger.info(str(unlinked) + " listings aren't linked to a Unit.")
-    state.record_finished(DISCOGS_LISTINGS_SYNC, started)
+    SyncRecord.record_finished(DISCOGS_LISTINGS_SYNC, started)
     logger.info("Discogs listings sync finished.")
 
 
@@ -178,7 +179,7 @@ def sync_discogs_orders(days=DISCOGS_ORDER_DAYS):
     `days` is None). It only reads from Discogs. Orders are added and brought
     up to date, never removed.
     """
-    started = state.utcnow()
+    started = localtime.utcnow()
     logger.info("Updating Discogs orders...")
     since = None if days is None else started - datetime.timedelta(days=days)
     # Read in full or not at all (IncompleteRead fails the sync).
@@ -188,7 +189,7 @@ def sync_discogs_orders(days=DISCOGS_ORDER_DAYS):
         logger.info("Saving Discogs order " + str(data["id"]))
         save_discogs_order(data)
     _end_sold_elsewhere()
-    state.record_finished(DISCOGS_ORDERS_SYNC, started)
+    SyncRecord.record_finished(DISCOGS_ORDERS_SYNC, started)
     logger.info("Discogs orders sync finished.")
 
 
@@ -213,8 +214,8 @@ def sync_ebay_listings():
 
     # Reads all of eBay's active list or raises, which fails the sync
     # before anything is marked ended.
-    previous_sync = state.last_finished(state.LISTINGS_SYNC)
-    started = state.utcnow()
+    previous_sync = SyncRecord.last_finished(SyncRecord.LISTINGS_SYNC)
+    started = localtime.utcnow()
     all_items = fetch_active_items()
 
     # Process every page's items together (rather than page by page) so
@@ -252,7 +253,7 @@ def sync_ebay_listings():
     save_renewals(all_items, started)
     ended = mark_ended_listings(remote_item_ids, previous_sync)
     logger.info("Marked " + str(ended) + " listings as ended.")
-    state.record_finished(state.LISTINGS_SYNC, started)
+    SyncRecord.record_finished(SyncRecord.LISTINGS_SYNC, started)
     logger.info("eBay listings sync finished.")
 
 
@@ -281,7 +282,7 @@ def _save_orders(update, api, response):
 
 def sync_ebay_orders(update, days, message):
     logger.info(message)
-    started = state.utcnow()
+    started = localtime.utcnow()
     try:
         current_time = datetime.datetime.now() + datetime.timedelta(days=1)
         start_time = current_time + datetime.timedelta(days=-days)
@@ -304,5 +305,5 @@ def sync_ebay_orders(update, days, message):
         logging.error(e.response.dict())
         return
     _end_sold_elsewhere()
-    state.record_finished(ORDERS_SYNC, started)
+    SyncRecord.record_finished(ORDERS_SYNC, started)
     logger.info("eBay orders sync finished.")
