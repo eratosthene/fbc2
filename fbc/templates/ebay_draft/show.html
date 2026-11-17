@@ -37,7 +37,31 @@
 <form method="post" action="{{ url_for('EbayDraftModelView.verify', pk=draft.id) }}" style="display: inline">
   <button class="btn btn-info" {% if dev_mode %}disabled{% endif %}>Check with eBay</button>
 </form>
-{% if over_warning %}
+{% if over_warning and end_candidates %}
+<div class="alert alert-warning" style="margin-top: 10px">
+  {{ over_warning }} Ending one of these first saves a renewal this month. Views are unknown for now, so they are the ones renewing soonest.
+  Ending is your call; fbc never does it on its own. End this one ends it on eBay and parks it, so it can be listed again.
+  {% if dev_mode %}<br>Dev Mode is turned on, so ending is refused with the Dev Mode message.{% endif %}
+</div>
+<table class="table table-bordered table-condensed" style="width: auto">
+  <tr><th>Listing</th><th>Price</th><th>Age</th><th>Renews on</th><th>On Discogs</th><th>Views</th><th></th></tr>
+  {% for c in end_candidates %}
+  <tr>
+    <td><a href="{{ c.listing.url }}">{{ c.listing.title }}</a></td>
+    <td>{{ c.listing.fmt_price() }}</td>
+    <td>{{ c.age }} days</td>
+    <td>{{ c.renews|localtime }}</td>
+    <td>{% if not c.unit %}No Unit{% elif c.on_discogs %}Yes{% else %}No{% endif %}</td>
+    <td class="text-muted">unknown</td>
+    <td>
+      <form method="post" action="{{ url_for('EbayDraftModelView.end_and_park', pk=draft.id, item_id=c.listing.item_id) }}" style="display: inline" onsubmit="return confirm('End this listing on eBay and park it?')">
+        <button class="btn btn-xs btn-danger">End this one</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% elif over_warning %}
 <div class="alert alert-warning" style="margin-top: 10px">{{ over_warning }}</div>
 {% endif %}
 {% if uncovered_fee %}

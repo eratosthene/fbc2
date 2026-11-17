@@ -731,6 +731,209 @@ def test_a_renewal_keeps_its_pacific_time_across_daylight_saving():
     )
 
 
+# --- What to end to make room (#208) ---
+
+from fbc.models.other import OtherItem  # noqa: E402
+from fbc.ebay import publish  # noqa: E402
+
+# Nov 15, 12:00 UTC. A listing started on day N renews on day N this month.
+
+
+def _active(item_id, day, **kw):
+    return _listing(item_id, start=D(2026, 10, day, 12), **kw)
+
+
+def _ids(now=NOW):
+    return [c["listing"].item_id for c in insertions.end_candidates(now)]
+
+
+def test_a_renewal_that_has_passed_this_month_is_not_a_candidate(app):
+    _active("passed", 10)
+    _active("due", 20)
+    assert _ids() == ["due"]
+
+
+def test_candidates_come_soonest_renewal_first_and_stop_at_five(app):
+    for day in (28, 16, 22, 18, 20, 25, 17):
+        _active("d" + str(day), day)
+    assert _ids() == ["d16", "d17", "d18", "d20", "d22"]
+
+
+def test_the_last_day_of_the_month_still_counts_and_a_31st_start_renews_on_the_30th(
+    app,
+):
+    _active("last", 31)
+    assert _ids(D(2026, 11, 29)) == ["last"]
+    assert _ids(D(2026, 11, 30, 21)) == []
+
+
+def test_eBays_own_renewal_date_wins(app):
+    _active("moved", 20, renews_at=D(2026, 11, 14))
+    assert _ids() == []
+
+
+def test_fewer_than_five_and_none(app):
+    assert _ids() == []
+    _active("one", 20)
+    assert _ids() == ["one"]
+
+
+def test_candidates_leave_out_the_listings_that_must_not_be_ended(app):
+    _active("ended", 20, ended=True)
+    _active("archived", 20, archived=True)
+    _active("box", 20, pick_count=2)
+    box = db.session.get(EbayListing, "box")
+    from fbc.models.inventory import StorageBox
+
+    sb = StorageBox(name="B")
+    db.session.add(sb)
+    db.session.commit()
+    box.pick_from_box_id = sb.id
+    _active("other", 20)
+    db.session.add(OtherItem(name="Mug", ebay_listing_id="other"))
+    _active("two", 20)
+    _active("sold", 20)
+    _active("fine", 21)
+    for n, item in enumerate(["two", "two", "sold"]):
+        db.session.add(
+            Unit(name="u" + str(n), ebay_listing_id=item, sold=item == "sold")
+        )
+    db.session.commit()
+
+    assert _ids() == ["fine"]
+
+
+def test_views_unknown_sort_last_and_never_as_zero(app):
+    _active("soon", 16)
+    _active("later", 20)
+    pool = insertions._end_pool(NOW)
+    pool[0]["views"], pool[1]["views"] = None, 5
+    pool.sort(key=lambda c: (c["views"] is None, c["views"] or 0, c["renews"]))
+    assert [c["listing"].item_id for c in pool] == ["later", "soon"]
+
+
+def _over(monkeypatch):
+    _fill_month(monkeypatch)
+
+
+def test_the_draft_page_offers_candidates_in_place_of_the_bare_warning(
+    client, monkeypatch
+):
+    draft = _ready_draft(client, monkeypatch)
+    _over(monkeypatch)
+    _active("cand", 20)
+    real = insertions.end_candidates
+    monkeypatch.setattr(insertions, "end_candidates", lambda now: real(NOW))
+
+    page = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
+        as_text=True
+    )
+
+    assert "End this one" in page and "cand" in page and "unknown" in page
+    assert "Dev Mode is turned on" not in page
+
+
+def test_the_draft_page_keeps_the_warning_and_tick_without_candidates(
+    client, monkeypatch
+):
+    draft = _ready_draft(client, monkeypatch)
+    _over(monkeypatch)
+
+    page = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
+        as_text=True
+    )
+
+    assert "End this one" not in page
+    assert "Publish anyway" in page
+
+
+def _end_post(client, draft, item_id):
+    return client.post(
+        "/ebaydraftmodelview/endandpark/" + str(draft.id) + "/" + item_id,
+        follow_redirects=True,
+    )
+
+
+def test_end_and_park_ends_the_listing_and_parks_it(client, monkeypatch):
+    draft = _ready_draft(client, monkeypatch)
+    row = _active("cand", 20)
+    monkeypatch.setattr(
+        publish, "end_listing", lambda item_id: (True, "Ended on eBay.")
+    )
+
+    page = _end_post(client, draft, "cand").get_data(as_text=True)
+    db.session.expire_all()
+
+    assert "Ended on eBay." in page
+    assert row.ended and row.end_time and row.parked_at
+
+
+def test_end_and_park_when_ebay_refuses_changes_nothing(client, monkeypatch):
+    draft = _ready_draft(client, monkeypatch)
+    row = _active("cand", 20)
+    monkeypatch.setattr(publish, "end_listing", lambda item_id: (False, "Nope."))
+
+    page = _end_post(client, draft, "cand").get_data(as_text=True)
+    db.session.expire_all()
+
+    assert "Nope." in page
+    assert not row.ended and row.parked_at is None
+
+
+def test_end_and_park_on_an_ended_listing_does_not_call_ebay(client, monkeypatch):
+    draft = _ready_draft(client, monkeypatch)
+    row = _active("cand", 20, ended=True)
+    calls = []
+    monkeypatch.setattr(
+        publish, "end_listing", lambda item_id: calls.append(item_id) or (True, "x")
+    )
+
+    page = _end_post(client, draft, "cand").get_data(as_text=True)
+    db.session.expire_all()
+
+    assert "already ended" in page
+    assert calls == [] and row.parked_at is None
+
+
+def test_ebay_saying_it_had_already_ended_is_not_parked(client, monkeypatch):
+    draft = _ready_draft(client, monkeypatch)
+    row = _active("cand", 20)
+    monkeypatch.setattr(
+        publish, "end_listing", lambda item_id: (True, publish.ALREADY_ENDED)
+    )
+
+    _end_post(client, draft, "cand")
+    db.session.expire_all()
+
+    assert row.ended and row.parked_at is None
+
+
+def test_end_and_park_in_dev_mode_is_refused_with_the_dev_mode_message(
+    client, monkeypatch
+):
+    draft = _ready_draft(client, monkeypatch)
+    row = _active("cand", 20)
+    monkeypatch.undo()
+    monkeypatch.setitem(fbc.app.config["EBAY_SETTINGS"], "LISTING", dict(SETTINGS))
+    monkeypatch.setitem(fbc.app.config, "DEV_MODE", True)
+    from fbc.core import devmode
+
+    monkeypatch.setattr(devmode, "on", lambda: True)
+
+    page = _end_post(client, draft, "cand").get_data(as_text=True)
+    db.session.expire_all()
+
+    assert "Couldn&#39;t end it" in page and "Dev Mode" in page
+    assert not row.ended and row.parked_at is None
+
+
+def test_an_ordinary_ending_leaves_parked_at_null(app):
+    row = _active("cand", 20)
+    mark_ended_listings(set(), D(2026, 11, 14))
+    db.session.refresh(row)
+    assert row.ended and row.parked_at is None
+
+
 def test_the_home_page_says_how_much_room_is_left_and_the_units_waiting(app):
     SyncRecord.record_finished(SyncRecord.LISTINGS_SYNC, localtime.utcnow())
     _listing("1", start=localtime.utcnow())

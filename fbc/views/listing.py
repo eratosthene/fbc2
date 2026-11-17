@@ -8,7 +8,7 @@ from markupsafe import Markup
 from wtforms import TextAreaField
 
 from fbc.ebay import insertions
-from fbc.core import devmode
+from fbc.core import devmode, localtime
 from fbc.ebay.api import listing_settings, seller_profiles
 from fbc.ebay.drafts import check_ready, describe_template, listing_details, new_draft
 from fbc.ebay.publish import publish_draft, verify_draft
@@ -41,6 +41,7 @@ class EbayDraftModelView(CustomModelView):
         "can_rotate",
         "can_verify",
         "can_publish",
+        "can_end_and_park",
         "can_policies",
         "can_oauth",
     ]
@@ -102,11 +103,31 @@ class EbayDraftModelView(CustomModelView):
         for w in summary["warnings"]:
             flash(w, "warning")
 
+    def _end_candidates(self, over_warning):
+        """What to offer ending in place of the warning: rows for the page."""
+        from fbc.models.discogs import DiscogsListing
+
+        if not over_warning:
+            return []
+        now = localtime.utcnow()
+        rows = []
+        for c in insertions.end_candidates(now):
+            unit = c["unit"]
+            rows.append(
+                dict(
+                    c,
+                    age=(now - c["listing"].start_time).days,
+                    on_discogs=bool(unit and DiscogsListing.open_for(unit)),
+                )
+            )
+        return rows
+
     @expose("/show/<pk>", methods=["GET"])
     @has_access
     def show(self, pk):
         draft = self._draft(pk)
         widgets = self._show(pk)
+        over_warning = insertions.publish_warning(insertions.listing_summary())
         return self.render_template(
             self.show_template,
             pk=pk,
@@ -117,7 +138,8 @@ class EbayDraftModelView(CustomModelView):
             problems=check_ready(draft),
             pictures=draft.stored_pictures(),
             pictures_folder=store.folder() is not None,
-            over_warning=insertions.publish_warning(insertions.listing_summary()),
+            over_warning=over_warning,
+            end_candidates=self._end_candidates(over_warning),
             uncovered_fee=insertions.uncovered_insertion_fee(
                 json.loads(draft.messages) if draft.messages else None
             ),
@@ -272,6 +294,32 @@ class EbayDraftModelView(CustomModelView):
                 ),
                 "success",
             )
+        return self._back(draft)
+
+    @expose("/endandpark/<int:pk>/<item_id>", methods=["POST"])
+    @has_access
+    def end_and_park(self, pk, item_id):
+        """
+        End one active listing to make room for this draft, and park it. It
+        goes through publish.end_listing, so Dev Mode refuses it.
+        """
+        from fbc import db
+        from fbc.models.ebay import EbayListing
+
+        # Inside the method: sync.ending imports models.sync, and a model
+        # imported before AppBuilder starts gets its table made by it, which
+        # breaks the migration that creates it.
+        from fbc.sync import ending
+
+        draft = self._draft(pk)
+        listing = db.session.get(EbayListing, item_id)
+        if not listing:
+            abort(404)
+        ok, message = ending.end_and_park(listing)
+        flash(
+            ("Ended " + listing.title + ". " if ok else "Couldn't end it: ") + message,
+            "success" if ok else "danger",
+        )
         return self._back(draft)
 
     @expose("/policies")

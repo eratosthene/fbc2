@@ -3,6 +3,11 @@ from sqlalchemy import Column, DateTime, String
 
 from fbc.core import localtime
 
+# Don't import this module at the top of one that fbc/__init__.py imports before
+# Flask-AppBuilder starts: AppBuilder makes the tables of every model loaded by
+# then, which breaks the migration that creates sync_record (the Migrations
+# workflow catches it). Import it inside the function that needs it.
+#
 # The sync_record name of the eBay listings sync.
 LISTINGS_SYNC = "ebay-listings"
 
