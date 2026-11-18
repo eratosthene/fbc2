@@ -172,7 +172,7 @@ added or moved on Discogs until you press that form's button. Run Sync Discogs
 first if a folder you made on Discogs isn't offered.
 
 The Purchase Lots list and a lot's page show no money figures. Reports >
-Lots has them for every lot (price, Units, sold, profit, ROI and a forecast),
+Lots has them for every lot (price, Units, sold, profit, ROI and two forecasts),
 and a lot's page links to it. A Sales Receipt's money is split between its
 Units, and a lot's price evenly between its Units.
 
@@ -1113,22 +1113,53 @@ still in stock, Sold For, Net Sold, profit and ROI, and a totals row. Their
 sales are all the sales so far, not just the period's, because a Lot's result
 isn't known until it's sold. Click a heading to sort.
 
-**Forecast profit** is what the Lot may make once its Units in stock sell:
-Net Sold so far, plus what the Units in stock are expected to net, less the
-Lot's price. A Unit in stock is expected to net its retail price times a
-*realization rate*, the net the Lot's sold Units brought in per dollar of
-their retail price. The Lot's rate is blended toward the shop-wide rate (all
-sold Units, in all Lots, all time) by how many Units the Lot has sold:
-(Units sold × Lot rate + 5 × shop rate) ÷ (Units sold + 5). A Lot with no
-sales yet uses the shop rate alone, and its cell carries a small `*`. A Unit in
-stock with no retail price is expected to net the Lot's average net per Unit
-sold, or the shop's if the Lot has none sold. Only sold Units with a retail
-price count toward a rate, and a Unit marked sold with no Sales Receipt counts
-nowhere. The column is blank when the Lot has nothing in stock, or when no
-Unit with a retail price has sold anywhere; the totals row adds up the rest.
-It assumes everything in stock sells, so it is probably optimistic. The Lots
-CSV has the column, and another that says "yes" when the shop rate alone was
-used.
+Two forecasts sit side by side. Both start from the Lot's **profit so far**
+(Net Sold less the Lot's price), so neither is profit *still to come*: it is
+the Lot's whole result, past and future.
+
+**Best case** (the CSV calls it "Forecast profit (if all sells)") is what the
+Lot makes if every Unit in stock sells: profit so far, plus what the Units in
+stock are expected to net. A Unit in stock is expected to
+net its retail price times a *realization rate*, the net the Lot's sold Units
+brought in per dollar of their retail price. The Lot's rate is blended toward
+the shop-wide rate (all sold Units, in all Lots, all time) by how many Units
+the Lot has sold: (Units sold × Lot rate + 5 × shop rate) ÷ (Units sold + 5).
+A Lot with no sales yet uses the shop rate alone, and its cell carries a small
+`*`. A Unit in stock with no retail price is expected to net the Lot's average
+net per Unit sold, or the shop's if the Lot has none sold. Only sold Units
+with a retail price count toward a rate, and a Unit marked sold with no Sales
+Receipt counts nowhere. The column is blank when the Lot has nothing in
+stock, or when no Unit with a retail price has sold anywhere. It assumes every
+Unit in stock sells, which the shop's history says is optimistic.
+
+**12 months** (the CSV's "12-month forecast") is more cautious. It counts only
+the share of the stock's expected value that has historically sold within 12
+months:
+
+> 12 months = profit so far + share × the net expected from the Units in stock
+
+The share comes from the shop's own history, so it changes as the shop's sales
+do. Take the date 12 months ago. For every Lot dated at least 30 days before
+it, work out the Best case forecast as it would have been then: only sales on
+or before that date count, for the Lot's rate and the shop's, and the Units in
+stock then are those unsold or sold after it. Add up the net that forecast
+expected from those Units, and the net they actually brought in since (each
+Unit's share of its Sales Receipt, as everywhere else). Share = brought in ÷
+expected, pooled across all the Lots, so one share is used for every Lot, old
+or new. Units sold with no dated Sales Receipt are left out, and so are Other
+Items.
+
+The share is shown above the table, for example "Over the last 12 months,
+about 25% of the expected value of stock sold." The column is blank, and the
+page says why, when there is too little history: fewer than 5 Lots with stock
+at that date, or less than $250 of expected net between them. It is also blank
+for a Lot with nothing in stock. The share is worked out from every Lot, not
+just the ones in the period shown. The totals row adds each column up, a blank
+adding nothing.
+
+The table's headings are short to keep it narrow: **Stock cost** is Stock at
+cost and **To B/E** is Units to break even. Hover over a heading to see its
+full meaning. The Lots CSV has the long names.
 
 ### Sales
 

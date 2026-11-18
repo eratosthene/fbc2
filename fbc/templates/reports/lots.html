@@ -9,22 +9,41 @@
   The Purchase Lots bought in this period. Their sales are all the sales so
   far, not just this period's, because a Lot's result isn't known until it's
   sold. Click a heading to sort.
-  <b>To break even</b> is the Units still to sell to cover the Lot's price, at
+  <b>To B/E</b> is the Units still to sell to cover the Lot's price, at
   the average net per Unit sold in the period (or in all time, if the period
-  sold none); it is blank when nothing has ever sold. <b>Forecast profit</b>
-  is Net sold plus what the Units in stock should net, less the Lot's price.
-  It assumes everything in stock sells, so it is probably optimistic. A
+  sold none); it is blank when nothing has ever sold. <b>Best case</b>
+  is the profit so far (it is not extra profit on top of it) plus what the
+  Units in stock should net if every one sold, less the Lot's price. It is
+  probably optimistic. <b>12 months</b> is the profit so far plus only the
+  share of that expected value that has sold within a year in the past. A
   <sup>*</sup> means the Lot has no sales yet, so the shop-wide rate alone was
-  used. It is blank when nothing is in stock.
+  used. Both are blank when nothing is in stock. Hover over a heading for its
+  full meaning.
 </p>
+{% if share.share is not none %}
+<p class="text-muted">
+  Over the last {{ share.months }} months, about {{ '%.0f'|format(share.share * 100) }}% of the
+  expected value of stock sold. That share is used for every Lot in the
+  12 months column.
+</p>
+{% else %}
+<p class="text-muted">12 months is blank. {{ share.reason }}</p>
+{% endif %}
 {% if rows %}
 {{ draw("lot-payback", "Payback of the " ~ (rows|length if rows|length < 5 else 5) ~ " dearest Lots: net sold so far as a % of the Lot's price", payback) }}
 {{ chart_scripts() if payback }}
 <div style="overflow-x: auto">
 <table class="table table-bordered table-condensed" id="lots-report" style="width: auto">
   <thead><tr>
-    {% for h in ['Date', 'Lot', 'Price', 'Units', 'Per Unit', 'Sold', 'In stock', 'Stock at cost', 'Sold for', 'Net sold', 'Profit', 'ROI', 'Forecast profit', 'To break even'] %}
-    <th class="text-right" style="cursor: pointer">{{ h }}</th>
+    {% for h, tip in [
+      ('Date', ''), ('Lot', ''), ('Price', ''), ('Units', ''), ('Per Unit', ''),
+      ('Sold', ''), ('In stock', ''),
+      ('Stock cost', "What the Units in stock cost, from the Lot's price."),
+      ('Sold for', ''), ('Net sold', ''), ('Profit', ''), ('ROI', ''),
+      ('Best case', "Profit so far plus what the Units in stock would bring if every one sold, less the Lot's price. It already includes the profit so far."),
+      ('12 months', "Profit so far plus the share of the stock's expected value that has historically sold within a year."),
+      ('To B/E', "The Units still to sell to cover the Lot's price.")] %}
+    <th class="text-right" style="cursor: pointer"{% if tip %} title="{{ tip }}"{% endif %}>{{ h }}</th>
     {% endfor %}
   </tr></thead>
   <tbody>
@@ -43,6 +62,7 @@
     <td class="text-right" data-sort="{{ r.profit }}">{{ money(r.profit) }}</td>
     <td class="text-right" data-sort="{{ r.roi }}">{{ '%.2f'|format(r.roi) }}%</td>
     <td class="text-right" data-sort="{{ r.forecast if r.forecast is not none else -999999999 }}">{% if r.forecast is not none %}{{ money(r.forecast) }}{% if r.shop_rate_only %}<sup title="This Lot has no sales yet, so the shop-wide rate alone was used.">*</sup>{% endif %}{% endif %}</td>
+    <td class="text-right" data-sort="{{ r.forecast12 if r.forecast12 is not none else -999999999 }}">{% if r.forecast12 is not none %}{{ money(r.forecast12) }}{% endif %}</td>
     <td class="text-right" data-sort="{{ r.to_break_even if r.to_break_even is not none else 999999999 }}">{{ '' if r.to_break_even is none else r.to_break_even }}</td>
   </tr>
   {% endfor %}
@@ -59,6 +79,7 @@
     <th class="text-right">{{ money(total.profit) }}</th>
     <th class="text-right">{{ '%.2f'|format(total.roi) }}%</th>
     <th class="text-right">{{ money(total.forecast) }}</th>
+    <th class="text-right">{{ money(total.forecast12) if share.share is not none else '' }}</th>
     <th class="text-right">{{ '' if total.to_break_even is none else total.to_break_even }}</th>
   </tr></tfoot>
 </table>
