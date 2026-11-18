@@ -9,7 +9,7 @@
   <span class="text-muted">Sales Receipts, Lots, supply orders and Expenses in the period.</span></p>
 
 <h3>Sales</h3>
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><th></th>{% for name in marketplace_names %}<th class="text-right">{{ mp_name(name) }}</th>{% endfor %}<th class="text-right">Total</th></tr>
   {% for label, key, kind in [('Sales Receipts', 'receipts', 'n'), ('Sold for', 'gross', '$'), ('Fees', 'fees', '$'), ('Fee %', 'feepc', '%'), ('Net sold', 'net', '$'), ('Cost of the Units sold', 'cogs', '$')] %}
   <tr>
@@ -28,7 +28,7 @@
 </p>
 
 <h3>Profit</h3>
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><th></th><th class="text-right">Cost of goods</th><th class="text-right">Cash</th></tr>
   <tr><td>Net sold</td><td class="text-right">{{ money(total.net) }}</td><td class="text-right">{{ money(total.net) }}</td></tr>
   <tr><td>Less the Units sold (their share of their Lots' prices)</td><td class="text-right">{{ money(-total.cogs) }}</td><td class="text-right"></td></tr>
@@ -49,7 +49,7 @@
 
 {% if expenses %}
 <h3>Expenses</h3>
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   {% for label, amount in expenses.items() %}<tr><td>{{ label }}</td><td class="text-right">{{ money(amount) }}</td></tr>{% endfor %}
 </table>
 {% endif %}
@@ -59,7 +59,7 @@
 {{ draw("pnl-money", "Net sold and spending by " ~ period.group, chart.money) }}
 {{ draw("pnl-cumulative", "Cumulative cash position", chart.cumulative) }}
 <div style="overflow-x: auto">
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><th></th>{% for label, f in columns %}<th class="text-right">{{ label }}</th>{% endfor %}</tr>
   {% for label, key in [('Sales Receipts', 'receipts'), ('Net sold', 'net'), ('Cost of the Units sold', 'cogs'), ('Lots bought', 'lots'), ('Supplies bought', 'supplies'), ('Expenses', 'expenses'), ('Profit, cost of goods', 'cogs_profit'), ('Profit, cash', 'cash_profit')] %}
   <tr><th>{{ label }}</th>{% for _, f in columns %}<td class="text-right">{% if key == 'receipts' %}{{ f[key] }}{% else %}{{ money(f[key]) }}{% endif %}</td>{% endfor %}</tr>
@@ -74,7 +74,7 @@
 
 <h3>Other Items</h3>
 {% if other.receipts %}
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><td>Sold</td><td class="text-right">{{ other['items'] }}</td></tr>
   <tr><td>Sold for</td><td class="text-right">{{ money(other.gross) }}</td></tr>
   <tr><td>Net sold</td><td class="text-right">{{ money(other.net) }}</td></tr>

@@ -7,7 +7,7 @@
 
 {% macro stock_table(cols, with_head) %}
 <div style="overflow-x: auto">
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><th></th>{% for label, f in cols %}<th class="text-right" colspan="3">{{ label }}</th>{% endfor %}</tr>
   <tr><th></th>{% for _ in cols %}<th class="text-right">Units</th><th class="text-right">Cost</th><th class="text-right">Retail</th>{% endfor %}</tr>
   {% for label, key in [('Opening stock', 'opening'), ('Bought', 'bought'), ('Sold', 'sold'), ('Closing stock', 'closing')] %}
