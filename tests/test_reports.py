@@ -907,12 +907,200 @@ def test_forecast_profit_in_the_page_and_the_csv(app):
     _unit(c, retail=10.0)
     with signed_in_client(app) as client:
         html = client.get("/lotsreport/?period=all").data
-        assert b"Forecast profit" in html
+        assert b"Best case" in html
         assert b"This Lot has no sales yet" in html
     _name, rows = report_csv.lots(reports.Period({"period": "all"}))
     head = rows[0]
-    assert "Forecast profit" in head
+    assert "Forecast profit (if all sells)" in head
     by_lot = {r[1]: r for r in rows[1:]}
-    i = head.index("Forecast profit")
+    i = head.index("Forecast profit (if all sells)")
     assert by_lot["X"][i] == -15.0 and by_lot["X"][i + 1] == ""
     assert by_lot["C"][i + 1] == "yes"
+
+
+# --- Lots: 12-month forecast -------------------------------------------------
+
+NOW = D(2026, 6, 30)  # so the backtest looks back from 2025-06-30
+
+
+@pytest.fixture
+def now(monkeypatch):
+    monkeypatch.setattr(reports, "today", lambda: NOW)
+
+
+def _old_lot(name, price=100.0):
+    """A Lot old enough to count, with one Unit sold before the cutoff."""
+    lot = _lot(price, D(2025, 1, 1))
+    lot.name = name
+    db.session.commit()
+    _sold_unit(lot, 100.0, 50.0, D(2025, 2, 1))
+    return lot
+
+
+def _backtest_shop(extra=True):
+    """
+    Five Lots, each with one sold Unit (net 50 on retail 100, before the
+    cutoff, so every rate is 0.5) and one Unit in stock at the cutoff:
+      L1 retail 100, sold 2025-09-01 for net 40
+      L2 retail 100, sold 2026-01-01 for net 30
+      L3 retail 100, still unsold
+      L4 no retail price, sold 2025-12-01 for net 20 (expected: L4's average, 50)
+      L5 retail 100, sold 2025-08-01 for net 60
+    Expected 5 * 50 = 250; realized 40 + 30 + 0 + 20 + 60 = 150; share 0.6.
+    """
+    lots = {}
+    for name in ("L1", "L2", "L3", "L4", "L5"):
+        lots[name] = _old_lot(name)
+    _sold_unit(lots["L1"], 100.0, 40.0, D(2025, 9, 1))
+    _sold_unit(lots["L2"], 100.0, 30.0, D(2026, 1, 1))
+    _unit(lots["L3"], retail=100.0)
+    _sold_unit(lots["L4"], None, 20.0, D(2025, 12, 1))
+    _sold_unit(lots["L5"], 100.0, 60.0, D(2025, 8, 1))
+    if extra:
+        # Too young to count: dated 2025-06-15, under 30 days before the cutoff.
+        young = _lot(40.0, D(2025, 6, 15))
+        young.name = "Young"
+        db.session.commit()
+        _unit(young, retail=1000.0)
+        # Sold with no Sales Receipt at all: ignored.
+        _unit(lots["L3"], sold=True, retail=500.0)
+    return lots
+
+
+def test_twelve_month_share_worked_by_hand(app, now):
+    _backtest_shop()
+    got = reports.lots_report(reports.Period({"period": "all"}))
+    share = got["share"]
+    assert share["date"] == D(2025, 6, 30)
+    assert share["lots"] == 5
+    assert share["expected"] == 250.0
+    assert share["realized"] == 150.0
+    assert share["share"] == pytest.approx(0.6)
+    assert share["reason"] == ""
+
+
+def test_twelve_month_forecast_per_lot_and_total(app, now):
+    _backtest_shop()
+    rows = {
+        r["lot"].name: r
+        for r in reports.lots_report(reports.Period({"period": "all"}))["rows"]
+    }
+    # Now, the shop has sold with a retail price: net 250 + 40 + 30 + 60 = 380
+    # on retail 500 + 300 = 800 (L4's Unit has no retail price), so 0.475.
+    rate = 380 / 800
+    # L3: sold Unit net 50 (rate 0.5, n = 1), $100 retail in stock, price 100.
+    l3_rate = (0.5 + 5 * rate) / 6
+    assert rows["L3"]["forecast12"] == round(50 + 0.6 * 100 * l3_rate - 100, 2)
+    assert rows["L3"]["forecast"] == round(50 + 100 * l3_rate - 100, 2)
+    # Nothing in stock: blank, as the older column is.
+    assert rows["L1"]["forecast12"] is None and rows["L1"]["forecast"] is None
+    assert rows["Young"]["forecast12"] is not None
+    total = reports.lots_report(reports.Period({"period": "all"}))["total"]
+    assert total["forecast12"] == round(
+        rows["L3"]["forecast12"] + rows["Young"]["forecast12"], 2
+    )
+
+
+def test_twelve_month_share_uses_every_lot_not_just_the_period(app, now):
+    _backtest_shop()
+    got = reports.lots_report(
+        reports.Period({"from": "2025-06-01", "to": "2025-06-30"})
+    )
+    assert [r["lot"].name for r in got["rows"]] == ["Young"]
+    assert got["share"]["share"] == pytest.approx(0.6)
+    assert got["rows"][0]["forecast12"] is not None
+
+
+def test_twelve_month_is_blank_with_fewer_than_five_lots(app, now):
+    lots = _backtest_shop(extra=False)
+    # Four Lots left that were in stock then.
+    for u in db.session.query(Unit).filter_by(purchase_lot=lots["L5"]):
+        u.purchase_lot = None
+    db.session.commit()
+    got = reports.lots_report(reports.Period({"period": "all"}))
+    assert got["share"]["share"] is None
+    assert got["share"]["lots"] == 4
+    assert "at least 5 Lots" in got["share"]["reason"]
+    assert all(r["forecast12"] is None for r in got["rows"])
+    assert got["total"]["forecast12"] == 0.0
+    # Best case is unaffected.
+    assert any(r["forecast"] is not None for r in got["rows"])
+
+
+def test_twelve_month_is_blank_with_too_little_expected(app, now):
+    for name in ("A", "B", "C", "D", "E"):
+        _unit(_old_lot(name), retail=99.0)  # expects 49.50 each: 247.50 in all
+    got = reports.lots_report(reports.Period({"period": "all"}))
+    assert got["share"]["lots"] == 5
+    assert got["share"]["expected"] == 247.5
+    assert got["share"]["share"] is None
+    assert "$250" in got["share"]["reason"]
+    # One more dollar of retail price in stock crosses the minimum.
+    u = db.session.query(Unit).filter_by(retail_price=99.0).first()
+    u.retail_price = 101.0
+    db.session.commit()
+    got = reports.lots_report(reports.Period({"period": "all"}))
+    assert got["share"]["expected"] == 248.5  # still under the minimum
+    assert got["share"]["share"] is None
+
+
+def test_twelve_month_in_the_page_and_the_csv(app, now):
+    from fbc.sales import report_csv
+
+    _backtest_shop()
+    with signed_in_client(app) as client:
+        html = client.get("/lotsreport/?period=all").data.decode()
+    assert "Over the last 12 months, about 60% of the" in html
+    tips = {
+        "Best case": "It already includes the profit so far.",
+        "12 months": "historically sold within a year",
+        "To B/E": "still to sell to cover the Lot's price",
+        "Stock cost": "What the Units in stock cost",
+    }
+    for head, tip in tips.items():
+        import re
+
+        m = re.search(r'<th[^>]*title="([^"]*)"[^>]*>' + head + "</th>", html)
+        assert m and tip in m.group(1).replace("&#39;", "'"), head
+    for gone in ("Forecast profit</th>", "To break even</th>", "Stock at cost</th>"):
+        assert gone not in html
+    # Sorting goes by column position: headings and cells line up.
+    head_row = html.split("<thead>")[1].split("</thead>")[0]
+    body_row = html.split("<tbody>")[1].split("</tr>")[0]
+    assert head_row.count("<th") == body_row.count("<td") == 15
+    _name, rows = report_csv.lots(reports.Period({"period": "all"}))
+    head = rows[0]
+    assert "Forecast profit (if all sells)" in head
+    assert "Units to break even" in head and "Stock at cost" in head
+    i = head.index("12-month forecast")
+    by_lot = {r[1]: r for r in rows[1:]}
+    assert by_lot["L1"][i] is None
+    assert by_lot["L3"][i] is not None
+
+
+def test_twelve_month_blank_page_says_why(app, now):
+    x = _named("X", 40.0)
+    _sold_unit(x, 20.0, 10.0)
+    _unit(x, retail=30.0)
+    with signed_in_client(app) as client:
+        html = client.get("/lotsreport/?period=all").data.decode()
+    assert "12 months is blank." in html and "too little history" in html
+
+
+def test_lots_report_queries_do_not_grow_with_lots(app, now):
+    from sqlalchemy import event
+
+    n = []
+    event.listen(db.session.get_bind(), "before_cursor_execute", lambda *a: n.append(1))
+
+    def count():
+        n.clear()
+        reports.lots_report(reports.Period({"period": "all"}))
+        return len(n)
+
+    _old_lot("first")
+    few = count()
+    for i in range(6):
+        lot = _old_lot(f"more{i}")
+        _unit(lot, retail=50.0)
+    assert count() == few

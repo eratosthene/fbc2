@@ -559,25 +559,34 @@ def _stock_chart(columns):
 
 def lots_report(period):
     """
-    {"rows", "total"}: the Purchase Lots dated in the Period, newest first,
-    with the figures of finance.lot_figures (all their sales so far, not
-    just the period's), the cost of the Units still in stock, "forecast" and
-    "shop_rate_only" (see _forecasts()) and "to_break_even",
-    the Units still to sell to cover the Lot's price (see breakeven()).
+    {"rows", "total", "payback", "share"}: the Purchase Lots dated in the
+    Period, newest first, with the figures of finance.lot_figures (all their
+    sales so far, not just the period's), the cost of the Units still in
+    stock, "forecast" and "shop_rate_only" (see _expected_stock()), "forecast12"
+    (see _stock_share()) and "to_break_even", the Units still to sell to cover
+    the Lot's price (see breakeven()). "share" is what _stock_share() worked
+    out from every Lot, whatever the Period.
     """
-    lots = [
-        lot
-        for lot in db.session.query(PurchaseLot).order_by(PurchaseLot.date.desc())
-        if _within(lot.date, period.start, period.end)
-    ]
+    all_lots = db.session.query(PurchaseLot).order_by(PurchaseLot.date.desc()).all()
+    lots = [lot for lot in all_lots if _within(lot.date, period.start, period.end)]
     inv = finance.Inventory()
     figures = finance.lot_figures(lots, inv)
     avg, _source = _average_net_per_unit(period)
-    forecasts = _forecasts(inv, figures)
+    receipt_dates = dict(db.session.query(SalesReceipt.id, SalesReceipt.date))
+    expected = _expected_stock(inv, receipt_dates)
+    share = _stock_share(inv, all_lots, receipt_dates, today())
     rows = []
     for lot in lots:
         f = dict(figures[lot.id])
-        f["forecast"], f["shop_rate_only"] = forecasts[lot.id]
+        got = expected.get(lot.id)
+        f["forecast"], f["shop_rate_only"], f["forecast12"] = None, False, None
+        if got:
+            f["forecast"] = round(f["net"] + got[0] - f["capital"], 2)
+            f["shop_rate_only"] = got[1]
+            if share["share"] is not None:
+                f["forecast12"] = round(
+                    f["net"] + share["share"] * got[0] - f["capital"], 2
+                )
         f["lot"] = lot
         f["to_break_even"] = _units_to_cover(f["capital"] - f["net"], avg)
         f["stock_cost"] = (
@@ -595,29 +604,51 @@ def lots_report(period):
     total["roi"] = finance.percent(total["profit"], total["capital"])
     # A blank forecast adds nothing.
     total["forecast"] = round(sum(r["forecast"] or 0.0 for r in rows), 2)
-    return {"rows": rows, "total": total, "payback": _payback(rows, inv)}
+    total["forecast12"] = round(sum(r["forecast12"] or 0.0 for r in rows), 2)
+    return {
+        "rows": rows,
+        "total": total,
+        "payback": _payback(rows, inv, receipt_dates),
+        "share": share,
+    }
 
 
 # How many Units' worth of weight the shop-wide rate has when it is blended
 # with a Lot's own.
 FORECAST_WEIGHT = 5
 
+# The 12-month forecast's horizon, in months.
+FORECAST_MONTHS = 12
+# A Lot is only used to work out the share once it is this many days older
+# than the date the share looks back from.
+FORECAST_MIN_AGE_DAYS = 30
+# Too little history to trust the share: fewer Lots than this, or less
+# expected net (in dollars) from the stock then. Roughly a few dozen Units.
+FORECAST_MIN_LOTS = 5
+FORECAST_MIN_EXPECTED = 250.0
 
-def _forecasts(inv, figures):
+
+def _expected_stock(inv, receipt_dates, as_of=None):
     """
-    {lot id: (forecast profit, shop rate alone was used)} for the Lots in
-    `figures`, from the Units `inv` has already loaded (no queries).
+    {lot id: (expected net of the Units in stock, shop rate alone was used,
+    what those Units sold for after `as_of`)} for the Lots with stock to
+    forecast, from the Units `inv` has already loaded (no queries). A Lot with
+    nothing in stock is left out, and so is every Lot when the shop has no
+    sold Unit with a retail price to base a rate on.
 
-    Forecast profit = net sold so far + the net expected from the Units in
-    stock - the Lot's price. A Unit in stock is expected to net its retail
-    price times a realization rate (net per dollar of retail price): the Lot's
-    own, blended toward the shop-wide rate by (n * lot + 5 * shop) / (n + 5),
-    where n is the Units it sold; the shop rate alone when it sold none. A
-    Unit with no retail price is expected to net the Lot's average net per
-    sold Unit, else the shop's, else 0. Blank (None) when nothing is in stock
-    or the shop has no sold Unit with a retail price to base a rate on. Only
-    sold Units with a Sales Receipt and a retail price count toward a rate, so
-    a Unit with no retail price doesn't drag it down.
+    A Unit in stock is expected to net its retail price times a realization
+    rate (net per dollar of retail price): the Lot's own, blended toward the
+    shop-wide rate by (n * lot + 5 * shop) / (n + 5), where n is the Units it
+    sold; the shop rate alone when it sold none. A Unit with no retail price
+    is expected to net the Lot's average net per sold Unit, else the shop's,
+    else 0. Only sold Units with a Sales Receipt and a retail price count
+    toward a rate, so a Unit with no retail price doesn't drag it down.
+
+    With `as_of` (a date) this is the forecast as it stood then: only sales
+    on or before it count, and the stock is the Units unsold or sold after it.
+    A Unit sold with no dated Sales Receipt is ignored. The third figure is
+    the net those stock Units went on to bring in, split as Inventory.sale()
+    does (0 for a Unit still unsold).
     """
     shop = {"net": 0.0, "retail": 0.0, "avg_net": 0.0, "avg_n": 0}
     lots = {}
@@ -633,19 +664,29 @@ def _forecasts(inv, figures):
                 "stock": [],
             },
         )
+        later = 0.0
         if u.sold is False:
-            lot["stock"].append(u.retail_price or 0.0)
-        elif u.sold:
-            sale = inv.sale(u)
-            if not sale:
+            lot["stock"].append((u.retail_price or 0.0, later))
+            continue
+        if not u.sold:
+            continue
+        sale = inv.sale(u)
+        if not sale:
+            continue
+        net = sale[1] or 0.0
+        if as_of is not None:
+            day = receipt_dates.get(u.sales_receipt_id)
+            if day is None:
                 continue
-            net = sale[1] or 0.0
-            lot["avg_net"] += net
-            lot["avg_n"] += 1
-            if u.retail_price and u.retail_price > 0:
-                lot["net"] += net
-                lot["retail"] += u.retail_price
-                lot["n"] += 1
+            if day > as_of:
+                lot["stock"].append((u.retail_price or 0.0, net))
+                continue
+        lot["avg_net"] += net
+        lot["avg_n"] += 1
+        if u.retail_price and u.retail_price > 0:
+            lot["net"] += net
+            lot["retail"] += u.retail_price
+            lot["n"] += 1
     for lot_id, lot in lots.items():
         if lot_id is None:
             continue
@@ -654,25 +695,80 @@ def _forecasts(inv, figures):
     shop_rate = shop["net"] / shop["retail"] if shop["retail"] > 0 else None
     shop_avg = shop["avg_net"] / shop["avg_n"] if shop["avg_n"] else 0.0
     out = {}
-    for lot_id, f in figures.items():
-        lot = lots.get(lot_id)
-        if not lot or not lot["stock"] or shop_rate is None:
-            out[lot_id] = (None, False)
+    if shop_rate is None:
+        return out
+    for lot_id, lot in lots.items():
+        if not lot["stock"]:
             continue
         n = lot["n"]
         rate = (
             n * (lot["net"] / lot["retail"] if n else 0.0) + FORECAST_WEIGHT * shop_rate
         ) / (n + FORECAST_WEIGHT)
         avg = lot["avg_net"] / lot["avg_n"] if lot["avg_n"] else shop_avg
-        expected = sum(r * rate if r > 0 else avg for r in lot["stock"])
-        out[lot_id] = (round(f["net"] + expected - f["capital"], 2), n == 0)
+        expected = sum(r * rate if r > 0 else avg for r, _ in lot["stock"])
+        out[lot_id] = (expected, n == 0, sum(later for _, later in lot["stock"]))
+    return out
+
+
+def _months_ago(day, months):
+    """`day` less `months` months, to the end of a shorter month."""
+    index = day.year * 12 + day.month - 1 - months
+    year, month = index // 12, index % 12 + 1
+    last = calendar.monthrange(year, month)[1]
+    return datetime.date(year, month, min(day.day, last))
+
+
+def _stock_share(inv, lots, receipt_dates, now):
+    """
+    {"share", "date", "months", "lots", "expected", "realized", "reason"}: the part of
+    the stock's expected value that sold within FORECAST_MONTHS, worked out
+    from the shop's own history.
+
+    Take `date`, FORECAST_MONTHS before `now`. For every Lot dated at least
+    FORECAST_MIN_AGE_DAYS before it and with stock then, run the forecast as
+    it stood on `date` (_expected_stock with as_of) and add up the net it
+    expected from the Units in stock then. Realized is what those same Units
+    sold for since (their Sales Receipts' net, split as Inventory.sale() does).
+    share = realized / expected, pooled across the Lots (one share for all).
+
+    "share" is None, with a plain-English "reason", when fewer than
+    FORECAST_MIN_LOTS Lots qualify or they expected less than
+    FORECAST_MIN_EXPECTED between them. `lots` and `expected` say what was
+    found either way. Other Items never reach `inv`.
+    """
+    date = _months_ago(now, FORECAST_MONTHS)
+    oldest = date - datetime.timedelta(days=FORECAST_MIN_AGE_DAYS)
+    then = _expected_stock(inv, receipt_dates, as_of=date)
+    used = [then[lot.id] for lot in lots if lot.date <= oldest and lot.id in then]
+    expected = sum(e for e, _, _ in used)
+    realized = sum(r for _, _, r in used)
+    out = {
+        "share": None,
+        "date": date,
+        "months": FORECAST_MONTHS,
+        "lots": len(used),
+        "expected": round(expected, 2),
+        "realized": round(realized, 2),
+        "reason": "",
+    }
+    if len(used) < FORECAST_MIN_LOTS or expected < FORECAST_MIN_EXPECTED:
+        out["reason"] = (
+            f"There is too little history to work out how much of the stock's "
+            f"expected value sells in {FORECAST_MONTHS} months: it needs at "
+            f"least {FORECAST_MIN_LOTS} Lots with stock from before "
+            f"{oldest.isoformat()}, expecting at least "
+            f"${FORECAST_MIN_EXPECTED:,.0f} between them, and has {len(used)} "
+            f"expecting ${expected:,.2f}."
+        )
+        return out
+    out["share"] = realized / expected
     return out
 
 
 PAYBACK_LOTS = 5
 
 
-def _payback(rows, inv):
+def _payback(rows, inv, receipt_dates):
     """
     Chart.js data for how fast the PAYBACK_LOTS dearest Lots (by price) paid
     back: the net sold so far as a % of the Lot's price, at the end of each
@@ -684,7 +780,6 @@ def _payback(rows, inv):
     if not top:
         return None
     ids = {r["lot"].id for r in top}
-    receipt_dates = dict(db.session.query(SalesReceipt.id, SalesReceipt.date))
     sales = {i: [] for i in ids}
     for u in inv.units:
         if u.sold and u.purchase_lot_id in ids and u.sales_receipt_id in receipt_dates:
