@@ -33,7 +33,7 @@
 {{ draw("lot-payback", "Payback of the " ~ (rows|length if rows|length < 5 else 5) ~ " dearest Lots: net sold so far as a % of the Lot's price", payback) }}
 {{ chart_scripts() if payback }}
 <div style="overflow-x: auto">
-<table class="table table-bordered table-condensed" id="lots-report" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" id="lots-report" style="width: auto">
   <thead><tr>
     {% for h, tip in [
       ('Date', ''), ('Lot', ''), ('Price', ''), ('Units', ''), ('Per Unit', ''),

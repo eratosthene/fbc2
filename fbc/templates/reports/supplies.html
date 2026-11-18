@@ -7,7 +7,7 @@
 
 <h3>Spending and use</h3>
 <div style="overflow-x: auto">
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><th></th><th class="text-right">Total</th>{% for label, f in columns %}<th class="text-right">{{ label }}</th>{% endfor %}</tr>
   {% for label, key, kind in [('Bought', 'bought', '$'), ('Less used on Other Items', 'other_used', '$'), ('Supplies in Profit &amp; Loss', 'net', '$'), ('Units sold', 'units_sold', 'n'), ('Supplies per Unit sold', 'per_unit', '$?'), ('Supplies used', 'used', 'n'), ('Cost of those used', 'used_cost', '$'), ('Used with no Cost Per Use', 'uncosted', 'n'), ('Cost used per Unit sold', 'used_per_unit', '$?')] %}
   <tr>
@@ -32,7 +32,7 @@
 
 <h3>By Supply</h3>
 {% if per_supply %}
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><th>Supply</th><th class="text-right">Ordered</th><th class="text-right">Used</th><th class="text-right">Cost per use</th><th class="text-right">Cost used</th><th class="text-right">In stock now</th></tr>
   {% for r in per_supply %}
   <tr>

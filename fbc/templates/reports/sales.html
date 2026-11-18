@@ -8,7 +8,7 @@
 {% macro days(d) %}{% if d %}{{ '%g'|format(d.median) }}{% else %}-{% endif %}{% endmacro %}
 
 <h3>The period</h3>
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><td>Sales Receipts</td><td class="text-right">{{ total.receipts }}</td></tr>
   <tr><td>Units sold</td><td class="text-right">{{ total.units }}</td></tr>
   <tr><td>Sold for</td><td class="text-right">{{ money(total.gross) }}</td></tr>
@@ -28,7 +28,7 @@
 
 <h3>Days to sell</h3>
 {% if total.days %}
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><td>Median</td><td class="text-right">{{ '%g'|format(total.days.median) }}</td></tr>
   <tr><td>Middle half of Units (quartiles)</td><td class="text-right">{{ '%g'|format(total.days.q1) }} to {{ '%g'|format(total.days.q3) }}</td></tr>
   <tr><td>Fastest</td><td class="text-right">{{ total.days.fastest }}</td></tr>
@@ -45,7 +45,7 @@
 <h3>By {{ period.group }}</h3>
 {% if columns %}
 <div style="overflow-x: auto">
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><th></th>{% for label, f in columns %}<th class="text-right">{{ label }}</th>{% endfor %}</tr>
   {% for label, key in [('Sales Receipts', 'receipts'), ('Units sold', 'units'), ('Sold for', 'gross'), ('Fees', 'fees'), ('Net sold', 'net'), ('Average sale, per Unit', 'avg_unit'), ('Average net, per Unit', 'avg_net_unit'), ('Average profit, per Unit', 'avg_profit_unit')] %}
   <tr>
@@ -64,7 +64,7 @@
 <h3>Gross by year, for the 1099-K check</h3>
 {% if years %}
 <div style="overflow-x: auto">
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><th rowspan="2">Year</th>{% for m in marketplace_names %}<th class="text-right" colspan="2">{{ m or 'Other' }}</th>{% endfor %}<th class="text-right" colspan="2">Total</th></tr>
   <tr>{% for _ in range(marketplace_names|length + 1) %}<th class="text-right">Sold for</th><th class="text-right">Sale lines</th>{% endfor %}</tr>
   {% for year, f in years %}

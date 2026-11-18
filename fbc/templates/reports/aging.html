@@ -12,7 +12,7 @@
   is the Units' listed prices as they are now. The Units here are Inventory's
   closing stock. Older stock is where money is tied up.
 </p>
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><th>Age</th><th class="text-right">Units</th><th class="text-right">Cost</th><th class="text-right">Retail</th></tr>
   {% for label, f in buckets %}
   <tr><td>{{ label }}</td><td class="text-right">{{ f.units }}</td><td class="text-right">{{ money(f.cost) }}</td><td class="text-right">{{ money(f.retail) }}</td></tr>
@@ -32,7 +32,7 @@
   Purchase Lots bought {{ old_after }} months or more before then, with the
   most cost still in stock. At most 10.
 </p>
-<table class="table table-bordered table-condensed" style="width: auto">
+<table class="table table-bordered table-condensed table-striped" style="width: auto">
   <tr><th>Date</th><th>Lot</th><th class="text-right">Units in stock</th><th class="text-right">Cost</th></tr>
   {% for r in old_lots %}
   <tr><td>{{ r.lot.date.isoformat() }}</td><td>{{ r.lot.name }}</td><td class="text-right">{{ r.units }}</td><td class="text-right">{{ money(r.cost) }}</td></tr>
