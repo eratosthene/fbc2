@@ -14,7 +14,7 @@ from fake_discogs import FakeDiscogs, collection_item
 
 from fbc import db
 from fbc.discogs.saving import add_discogs_release, save_record
-from fbc.ebay import credits, describe, drafts
+from fbc.ebay import credits, drafts
 from fbc.ebay.describe import build_item_specifics, build_title
 from fbc.models.discogs import Artist, DiscogsRelease, Genre, Style
 from fbc.models.inventory import PurchaseLot, Unit
@@ -185,7 +185,7 @@ def _record(artists=(), extra=(), tracks=()):
 
 def _people(record):
     release = DiscogsRelease(credits=credits.credits_json(record))
-    return credits.people(release, describe.clean_name)
+    return credits.people(release)
 
 
 def test_role_credits_give_composer_conductor_and_orchestra():
@@ -287,6 +287,44 @@ def test_only_the_credits_in_use_are_kept():
         {"name": "Main", "role": ""},
         {"name": "Con", "role": "Conductor"},
     ]
+
+
+def test_stored_names_have_their_discogs_numbers_taken_off():
+    record = _record(
+        artists=[("Anthony Collins (2)", "")],
+        extra=[("Georg Solti (12)", "Conductor")],
+    )
+    assert credits.extract(record) == [
+        {"name": "Anthony Collins", "role": ""},
+        {"name": "Georg Solti", "role": "Conductor"},
+    ]
+
+
+def test_a_main_artist_with_a_role_credit_is_not_kept_twice():
+    # The shape of https://www.discogs.com/release/4271009.
+    record = _record(
+        artists=[
+            ("Alexander Borodin", ""),
+            ("London Philharmonic Orchestra", ""),
+            ("Eduard Van Beinum", ""),
+            ("Anthony Collins (2)", ""),
+        ],
+        extra=[
+            ("London Philharmonic Orchestra", "Orchestra"),
+            ("Alexander Borodin", "Composed By"),
+        ],
+    )
+    assert credits.extract(record) == [
+        {"name": "Eduard Van Beinum", "role": ""},
+        {"name": "Anthony Collins", "role": ""},
+        {"name": "London Philharmonic Orchestra", "role": "Orchestra"},
+        {"name": "Alexander Borodin", "role": "Composed By"},
+    ]
+    assert _people(record) == {
+        "composer": ["Alexander Borodin"],
+        "conductor": [],
+        "orchestra": ["London Philharmonic Orchestra"],
+    }
 
 
 # Classical detection
@@ -665,6 +703,37 @@ def test_backfill_limit(app, monkeypatch):
     counts = drafts.backfill_credits(apply=True, limit=2, echo=lambda line: None)
 
     assert counts == {"found": 3, "saved": 2, "failed": 0}
+    assert len(fake.calls_to("release")) == 2
+
+
+def test_backfill_overwrite_reads_releases_that_have_credits_again(app, monkeypatch):
+    classical, done, other = _classical_releases(app)
+    classical.credits = '[{"name": "Old (2)", "role": "Conductor"}]'
+    db.session.commit()
+    fake = _discogs_with_credits(monkeypatch, 21, 22, 23)
+
+    shown = drafts.backfill_credits(overwrite=True, echo=lambda line: None)
+    assert shown == {"found": 2, "saved": 0, "failed": 0}
+    assert fake.calls_to("release") == []
+
+    counts = drafts.backfill_credits(apply=True, overwrite=True, echo=lambda line: None)
+
+    assert counts == {"found": 2, "saved": 2, "failed": 0}
+    assert json.loads(classical.credits) == [{"name": "Con", "role": "Conductor"}]
+    assert json.loads(done.credits) == [{"name": "Con", "role": "Conductor"}]
+    assert other.credits is None
+
+
+def test_the_backfill_command_takes_overwrite(app, monkeypatch):
+    classical, _, _ = _classical_releases(app)
+    classical.credits = "[]"
+    db.session.commit()
+    fake = _discogs_with_credits(monkeypatch, 21, 22)
+    runner = app.test_cli_runner()
+
+    result = runner.invoke(args=["backfill-credits", "--apply", "--overwrite"])
+
+    assert "2 classical releases to read. Saved 2" in result.output
     assert len(fake.calls_to("release")) == 2
 
 

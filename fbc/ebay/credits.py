@@ -46,6 +46,11 @@ CLASSICAL_GENRE = "Classical"
 OPERA_STYLE = "Opera"
 
 
+def clean_name(name):
+    """Drop the " (2)" Discogs adds to tell same-named artists/labels apart."""
+    return re.sub(r"\s*\(\d+\)$", "", name or "").strip()
+
+
 def role_names(role):
     """
     The lowercase roles in a Discogs role string: "Conductor, Chorus Master
@@ -87,13 +92,14 @@ def extract(record):
     The credits to keep from a Discogs release record (the JSON of
     GET /releases/{id}): every main artist, and the credits whose role is a
     composer, conductor or orchestra, including a composer credited on one
-    track. Names are as Discogs has them, " (2)" and all.
+    track. Names have Discogs' " (2)" taken off. A main artist who also has a
+    role credit is kept only with the role.
     """
     found = []
 
     def add(name, role):
-        entry = {"name": name, "role": role}
-        if name and entry not in found:
+        entry = {"name": clean_name(name), "role": role}
+        if entry["name"] and entry not in found:
             found.append(entry)
 
     for a in record.get("artists") or []:
@@ -105,7 +111,8 @@ def extract(record):
         for a in track.get("extraartists") or []:
             if "composer" in _kinds(a.get("role")):
                 add(a.get("name"), a.get("role"))
-    return found
+    with_role = {c["name"] for c in found if c["role"]}
+    return [c for c in found if c["role"] or c["name"] not in with_role]
 
 
 def credits_json(record):
@@ -123,7 +130,7 @@ def load(release):
     return credits if isinstance(credits, list) else []
 
 
-def people(release, clean_name):
+def people(release):
     """
     {"composer": [...], "conductor": [...], "orchestra": [...]}: the cleaned
     names credited in each part, in credit order, without repeats. Role

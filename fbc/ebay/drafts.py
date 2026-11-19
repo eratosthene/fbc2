@@ -297,22 +297,22 @@ def ensure_release_details(release):
         )
 
 
-def backfill_credits(apply=False, limit=None, echo=print):
+def backfill_credits(apply=False, limit=None, overwrite=False, echo=print):
     """
     Fetch the credits of every classical release that has none, one call to
-    Discogs each, as the first eBay Draft for it would. Without `apply`, only
-    list them. Returns {"found", "saved", "failed"}: how many lacked credits,
-    how many were saved, and how many Discogs couldn't give.
+    Discogs each, as the first eBay Draft for it would. With `overwrite`, also
+    those that have credits, and read them again. Without `apply`, only list
+    them. Returns {"found", "saved", "failed"}: how many were chosen, how many
+    were saved, and how many Discogs couldn't give.
     """
     from fbc import db
     from fbc.models.discogs import DiscogsRelease
 
+    query = db.session.query(DiscogsRelease)
+    if not overwrite:
+        query = query.filter(DiscogsRelease.credits.is_(None))
     releases = [
-        r
-        for r in db.session.query(DiscogsRelease)
-        .filter(DiscogsRelease.credits.is_(None))
-        .order_by(DiscogsRelease.release_id)
-        if credits.is_classical(r)
+        r for r in query.order_by(DiscogsRelease.release_id) if credits.is_classical(r)
     ]
     counts = {"found": len(releases), "saved": 0, "failed": 0}
     for release in releases[:limit]:
