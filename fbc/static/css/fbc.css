@@ -22,3 +22,25 @@ h6 { font-size: 10.2px; margin-top: 8.5px; margin-bottom: 8.5px; }
 .home-card-tools { margin-top: 18px; }
 .home-hidden-card { margin: 6px 0; }
 .sortable-ghost { opacity: 0.4; }
+
+/* Filters on a list, on a phone. FAB puts them in a table whose three cells
+   get squeezed, and Bootstrap makes .table-responsive clip (overflow-y:
+   hidden) below 768px, which cuts off popups such as the date picker. So here
+   each filter row is stacked, and the filter table alone doesn't clip. The
+   list tables keep their sideways scroll. */
+@media screen and (max-width: 767px) {
+  form#filter_form table.filters { overflow: visible; border: 0; }
+  form#filter_form table.filters,
+  form#filter_form table.filters > tbody,
+  form#filter_form table.filters > tbody > tr,
+  form#filter_form table.filters > tbody > tr > td { display: block; width: 100%; }
+  form#filter_form table.filters > tbody > tr { padding-bottom: 8px; border-top: 1px solid #ddd; }
+  form#filter_form table.filters > tbody > tr > td { border: 0; padding: 4px 8px; }
+  form#filter_form table.filters .select2-container { width: 100% !important; }
+  form#filter_form table.filters input.form-control,
+  form#filter_form table.filters select.form-control { width: 100%; }
+  /* The Select2 list opens on the body, sized to its select; keep it readable. */
+  .select2-dropdown { min-width: 240px; max-width: calc(100vw - 16px); }
+  /* The Add Filter menu stays on screen. */
+  form#filter_form .btn-group > .dropdown-menu { max-width: calc(100vw - 30px); max-height: 60vh; overflow-y: auto; }
+}
