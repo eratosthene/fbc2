@@ -184,6 +184,26 @@ def backfill_earnings(apply, update_net, since, limit):
     )
 
 
+@app.cli.command("backfill-credits")
+@click.option("--apply", is_flag=True, help="Save the credits; without it, only show.")
+@click.option("--limit", type=int, help="Fetch at most this many releases.")
+def backfill_credits(apply, limit):
+    """Give classical releases their composer and conductor credits."""
+    from fbc.ebay.drafts import backfill_credits
+
+    counts = backfill_credits(apply=apply, limit=limit, echo=click.echo)
+    click.echo(
+        str(counts["found"])
+        + " classical releases have no credits. Saved "
+        + str(counts["saved"])
+        + ", Discogs couldn't give "
+        + str(counts["failed"])
+        + "."
+    )
+    if not apply:
+        click.echo("This was a dry run. Add --apply to fetch them.")
+
+
 @app.cli.command("archive")
 @click.option("--apply", is_flag=True, help="Save the changes; without it, only show.")
 def archive(apply):

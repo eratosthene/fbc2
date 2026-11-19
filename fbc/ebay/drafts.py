@@ -252,6 +252,31 @@ def describe_template(fields):
     return rows
 
 
+def _needs_details(release):
+    """Whether `release` lacks labels, or credits it would use (classical)."""
+    if release.labels is None:
+        return True
+    return release.credits is None and credits.is_classical(release)
+
+
+def _fetch_details(release):
+    """Read the release from Discogs and fill in what it lacks. May raise."""
+    from fbc import db
+    from fbc.discogs import client as discogs_client
+
+    r = discogs_client.release(release.release_id)
+    if release.labels is None:
+        release.labels = json.dumps(
+            [
+                {"name": label.get("name"), "catno": label.get("catno")}
+                for label in r.get("labels") or []
+            ]
+        )
+        release.country = r.get("country")
+    release.credits = credits.credits_json(r)
+    db.session.commit()
+
+
 def ensure_release_details(release):
     """
     Releases synced before fbc stored labels and country don't have them, and
@@ -259,26 +284,10 @@ def ensure_release_details(release):
     fetch them from Discogs the first time a listing needs them. Credits are
     only fetched for classical releases, the only ones that use them.
     """
-    if not release:
+    if not release or not _needs_details(release):
         return
-    needs_credits = release.credits is None and credits.is_classical(release)
-    if release.labels is not None and not needs_credits:
-        return
-    from fbc import db
-    from fbc.discogs import client as discogs_client
-
     try:
-        r = discogs_client.release(release.release_id)
-        if release.labels is None:
-            release.labels = json.dumps(
-                [
-                    {"name": label.get("name"), "catno": label.get("catno")}
-                    for label in r.get("labels") or []
-                ]
-            )
-            release.country = r.get("country")
-        release.credits = credits.credits_json(r)
-        db.session.commit()
+        _fetch_details(release)
     except Exception as e:
         logger.warning(
             "Couldn't fetch labels for release "
@@ -286,6 +295,41 @@ def ensure_release_details(release):
             + ": "
             + str(e)
         )
+
+
+def backfill_credits(apply=False, limit=None, echo=print):
+    """
+    Fetch the credits of every classical release that has none, one call to
+    Discogs each, as the first eBay Draft for it would. Without `apply`, only
+    list them. Returns {"found", "saved", "failed"}: how many lacked credits,
+    how many were saved, and how many Discogs couldn't give.
+    """
+    from fbc import db
+    from fbc.models.discogs import DiscogsRelease
+
+    releases = [
+        r
+        for r in db.session.query(DiscogsRelease)
+        .filter(DiscogsRelease.credits.is_(None))
+        .order_by(DiscogsRelease.release_id)
+        if credits.is_classical(r)
+    ]
+    counts = {"found": len(releases), "saved": 0, "failed": 0}
+    for release in releases[:limit]:
+        label = str(release.release_id) + " " + (release.title or "")
+        if not apply:
+            echo("Would fetch " + label)
+            continue
+        try:
+            _fetch_details(release)
+        except Exception as e:
+            db.session.rollback()
+            counts["failed"] += 1
+            echo("Couldn't fetch " + label + ": " + str(e))
+            continue
+        counts["saved"] += 1
+        echo("Saved " + label)
+    return counts
 
 
 def check_ready(draft):

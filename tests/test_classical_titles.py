@@ -598,6 +598,91 @@ def test_a_new_draft_for_a_classical_unit_uses_the_credits(app, monkeypatch):
     assert "Karajan" not in (draft.description or "")
 
 
+# The backfill command
+
+
+def _classical_releases(app):
+    classical = _unit(genres=("Classical",), release_id=21).discogs_release
+    done = _unit(genres=("Classical",), credit_list=[], release_id=22).discogs_release
+    other = _unit(genres=("Rock",), release_id=23).discogs_release
+    return classical, done, other
+
+
+def _discogs_with_credits(monkeypatch, *ids):
+    fake = FakeDiscogs()
+    fake.releases = {
+        i: {"id": i, "extraartists": [{"name": "Con", "role": "Conductor"}]}
+        for i in ids
+    }
+    return fake.install(monkeypatch)
+
+
+def test_backfill_only_shows_without_apply(app, monkeypatch):
+    classical, _, _ = _classical_releases(app)
+    fake = _discogs_with_credits(monkeypatch, 21)
+    lines = []
+
+    counts = drafts.backfill_credits(echo=lines.append)
+
+    assert counts == {"found": 1, "saved": 0, "failed": 0}
+    assert lines == ["Would fetch 21 Album"]
+    assert fake.calls_to("release") == []
+    assert classical.credits is None
+
+
+def test_backfill_fetches_classical_releases_without_credits_only(app, monkeypatch):
+    classical, done, other = _classical_releases(app)
+    fake = _discogs_with_credits(monkeypatch, 21, 22, 23)
+
+    counts = drafts.backfill_credits(apply=True, echo=lambda line: None)
+
+    assert counts == {"found": 1, "saved": 1, "failed": 0}
+    assert len(fake.calls_to("release")) == 1
+    assert json.loads(classical.credits) == [{"name": "Con", "role": "Conductor"}]
+    assert done.credits == "[]"
+    assert other.credits is None
+
+
+def test_backfill_carries_on_past_a_release_discogs_cant_give(app, monkeypatch):
+    first = _unit(genres=("Classical",), release_id=31).discogs_release
+    second = _unit(genres=("Classical",), release_id=32).discogs_release
+    _discogs_with_credits(monkeypatch, 32)
+    lines = []
+
+    counts = drafts.backfill_credits(apply=True, echo=lines.append)
+
+    assert counts == {"found": 2, "saved": 1, "failed": 1}
+    assert first.credits is None
+    assert second.credits is not None
+    assert lines[0].startswith("Couldn't fetch 31 Album")
+
+
+def test_backfill_limit(app, monkeypatch):
+    for i in (41, 42, 43):
+        _unit(genres=("Classical",), release_id=i)
+    fake = _discogs_with_credits(monkeypatch, 41, 42, 43)
+
+    counts = drafts.backfill_credits(apply=True, limit=2, echo=lambda line: None)
+
+    assert counts == {"found": 3, "saved": 2, "failed": 0}
+    assert len(fake.calls_to("release")) == 2
+
+
+def test_the_backfill_command_reports_and_needs_apply(app, monkeypatch):
+    _classical_releases(app)
+    fake = _discogs_with_credits(monkeypatch, 21)
+    runner = app.test_cli_runner()
+
+    dry = runner.invoke(args=["backfill-credits"])
+    assert "1 classical releases have no credits. Saved 0" in dry.output
+    assert "Add --apply" in dry.output
+    assert fake.calls_to("release") == []
+
+    done = runner.invoke(args=["backfill-credits", "--apply"])
+    assert "Saved 1, Discogs couldn't give 0" in done.output
+    assert len(fake.calls_to("release")) == 1
+
+
 # The migration
 
 VERSIONS = Path(__file__).parent.parent / "migrations" / "versions"
