@@ -603,11 +603,16 @@ which is what goes to eBay. The folder they're in is `PICTURES_DIR`; without
 it the draft page says pictures can't be kept (see
 [Running fbc in production](production.md)).
 
-Add pictures with the file chooser on the draft page and Add pictures. Files
-you choose show as small previews with Rotate left and Rotate right buttons, so
-a sideways or upside down photo can be turned first. The turning happens in
-your browser when you press Add pictures. A file the browser can't show has no
-buttons and is added as it is. A photo that is only upright through its phone's
+Add pictures with the file chooser on the draft page and Add pictures. On a
+phone, **Take photo** opens the camera; each shot is added to the list, so you
+can take one after another. The file chooser picks from the photo library, and
+you can choose several at once. Choosing or taking more adds to the pictures
+already shown; a picture that is already there is ignored. The button says how
+many are waiting ("Add 3 pictures"). Pictures show as small previews with
+Rotate left, Rotate right and Remove buttons, and **Clear all** empties the
+list. A sideways or upside down photo can be turned first. The turning happens
+in your browser when you press Add pictures. A file the browser can't show has
+no Rotate buttons and is added as it is. A photo that is only upright through its phone's
 orientation tag is turned upright when it's kept, so it doesn't come out
 sideways. A file that isn't a picture is refused with a message and the others
 are still added. There can be up to 24.
