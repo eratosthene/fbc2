@@ -14,11 +14,7 @@ import re
 
 
 from fbc.ebay import credits, vocab
-
-
-def clean_name(name):
-    """Drop the " (2)" Discogs adds to tell same-named artists/labels apart."""
-    return re.sub(r"\s*\(\d+\)$", "", name or "").strip()
+from fbc.ebay.credits import clean_name
 
 
 def split_grading(grading):
@@ -156,7 +152,7 @@ def build_item_specifics(unit, defaults=None):
         put("Artist", *[clean_name(a.name) for a in release.artists])
         put("Release Title", release.title)
         if credits.is_classical(release):
-            by_part = credits.people(release, clean_name)
+            by_part = credits.people(release)
             put("Composer", *by_part["composer"])
             put("Conductor", *by_part["conductor"])
             put("Performer Orchestra", *by_part["orchestra"])
@@ -253,7 +249,7 @@ def classical_head(release):
     """
     if not credits.is_classical(release):
         return None
-    by_part = credits.people(release, clean_name)
+    by_part = credits.people(release)
     names = []
     for part in ("composer", "conductor"):
         if len(by_part[part]) == 1:
