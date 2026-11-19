@@ -593,6 +593,41 @@ workaround in Firefox. There, use Download or the zip and drag the files from a
 folder, or press Add Photos and choose them, which every browser accepts. The
 zip and the page use the shrunk 2048 pixel copies, not the originals.
 
+### The title and item specifics of an eBay Draft
+
+A new eBay Draft's title and item specifics are built from the Unit and its
+Discogs release. You can edit both on the draft before publishing. What fbc
+doesn't know is left out rather than guessed.
+
+The title is Artist - Title, the year, the edition, Vinyl, the type, the
+styles and the record's grade, cut to eBay's 80 characters:
+"Spyro Gyra - Carnaval 1980 First Edition Vinyl LP Fusion Jazz-Funk VG+".
+
+- Several artists are joined with "/", like "Sonny/Cher". The Artist item
+  specific lists them separately.
+- A Reissue (the Unit's Pressing says Reissue) shows the master's year, when
+  Discogs has one that differs, and then the release's own year after the word
+  Reissue: "Artist - Title 1960 Vinyl LP Reissue 1975 VG".
+- Over 80 characters, fbc drops the styles first, then the year after Reissue,
+  then the edition, and cuts what is left.
+- Release Year is the release's year, or the master's when the release has none.
+
+Releases Discogs files under the Classical genre (or the Opera style) also get
+Composer, Conductor and Performer Orchestra item specifics, and a title that
+starts with the composer's and conductor's surnames: "Strauss/Karajan - Also
+Sprach Zarathustra 1975 Vinyl LP VG". They come from the credits on the
+Discogs release. fbc uses credits with a role (Composed By, Written-By, Music
+By, Conductor, Orchestra, Ensemble), and a main artist with no role only when
+its name says it is an orchestra. If Discogs doesn't say who composed or
+conducted, or lists several composers or conductors, that name is left out
+of the title and the specific is left blank or lists them all. With neither
+name, the title uses the artists as usual. Check these against the record,
+since credits on Discogs are inconsistent.
+
+fbc keeps the credits with the release: a sync saves them, and a classical
+release synced before that gets them from Discogs once, when its first eBay
+Draft is made. Nothing from Discogs goes in the description.
+
 ### Pictures on an eBay Draft
 
 A Unit's pictures are kept by fbc, on the server, not only on eBay (#140).

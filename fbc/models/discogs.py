@@ -152,6 +152,9 @@ class DiscogsRelease(Model):
     master_year = Column(Integer)
     formats = Column(Text)
     labels = Column(Text)
+    # JSON: the composer, conductor and orchestra credits (fbc.ebay.credits).
+    # NULL until the release has been read from Discogs for them.
+    credits = Column(Text)
     country = Column(String(50))
     discogs_instances = relationship(
         "DiscogsInstance",
