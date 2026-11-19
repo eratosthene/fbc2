@@ -626,7 +626,17 @@ since credits on Discogs are inconsistent.
 
 fbc keeps the credits with the release: a sync saves them, and a classical
 release synced before that gets them from Discogs once, when its first eBay
-Draft is made. Nothing from Discogs goes in the description.
+Draft is made. Nothing from Discogs goes in the description. A sync only reads
+releases it hasn't seen, so to fetch the credits of every classical release
+now, run this once after updating, and again if some couldn't be read:
+
+```bash
+flask --app fbc backfill-credits
+flask --app fbc backfill-credits --apply
+```
+
+It lists the classical releases with no credits, and with `--apply` fetches
+each from Discogs (one call each, so use `--limit` to do some at a time).
 
 ### Pictures on an eBay Draft
 
