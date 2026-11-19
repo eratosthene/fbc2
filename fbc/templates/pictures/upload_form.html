@@ -101,13 +101,20 @@
     remove.textContent = "Remove";
     remove.onclick = function () { removeItem(item, cell); };
     controls.appendChild(remove);
+    var label = document.createElement("div");
+    label.className = "text-muted small";
+    label.style.cssText = "overflow: hidden; text-overflow: ellipsis; white-space: nowrap";
+    label.textContent = file.name;
     cell.appendChild(frame);
+    cell.appendChild(label);
     cell.appendChild(controls);
     box.appendChild(cell);
   }
 
+  // Name and size only: some phone browsers (Firefox on Android) copy a picked
+  // file each time, which gives the copy a new last-modified time.
   function sameFile(a, b) {
-    return a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+    return a.name === b.name && a.size === b.size;
   }
 
   // Add what was chosen to the list, skipping a picture that is already in it.
