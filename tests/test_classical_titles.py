@@ -706,6 +706,37 @@ def test_backfill_limit(app, monkeypatch):
     assert len(fake.calls_to("release")) == 2
 
 
+def test_backfill_overwrite_reads_releases_that_have_credits_again(app, monkeypatch):
+    classical, done, other = _classical_releases(app)
+    classical.credits = '[{"name": "Old (2)", "role": "Conductor"}]'
+    db.session.commit()
+    fake = _discogs_with_credits(monkeypatch, 21, 22, 23)
+
+    shown = drafts.backfill_credits(overwrite=True, echo=lambda line: None)
+    assert shown == {"found": 2, "saved": 0, "failed": 0}
+    assert fake.calls_to("release") == []
+
+    counts = drafts.backfill_credits(apply=True, overwrite=True, echo=lambda line: None)
+
+    assert counts == {"found": 2, "saved": 2, "failed": 0}
+    assert json.loads(classical.credits) == [{"name": "Con", "role": "Conductor"}]
+    assert json.loads(done.credits) == [{"name": "Con", "role": "Conductor"}]
+    assert other.credits is None
+
+
+def test_the_backfill_command_takes_overwrite(app, monkeypatch):
+    classical, _, _ = _classical_releases(app)
+    classical.credits = "[]"
+    db.session.commit()
+    fake = _discogs_with_credits(monkeypatch, 21, 22)
+    runner = app.test_cli_runner()
+
+    result = runner.invoke(args=["backfill-credits", "--apply", "--overwrite"])
+
+    assert "2 classical releases to read. Saved 2" in result.output
+    assert len(fake.calls_to("release")) == 2
+
+
 def test_the_backfill_command_reports_and_needs_apply(app, monkeypatch):
     _classical_releases(app)
     fake = _discogs_with_credits(monkeypatch, 21)

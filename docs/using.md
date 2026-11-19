@@ -637,6 +637,9 @@ flask --app fbc backfill-credits --apply
 
 It lists the classical releases with no credits, and with `--apply` fetches
 each from Discogs (one call each, so use `--limit` to do some at a time).
+To read again the releases that already have credits and replace them, such
+as after a fix to how credits are kept, add `--overwrite` (and don't use
+`--limit` with it, since each run starts from the first release).
 
 ### Pictures on an eBay Draft
 
