@@ -13,7 +13,7 @@ import json
 import re
 
 
-from fbc.ebay import vocab
+from fbc.ebay import credits, vocab
 
 
 def clean_name(name):
@@ -155,6 +155,11 @@ def build_item_specifics(unit, defaults=None):
     if release:
         put("Artist", *[clean_name(a.name) for a in release.artists])
         put("Release Title", release.title)
+        if credits.is_classical(release):
+            by_part = credits.people(release, clean_name)
+            put("Composer", *by_part["composer"])
+            put("Conductor", *by_part["conductor"])
+            put("Performer Orchestra", *by_part["orchestra"])
         labels = _labels(release)
         put("Record Label", *[clean_name(label["name"]) for label in labels[:1]])
         catnos = [
@@ -164,8 +169,12 @@ def build_item_specifics(unit, defaults=None):
         ]
         put("Catalog Number", *catnos)
         put("MPN", *catnos)
-        if release.year:
-            put("Release Year", str(release.year))
+        # A release with no year of its own takes its master's.
+        year = release.year
+        if not year and release.master_year and release.master_year > 0:
+            year = release.master_year
+        if year:
+            put("Release Year", str(year))
         # Era (and the decade in Style) is when the music came out, so a
         # reissue keeps its original's: the master release's year when
         # Discogs has one.
@@ -235,18 +244,51 @@ def parse_specifics(text):
     return specifics
 
 
+def classical_head(release):
+    """
+    "Strauss/Karajan - Also Sprach Zarathustra" for a classical or opera
+    release: the composer's and the conductor's surnames. Either is left out
+    when Discogs doesn't say, or says several (no way to pick one); with
+    neither, the usual artists form. None if the release isn't classical.
+    """
+    if not credits.is_classical(release):
+        return None
+    by_part = credits.people(release, clean_name)
+    names = []
+    for part in ("composer", "conductor"):
+        if len(by_part[part]) == 1:
+            names.append(credits.surname(by_part[part][0]))
+    names = [n for n in dict.fromkeys(names) if n]
+    if not names:
+        return None
+    return "/".join(names) + " - " + release.title
+
+
 def build_title(unit):
     """
     A title in the house style, e.g.
     "Spyro Gyra - Carnaval 1980 First Edition Vinyl LP Fusion Jazz-Funk VG+"
-    for a "US Original" pressing, dropping styles and then the edition until
-    it fits in 80 characters.
+    for a "US Original" pressing. Artists are joined with "/". A reissue
+    shows its master's year, then the word Reissue and the release's year:
+    "Artist - Album 1960 Vinyl LP Reissue 1975 VG". A classical or opera
+    record starts with the composer and conductor instead (classical_head).
+    Over 80 characters, it drops the styles, then the release year after
+    Reissue, then the edition, then cuts what is left.
     """
     release = unit.discogs_release
+    # "First Edition" or "Reissue", as parsed for the Edition specific.
+    edition = (parse_pressing(unit.pressing)[0] or [""])[0]
+    reissue_year = ""
     if release:
-        artist = " / ".join(clean_name(a.name) for a in release.artists)
-        head = (artist + " - " if artist else "") + release.title
+        head = classical_head(release)
+        if head is None:
+            artist = "/".join(clean_name(a.name) for a in release.artists)
+            head = (artist + " - " if artist else "") + release.title
         year = str(release.year) if release.year else ""
+        master_year = release.master_year or 0
+        if edition == "Reissue" and master_year > 0 and master_year != release.year:
+            year = str(master_year)
+            reissue_year = str(release.year) if release.year else ""
         styles = [s.name.replace(" ", "-") for s in release.styles]
     else:
         head = unit.name
@@ -254,19 +296,25 @@ def build_title(unit):
         styles = []
     kind = (record_types(unit) or [""])[0]
     record, _ = split_grading(unit.grading)
-    # "First Edition" or "Reissue", as parsed for the Edition specific.
-    edition = (parse_pressing(unit.pressing)[0] or [""])[0]
 
-    def assemble(edition, styles):
-        parts = [head, year, edition, "Vinyl", kind] + styles + [record or ""]
+    def assemble(edition, reissue_year, styles):
+        # "Reissue" goes after the type, the way people search for it; other
+        # editions go in front of Vinyl.
+        before = after = ""
+        if edition == "Reissue":
+            after = (edition + " " + reissue_year).strip()
+        else:
+            before = edition
+        parts = [head, year, before, "Vinyl", kind, after] + styles + [record or ""]
         return " ".join(p for p in parts if p)
 
-    while styles and len(assemble(edition, styles)) > vocab.TITLE_MAX:
+    while styles and len(assemble(edition, reissue_year, styles)) > vocab.TITLE_MAX:
         styles = styles[:-1]
-    title = assemble(edition, styles)
-    if len(title) > vocab.TITLE_MAX:
-        title = assemble("", [])
-    return title[: vocab.TITLE_MAX].strip()
+    if len(assemble(edition, reissue_year, styles)) > vocab.TITLE_MAX:
+        reissue_year = ""
+    if len(assemble(edition, reissue_year, styles)) > vocab.TITLE_MAX:
+        edition = ""
+    return assemble(edition, reissue_year, styles)[: vocab.TITLE_MAX].strip()
 
 
 def build_description(unit):

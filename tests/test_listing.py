@@ -1328,7 +1328,7 @@ def test_type_falls_back_to_discogs(app):
 def test_title_uses_the_parsed_edition(app):
     title = build_title(_carnaval(pressing="UK Reissue", unit_type='12" Double LP'))
 
-    assert title.startswith("Spyro Gyra - Carnaval 1980 Reissue Vinyl LP ")
+    assert title.startswith("Spyro Gyra - Carnaval 1980 Vinyl LP Reissue ")
     assert "UK" not in title
 
 

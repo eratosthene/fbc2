@@ -5,7 +5,7 @@ import json
 import logging
 
 
-from fbc.ebay import api, describe, skus, vocab
+from fbc.ebay import api, credits, describe, skus, vocab
 
 logger = logging.getLogger()
 
@@ -254,23 +254,30 @@ def describe_template(fields):
 
 def ensure_release_details(release):
     """
-    Releases synced before fbc stored labels and country don't have them;
-    fetch them from Discogs the first time a listing needs them.
+    Releases synced before fbc stored labels and country don't have them, and
+    a classical release synced before it stored credits doesn't have those;
+    fetch them from Discogs the first time a listing needs them. Credits are
+    only fetched for classical releases, the only ones that use them.
     """
-    if not release or release.labels is not None:
+    if not release:
+        return
+    needs_credits = release.credits is None and credits.is_classical(release)
+    if release.labels is not None and not needs_credits:
         return
     from fbc import db
     from fbc.discogs import client as discogs_client
 
     try:
         r = discogs_client.release(release.release_id)
-        release.labels = json.dumps(
-            [
-                {"name": label.get("name"), "catno": label.get("catno")}
-                for label in r.get("labels") or []
-            ]
-        )
-        release.country = r.get("country")
+        if release.labels is None:
+            release.labels = json.dumps(
+                [
+                    {"name": label.get("name"), "catno": label.get("catno")}
+                    for label in r.get("labels") or []
+                ]
+            )
+            release.country = r.get("country")
+        release.credits = credits.credits_json(r)
         db.session.commit()
     except Exception as e:
         logger.warning(

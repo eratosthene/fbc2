@@ -8,6 +8,7 @@ from fbc.core import devmode
 from fbc.core.localtime import naive_utc
 from fbc.discogs import client as discogs_client
 from fbc.discogs import identify
+from fbc.ebay import credits as ebay_credits
 
 logger = logging.getLogger()
 
@@ -231,6 +232,7 @@ def add_discogs_release(item):
         ]
     )
     country = full.get("country")
+    credits_text = ebay_credits.credits_json(full)
     released = full.get("released")
     formats = json.dumps(info.get("formats") or [])
     # TODO: make this whole thing atomic instead of if/then
@@ -269,6 +271,7 @@ def add_discogs_release(item):
         discogs_release.formats = formats
         discogs_release.labels = labels
         discogs_release.country = country
+        discogs_release.credits = credits_text
         discogs_release.released = released
         discogs_release.folder_id = folder_id
         discogs_release.notes = json.dumps(item.get("notes"))
@@ -287,6 +290,7 @@ def add_discogs_release(item):
             formats=formats,
             labels=labels,
             country=country,
+            credits=credits_text,
             released=released,
             folder_id=folder_id,
             notes=json.dumps(item.get("notes")),
@@ -419,6 +423,7 @@ def save_record(record, master_year=None):
             ]
         ),
         country=record.get("country"),
+        credits=ebay_credits.credits_json(record),
         released=record.get("released"),
         # DiscogsRelease.unit_add reads the notes as JSON.
         notes="[]",

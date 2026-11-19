@@ -35,7 +35,8 @@ file is what they don't say.
   leaves out `other.receipt_ids()`. `fbc/views/` matches it.
 - `fbc/ebay/`: everything that talks to eBay or builds for it. `oauth.py`,
   `api.py` (Trading API), `describe.py` and `drafts.py` (an eBay Draft's title,
-  specifics and item), `publish.py`, `pictures.py`, `vocab.py` (lookup tables),
+  specifics and item), `credits.py` (composer, conductor and orchestra of a
+  classical release), `publish.py`, `pictures.py`, `vocab.py` (lookup tables),
   `skus.py`, `insertions.py`, `traffic.py` (listing views, Sell Analytics), `tracking.py`, `mystery.py`, `sorting.py` (records
   or Other Items, by eBay category), `finances.py`
   (Finances API), and `listings.py` and `orders.py` (saving what a sync reads
