@@ -2,32 +2,41 @@
 Split a Unit's old one-run description into its Record, Sleeve and Dust Jacket
 Notes and Extras, for `flask split-descriptions`.
 
-The owner writes the sentences in a habit: sleeve, dust jacket, record, an
-optional extra, then "Ultrasonically cleaned." So a sentence is placed by the
-words in it. It is never guessed: a Unit whose sentences don't each fit one
-place, or that has two sentences for one place, is left alone and listed so it
-can be fixed by hand.
+The owner writes it in a habit: the sleeve ("Cover looks good..."), the dust
+jacket ("Original paper dust jacket..."), the record ("Disc is in great
+shape..."), an optional extra, then "Ultrasonically cleaned." Each part starts
+with a sentence that names it, and may go on in more sentences that don't
+("Back shows some ringwear."). So a sentence that names its part starts that
+part, and one that doesn't goes on with the part before it. Words further into
+a sentence ("Records logo", "split") aren't read, since they say little about
+which part it is.
+
+It is never guessed past that: a Unit whose first sentence names no part is
+left alone and listed, with its text, so it can be fixed by hand.
 """
 
 import re
+from html import unescape
 
-# The dust jacket comes first, since its words are taken out of a sentence
-# before the rest are looked for.
-PLACES = (
-    (
-        "dust_jacket_note",
-        r"\b(dust\s*jackets?|dust\s*sleeves?|inner\s*sleeves?|inners?)\b",
-    ),
+# How a sentence starts a part. The dust jacket is found anywhere in the
+# sentence, since its name is specific; the others by the sentence's first
+# words, since "Cover" or "Disc" later on is usually about something else.
+DUST_JACKET = re.compile(
+    r"\b(dust\s*jackets?|dust\s*sleeves?|inner\s*sleeves?|inners?)\b", re.I
+)
+LEADS = (
     (
         "extras",
-        r"\b(inserts?|posters?|booklets?|obi|includes?|included|comes\s+with"
-        r"|bonus|stickers?|hype|download|postcards?|lyrics?)\b",
+        r"(includes?|included|comes\s+with|bonus|also\s+(includes?|comes)|with\s+the"
+        r"|has\s+an?\s+(insert|poster|booklet)|insert|poster|booklet|obi)",
     ),
-    ("sleeve_note", r"\b(sleeves?|covers?|jackets?|gatefold|shrink|spine|seams?)\b"),
+    (
+        "sleeve_note",
+        r"(cover|front\s+cover|sleeve|jacket|gatefold|front|album\s+cover)",
+    ),
     (
         "record_note",
-        r"\b(records?|discs?|vinyl|lps?|plays?|played|surfaces?|grooves?|scratch\w*"
-        r"|wax|sides?|platters?|pops?|crackles?|noise)\b",
+        r"(disc|discs|record|records|vinyl|lp|wax|platter|label|plays?|sides?)",
     ),
 )
 CLEANED = re.compile(r"ultrasonic", re.IGNORECASE)
@@ -39,29 +48,35 @@ def sentences(text):
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s.strip()]
 
 
+def _part(sentence):
+    """The part this sentence starts, or None if it doesn't name one."""
+    if DUST_JACKET.search(sentence):
+        return "dust_jacket_note"
+    for name, words in LEADS:
+        if re.match(r"\W*(the\s+|a\s+|an\s+|both\s+)?" + words + r"\b", sentence, re.I):
+            return name
+    return None
+
+
 def split(description):
     """
-    Returns `(notes, problem)`. `notes` maps the note fields to a sentence, for
-    those the description has; `problem` is None, or why it can't be split.
+    Returns `(notes, problem)`. `notes` maps the note fields to their sentences
+    (joined with a space when a part runs to several); `problem` is None, or why
+    it can't be split.
     """
-    notes = {}
-    for sentence in sentences(description or ""):
+    parts = {}
+    current = None
+    # Descriptions made on eBay's old form may hold "&quot;" and the like.
+    for sentence in sentences(unescape(description or "")):
         if CLEANED.search(sentence):
             continue
-        # "Dust jacket" holds the word "jacket", which isn't the sleeve.
-        rest = re.sub(PLACES[0][1], " ", sentence, flags=re.I)
-        places = [name for name, words in PLACES[1:] if re.search(words, rest, re.I)]
-        if rest != sentence:
-            places.insert(0, PLACES[0][0])
-        if len(places) != 1:
-            kind = "no place" if not places else "more than one place"
-            return None, kind + " for: " + sentence
-        if places[0] in notes:
-            return None, "two sentences for " + places[0] + ": " + sentence
-        notes[places[0]] = sentence
-    if not notes:
+        current = _part(sentence) or current
+        if current is None:
+            return None, "doesn't say which part it is: " + sentence
+        parts.setdefault(current, []).append(sentence)
+    if not parts:
         return None, "no sentences left after the cleaning line"
-    return notes, None
+    return {name: " ".join(texts) for name, texts in parts.items()}, None
 
 
 def split_all(apply=False, echo=print):
