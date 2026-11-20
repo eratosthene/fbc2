@@ -209,6 +209,25 @@ The old Grading field (like `VG+/VG`) is no longer shown or used. Its values
 were copied into Record Grade and Sleeve Grade when fbc was updated. The old
 Description is still there and still used as the Discogs listing's Comments.
 
+#### Splitting the old descriptions
+
+A Unit's old Description is one run of sentences. Run this once to split each
+into its notes:
+
+```bash
+flask --app fbc split-descriptions
+flask --app fbc split-descriptions --apply
+```
+
+It places each sentence by its words: dust jacket (or inner sleeve), sleeve
+(or cover, jacket), record (or disc, vinyl, plays), and extras (insert, poster,
+includes). It drops the "Ultrasonically cleaned." sentence, since that will be
+fixed text. It never guesses: a Unit with a sentence that fits no place or more
+than one, or two sentences for one place, is left alone and listed with its
+text, so you can fix it by hand. Without `--apply` it only says what it would
+do. It is safe to run again: a Unit that has any note is skipped. The
+Description itself is kept.
+
 ### Archiving
 
 Old, finished records can be archived so the long lists leave them out. It

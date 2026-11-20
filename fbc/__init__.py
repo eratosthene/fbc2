@@ -216,6 +216,26 @@ def backfill_credits(apply, overwrite, limit):
         click.echo("This was a dry run. Add --apply to fetch them.")
 
 
+@app.cli.command("split-descriptions")
+@click.option("--apply", is_flag=True, help="Save the notes; without it, only show.")
+def split_descriptions(apply):
+    """Split Units' old descriptions into Record, Sleeve and Dust Jacket Notes."""
+    from fbc.ebay.splitting import split_all
+
+    counts = split_all(apply=apply, echo=click.echo)
+    click.echo(
+        ("Split " if apply else "Would split ")
+        + str(counts["split"])
+        + " descriptions. Left alone because they don't split cleanly: "
+        + str(counts["problems"])
+        + ", because they have notes already: "
+        + str(counts["skipped"])
+        + "."
+    )
+    if not apply:
+        click.echo("This was a dry run. Add --apply to save the notes.")
+
+
 @app.cli.command("archive")
 @click.option("--apply", is_flag=True, help="Save the changes; without it, only show.")
 def archive(apply):
