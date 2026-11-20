@@ -254,6 +254,43 @@ ended and whether that is past the re-list window (`EBAY_RELIST_DAYS`, 90
 days unless set). A listing past the window still shows in the queue and
 re-lists through a new Draft. Running it again does nothing new.
 
+## Updating listing descriptions
+
+`update-listing-descriptions` gives the active listings the description the
+Description Template makes now (see Sales > Description Template in
+[using.md](using.md)), so old and new listings look alike. It is run in the live
+container, and turns `FBC_SKIP_VIEWS` on itself.
+
+It reads fbc's own active listings, not eBay's. For each one linked to exactly
+one unsold Unit that has notes or Extras, it builds the description a new eBay
+Draft would get and sets it with a revise that sends only the item ID and the
+description. It leaves alone a mystery box, a listing with no Unit or several,
+and a Unit with no notes yet. A description you wrote by hand on a Draft or on
+eBay is replaced, and the listing's last eBay Draft takes the new text, so a
+second run finds it already right.
+
+Run it in this order. The first only shows what it would do:
+
+```bash
+docker/live-flask.sh update-listing-descriptions
+```
+
+Then change one listing, with an item ID from the list:
+
+```bash
+docker/live-flask.sh update-listing-descriptions --item 123456789012 --apply
+```
+
+Check that listing in Seller Hub before going on: the description looks right
+on a phone and a desktop, and its shipping details, title, price and pictures
+are unchanged. Then the rest, a few at a time with `--limit` if you like:
+
+```bash
+docker/live-flask.sh update-listing-descriptions --apply
+```
+
+It pauses between listings. Run it again after fixing any that failed.
+
 ## Setting SKUs on old listings
 
 Listings made from eBay Drafts carry `fbc-<unit id>` as their SKU (Custom
