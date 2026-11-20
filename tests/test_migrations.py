@@ -175,3 +175,40 @@ def test_mystery_box_columns_are_added_and_removed():
             migration.downgrade()
         columns = {c["name"] for c in sa.inspect(conn).get_columns("ebay_listing")}
         assert columns == {"item_id"}
+
+
+def test_unit_grades_come_from_the_old_grading():
+    migration = _migration("a9d4f7c2e601_add_unit_grades_notes_and_extras")
+    engine = sa.create_engine("sqlite://")
+    unit = sa.Table(
+        "unit",
+        sa.MetaData(),
+        sa.Column("id", sa.Integer, primary_key=True),
+        sa.Column("grading", sa.String(20)),
+        sa.Column("description", sa.String(300)),
+    )
+    with engine.begin() as conn:
+        unit.create(conn)
+        for unit_id, grading in enumerate(
+            ["VG+/VG+", "NM or M-/VG", "VG+", "", None, "G/"], start=1
+        ):
+            conn.execute(
+                unit.insert().values(id=unit_id, grading=grading, description="Nice.")
+            )
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.upgrade()
+
+        rows = conn.execute(
+            sa.text(
+                "SELECT id, grading, record_grade, sleeve_grade, record_note,"
+                " dust_jacket_grade, extras, description FROM unit ORDER BY id"
+            )
+        ).all()
+        assert [tuple(r) for r in rows] == [
+            (1, "VG+/VG+", "VG+", "VG+", None, None, None, "Nice."),
+            (2, "NM or M-/VG", "NM or M-", "VG", None, None, None, "Nice."),
+            (3, "VG+", "VG+", None, None, None, None, "Nice."),
+            (4, "", None, None, None, None, None, "Nice."),
+            (5, None, None, None, None, None, None, "Nice."),
+            (6, "G/", "G", None, None, None, None, "Nice."),
+        ]

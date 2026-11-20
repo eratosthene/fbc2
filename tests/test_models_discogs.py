@@ -119,7 +119,7 @@ def test_unit_list_links_to_units_filtered_by_release(app):
     assert "List Units" in html
 
 
-def test_unit_add_extracts_grading_from_notes(app):
+def test_unit_add_extracts_grades_from_notes(app):
     notes = json.dumps(
         [
             {"field_id": 1, "value": "Media (Near Mint (NM or M-))"},
@@ -128,8 +128,8 @@ def test_unit_add_extracts_grading_from_notes(app):
     )
     release = _make_release(release_id=100, master_id=200, notes=notes)
     html = release.unit_add(instance_id=999, markup=False)
-    assert "grading=NM+or+M-" in html
-    assert "VG%2B" in html
+    assert "record_grade=NM+or+M-" in html
+    assert "sleeve_grade=VG%2B" in html
     assert "discogs_master=200" in html
     assert "999" in html
 

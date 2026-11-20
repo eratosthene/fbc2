@@ -103,8 +103,15 @@ def test_figures_aggregate_sales_receipts(db):
 
 
 def test_unit_repr_combines_fields():
-    unit = Unit(name="Discovery", unit_type='12" LP', pressing="US", grading="NM")
+    unit = Unit(name="Discovery", unit_type='12" LP', pressing="US", record_grade="NM")
     assert repr(unit) == 'Discovery 12" LP US NM'
+
+
+def test_unit_grading_text_joins_the_record_and_sleeve_grades():
+    assert Unit(record_grade="VG+", sleeve_grade="VG").grading_text() == "VG+/VG"
+    assert Unit(record_grade="NM").grading_text() == "NM"
+    assert Unit(sleeve_grade="G").grading_text() == "G"
+    assert Unit().grading_text() == ""
 
 
 def test_unit_fmt_retail_price_formats_when_set():

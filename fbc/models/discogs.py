@@ -239,17 +239,14 @@ class DiscogsRelease(Model):
             return s
 
     def unit_add(self, instance_id, markup=True):
-        grading = ""
+        # Field 1 is the Media Condition, field 2 the Sleeve Condition.
+        grades = {}
         notes = json.loads(self.notes)
         for d in notes:
-            if d["field_id"] == 1:
-                m = re.search(r".*\((.*)\)", d["value"])
-                if m:
-                    grading = grading + m.group(1)
-            elif d["field_id"] == 2:
-                m = re.search(r".*\((.*)\)", d["value"])
-                if m:
-                    grading = grading + "/" + m.group(1)
+            name = {1: "record_grade", 2: "sleeve_grade"}.get(d["field_id"])
+            m = re.search(r".*\((.*)\)", d["value"])
+            if name and m:
+                grades[name] = m.group(1)
         from fbc.models.inventory import Unit
 
         discogs_master = self.discogs_master_key()
@@ -257,7 +254,7 @@ class DiscogsRelease(Model):
             "name": unit_name(self),
             "pressing": pressing_for(self),
             "unit_type": '12" LP',
-            "grading": grading,
+            **grades,
             "discogs_release": self.release_id,
             "discogs_instance": instance_id,
             "discogs_master": discogs_master,

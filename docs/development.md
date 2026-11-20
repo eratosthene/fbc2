@@ -447,7 +447,7 @@ against Discogs, so check it on the first real Draft. Notes:
   timed-out post made. An older listing is found through the database
   (`DiscogsListing.open_for`) instead.
 - A Unit needs a collection instance (`discogs_instance_id`) to be listed.
-- `Unit.grading` maps to Discogs's condition names in
+- `Unit.record_grade` and `Unit.sleeve_grade` map to Discogs's condition names in
   `CONDITION_FOR_GRADE`; EX isn't mapped, because Discogs has no EX.
 - `DISCOGS_SETTINGS["ALLOW_OFFERS"]` (default on) sets the form's start.
 - The two new permissions (`can_from_unit`, `can_make_for_sale`) go to Admin

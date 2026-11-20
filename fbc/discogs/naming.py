@@ -41,7 +41,12 @@ def unit_name(release):
 
 
 def unit_add_params(
-    release, purchase_lot_id=None, matrix="", instance_id=None, grading="", notes=""
+    release,
+    purchase_lot_id=None,
+    matrix="",
+    instance_id=None,
+    grades=None,
+    notes="",
 ):
     """The Add Unit form's starting values for a release: like
     DiscogsRelease.unit_add, but with no collection instance, and the Purchase
@@ -58,8 +63,8 @@ def unit_add_params(
     }
     if instance_id:
         params["discogs_instance"] = instance_id
-    if grading:
-        params["grading"] = grading
+    # The grades to start with: record_grade, sleeve_grade, dust_jacket_grade.
+    params.update({name: grade for name, grade in (grades or {}).items() if grade})
     if (notes or "").strip():
         params["notes"] = notes.strip()
     if purchase_lot_id:

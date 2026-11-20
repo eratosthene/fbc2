@@ -81,7 +81,18 @@ class Unit(Model):
     purchase_lot = relationship("PurchaseLot")
     storage_box_id = Column(Integer, ForeignKey("storage_box.id"), index=True)
     storage_box = relationship("StorageBox")
+    # The old combined grade ("VG+/VG+"). Nothing writes or reads it any more:
+    # the grades below replace it, and a later change drops the column.
     grading = Column(String(20))
+    record_grade = Column(String(20))
+    record_note = Column(String(300))
+    sleeve_grade = Column(String(20))
+    sleeve_note = Column(String(300))
+    # The paper or plastic sleeve that holds the disc inside the record sleeve.
+    # eBay calls its grade "Inlay Condition".
+    dust_jacket_grade = Column(String(20))
+    dust_jacket_note = Column(String(300))
+    extras = Column(String(300))
     pressing = Column(String(100))
     matrix = Column(String(100))
     notes = Column(String(100))
@@ -101,15 +112,15 @@ class Unit(Model):
         Boolean, nullable=False, default=False, server_default=false(), index=True
     )
 
+    def grading_text(self):
+        """The record and sleeve grades as one short text, "VG+/VG"."""
+        return "/".join(g for g in (self.record_grade, self.sleeve_grade) if g)
+
     def __unicode__(self):
-        return (
-            self.name + " " + self.unit_type + " " + self.pressing + " " + self.grading
-        )
+        return " ".join((self.name, self.unit_type, self.pressing, self.grading_text()))
 
     def __repr__(self):
-        return (
-            self.name + " " + self.unit_type + " " + self.pressing + " " + self.grading
-        )
+        return self.__unicode__()
 
     def fmt_retail_price(self):
         if self.retail_price:

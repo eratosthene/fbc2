@@ -179,6 +179,32 @@ Units, and a lot's price evenly between its Units.
 Adding a Unit without a Retail Price still saves it, but warns, with a link to
 edit the Unit and add one.
 
+### Grades and notes
+
+A Unit has a grade and a note for each of its parts, and Extras:
+
+- **Record Grade** and **Record Note**: the disc.
+- **Sleeve Grade** and **Sleeve Note**: the record sleeve.
+- **Dust Jacket Grade** and **Dust Jacket Note**: the paper or plastic sleeve
+  that holds the disc inside the record sleeve. Leave them blank when there
+  isn't one. eBay calls its grade Inlay Condition.
+- **Extras**: anything else that comes with it.
+
+A grade is the short Goldmine abbreviation (`VG+`, `NM or M-`). A note is a
+sentence for buyers, such as "Disc is in great shape, plays well." The grades
+are used for eBay's Record Grading, Sleeve Grading and Inlay Condition, for
+Discogs's Media and Sleeve Condition, and for the end of an eBay Draft's title.
+The notes aren't used anywhere yet. Inlay Condition is the Dust Jacket Grade,
+or the Sleeve Grade when there is no dust jacket grade.
+
+Identify Record's add-to-Discogs form and the Add Unit link on a synced release
+fill in the grades from the copy's Media Condition and Sleeve Condition
+(Identify Record also fills in the Dust Jacket Condition). You write the notes.
+
+The old Grading field (like `VG+/VG`) is no longer shown or used. Its values
+were copied into Record Grade and Sleeve Grade when fbc was updated. The old
+Description is still there and still used as the Discogs listing's Comments.
+
 ### Archiving
 
 Old, finished records can be archived so the long lists leave them out. It
@@ -275,9 +301,9 @@ Each result has two buttons.
   button, "Add to my Discogs collection and add the Unit", **writes to your
   Discogs account**: it adds the copy, sets the fields, saves the release in
   fbc as Sync Discogs would, and opens Add Unit with the release, Purchase Lot,
-  matrix and instance chosen, the two conditions as the grading (like
-  "NM or M-/VG+") and the Notes. Dust Jacket Condition and Extras Included only
-  go to Discogs. If a field fails to set, the copy is still added and it says
+  matrix and instance chosen, the Media, Sleeve and Dust Jacket Conditions as the
+  Record, Sleeve and Dust Jacket Grades (like "NM or M-") and the Notes. Extras
+  Included only goes to Discogs. If a field fails to set, the copy is still added and it says
   which. If the copy is added but fbc can't save it, run Sync Discogs.
 - **Just add the Unit** saves the release in fbc only and adds nothing to
   Discogs, so the Unit has no collection copy (Ship This has nothing to remove
@@ -423,11 +449,11 @@ eBay. Nothing is posted until you press the button, and posting makes a
 **Draft**, which buyers can't see. In order:
 
 1. Press List on Discogs. A form opens, filled in from the Unit. Check it:
-   - **Media and Sleeve Condition** come from the Unit's grading, which is
-     "media/sleeve", like `NM/VG+`. M is Mint (M); NM, M- and NM or M- are
+   - **Media and Sleeve Condition** come from the Unit's Record Grade and
+     Sleeve Grade, like `NM` and `VG+`. M is Mint (M); NM, M- and NM or M- are
      Near Mint (NM or M-); VG+, VG, G+, G, F and P are the same words in full
-     (Very Good Plus (VG+) and so on). A grading Discogs has no word for, such
-     as EX, or a Unit with no sleeve grade, leaves that box on "(choose)".
+     (Very Good Plus (VG+) and so on). A grade Discogs has no word for, such
+     as EX, or a Unit with no Sleeve Grade, leaves that box on "(choose)".
    - **Price** is the Unit's retail price.
    - **Comments** are the Unit's Description, shown to buyers.
    - **Allow offers** starts ticked. Set `'ALLOW_OFFERS': False` in

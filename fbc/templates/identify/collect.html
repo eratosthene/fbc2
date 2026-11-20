@@ -7,7 +7,7 @@
 {% else %}
 <p>Release <a href="https://www.discogs.com/release/{{ release_id }}" target="_blank" rel="noopener">{{ release_id }}</a>.
   The button below <strong>adds a copy to your Discogs account</strong> and sets these fields on it,
-  then opens Add Unit with the Media and Sleeve Condition as the grading and the Notes filled in.</p>
+  then opens Add Unit with the Media, Sleeve and Dust Jacket Condition as the Record, Sleeve and Dust Jacket Grades and the Notes filled in.</p>
 {% if form.missing %}
 <div class="alert alert-info">Not set up as custom fields on your Discogs account, so not shown:
   {{ form.missing|join(', ') }}.</div>

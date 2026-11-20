@@ -57,7 +57,8 @@ def _unit(
     fields = dict(
         name="Unit",
         unit_type='12" LP',
-        grading="VG/VG",
+        record_grade="VG",
+        sleeve_grade="VG",
         pressing=pressing,
         retail_price=5.0,
         sold=False,

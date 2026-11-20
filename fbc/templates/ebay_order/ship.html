@@ -100,13 +100,13 @@ back for combined shipping.{% endif %}</div>
   <input type="hidden" name="fill-{{ item }}" value="{{ b.fill_box.id }}"></div>
   {% endif %}
   <table class="table table-bordered table-condensed" style="width: auto">
-    <tr><th>Unit</th><th>Type</th><th>Grading</th><th>Box</th><th>Swap in Unit</th><th></th></tr>
+    <tr><th>Unit</th><th>Type</th><th>Grades</th><th>Box</th><th>Swap in Unit</th><th></th></tr>
     {% for unit in b.units %}
     <tr>
       <td><input type="hidden" name="pick-{{ item }}" value="{{ unit.id }}">
         <a href="{{ url_for('UnitModelView.show', pk=unit.id) }}">{{ unit.name }}</a> (#{{ unit.id }})</td>
       <td>{{ unit.unit_type }}</td>
-      <td>{{ unit.grading }}</td>
+      <td>{{ unit.grading_text() }}</td>
       <td>{{ unit.storage_box.name if unit.storage_box else "" }}</td>
       <td><input type="text" name="swap-{{ unit.id }}" class="form-control input-sm" style="width: 6em"></td>
       <td><button name="action" value="reroll:{{ unit.id }}" class="btn btn-default btn-sm">Re-roll</button></td>

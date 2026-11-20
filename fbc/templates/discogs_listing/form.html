@@ -6,7 +6,7 @@
 {% endmacro %}
 {% block content %}
 <h3>List on Discogs</h3>
-<p><strong>{{ unit.name }}</strong>, graded <code>{{ unit.grading or "not graded" }}</code>.
+<p><strong>{{ unit.name }}</strong>, graded <code>{{ unit.grading_text() or "not graded" }}</code>.
   The button below <strong>posts this to your Discogs account as a Draft</strong>. A Draft isn't
   shown to buyers. Next you add pictures on Discogs, then use Make it For Sale to make it live.</p>
 {% for e in errors %}<div class="alert alert-danger">{{ e }}</div>{% endfor %}
@@ -16,8 +16,8 @@
   You can still list it here, but it could sell on both.</div>
 {% endfor %}
 {% if not values.condition %}
-<div class="alert alert-info">The Media Condition isn't set because the Unit's grading
-  (<code>{{ unit.grading or "blank" }}</code>) isn't a Discogs one. Choose it below.</div>
+<div class="alert alert-info">The Media Condition isn't set because the Unit's Record Grade
+  (<code>{{ unit.record_grade or "blank" }}</code>) isn't a Discogs one. Choose it below.</div>
 {% endif %}
 <form method="post" class="form-horizontal" action="{{ url_for('DiscogsListingModelView.from_unit', pk=unit.id) }}">
   {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
@@ -33,7 +33,7 @@
   <div class="form-group">
     <label class="col-sm-2 control-label" for="sleeve_condition">Sleeve Condition</label>
     <div class="col-sm-4"><select class="form-control" id="sleeve_condition" name="sleeve_condition">{{ options(sleeve_conditions, values.sleeve_condition) }}</select>
-      {% if not values.sleeve_condition %}<p class="help-block">The Unit's grading has no sleeve grade.</p>{% endif %}</div>
+      {% if not values.sleeve_condition %}<p class="help-block">The Unit's Sleeve Grade is blank or isn't a Discogs one.</p>{% endif %}</div>
   </div>
   <div class="form-group">
     <label class="col-sm-2 control-label" for="price">Price ($)</label>

@@ -17,7 +17,7 @@ import logging
 from fbc.discogs import client as discogs_client
 from fbc.core import devmode, localtime
 from fbc.ebay.api import listing_settings
-from fbc.ebay.describe import build_item_specifics, disc_count, split_grading
+from fbc.ebay.describe import build_item_specifics, disc_count
 from fbc.ebay.drafts import default_weight
 from fbc.ebay.skus import sku
 from fbc.models.discogs import (
@@ -44,7 +44,7 @@ MEDIA_CONDITIONS = (
 # A sleeve can also be one of these.
 SLEEVE_CONDITIONS = MEDIA_CONDITIONS + ("Generic", "Not Graded", "No Cover")
 
-# Unit.grading's abbreviations ("VG+/VG+", "NM or M-/VG") to Discogs's names.
+# A Unit's grade abbreviations ("VG+/VG+", "NM or M-/VG") to Discogs's names.
 # EX isn't a Discogs grade and doesn't map to one for certain, so it's left
 # for the owner to choose.
 CONDITION_FOR_GRADE = {
@@ -76,14 +76,13 @@ class PostUncertain(ListingError):
 
 
 def condition_for(abbreviation):
-    """Discogs's name for one of Unit.grading's abbreviations, or None."""
+    """Discogs's name for one of a Unit's grade abbreviations, or None."""
     return CONDITION_FOR_GRADE.get((abbreviation or "").strip())
 
 
-def conditions_from_grading(grading):
-    """(media condition, sleeve condition) for Unit.grading; each may be None."""
-    record, sleeve = split_grading(grading)
-    return condition_for(record), condition_for(sleeve)
+def conditions_for(unit):
+    """(media condition, sleeve condition) for `unit`; each may be None."""
+    return condition_for(unit.record_grade), condition_for(unit.sleeve_grade)
 
 
 def weight_grams(unit):
@@ -109,7 +108,7 @@ def default_allow_offers():
 
 def defaults(unit):
     """What the List on Discogs form starts with for `unit`."""
-    media, sleeve = conditions_from_grading(unit.grading)
+    media, sleeve = conditions_for(unit)
     return {
         "release_id": unit.discogs_release_id,
         "condition": media,
