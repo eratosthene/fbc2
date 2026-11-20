@@ -596,7 +596,9 @@ zip and the page use the shrunk 2048 pixel copies, not the originals.
 ### The title and item specifics of an eBay Draft
 
 A new eBay Draft's title and item specifics are built from the Unit and its
-Discogs release. You can edit both on the draft before publishing. What fbc
+Discogs release. You can edit both on the draft before publishing: the
+**Edit** button on the draft page opens the form, for a Draft of any status, if
+you are allowed to edit. What fbc
 doesn't know is left out rather than guessed.
 
 The title is Artist - Title, the year, the edition, Vinyl, the type, the

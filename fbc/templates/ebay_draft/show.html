@@ -33,7 +33,7 @@
 {% include "pictures/upload_form.html" %}
 {% endif %}
 <hr>
-<a href="{{ url_for('EbayDraftModelView.edit', pk=draft.id) }}" class="btn btn-default">Edit</a>
+{% if can_edit %}<a href="{{ url_for('EbayDraftModelView.edit', pk=draft.id) }}" class="btn btn-default">Edit</a>{% endif %}
 <form method="post" action="{{ url_for('EbayDraftModelView.verify', pk=draft.id) }}" style="display: inline">
   <button class="btn btn-info" {% if dev_mode %}disabled{% endif %}>Check with eBay</button>
 </form>
@@ -87,6 +87,9 @@
   {% for p in problems %}<li>{{ p }}</li>{% endfor %}
 </ul>
 {% endif %}
+{% elif can_edit %}
+<hr>
+<a href="{{ url_for('EbayDraftModelView.edit', pk=draft.id) }}" class="btn btn-default">Edit</a>
 {% endif %}
 {% if result %}
 <h4>Last eBay response</h4>
