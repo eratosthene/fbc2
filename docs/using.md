@@ -211,16 +211,33 @@ Description is still there and still used as the Discogs listing's Comments.
 
 #### The eBay Draft's description
 
-A new eBay Draft's description is built from the Unit: a Condition list with
-the Sleeve, Dust Jacket and Record grade and note, then the Extras, then a short
-list of the Unit's Pressing, Unit Type (as Format) and Matrix, then the footer
-lines. A part with nothing to say is left out. It has plain tags only, no links
-or styles, and nothing from Discogs. You can still edit it on the Draft.
+A new eBay Draft's description is built from the Unit by a template. The
+built-in one makes a Condition list with the Sleeve, Dust Jacket and Record
+grade and note, then the Extras, then a short list of the Unit's Pressing, Unit
+Type (as Format) and Matrix, then the line "All records are ultrasonically
+cleaned." A part with nothing to say is left out. It has plain tags only, no
+links or styles, and nothing from Discogs. You can still edit any Draft's
+description by hand.
 
-The footer is the same for every listing. It is `DESCRIPTION_FOOTER` in
-`EBAY_SETTINGS['LISTING']` in `config.py`, a list of lines, one paragraph each.
-Without it, the footer is "All records are ultrasonically cleaned." An empty
-list says nothing.
+**Sales > Description Template** edits the template. It is HTML with a few marks
+in braces:
+
+- `{record_note}` is replaced by the Unit's value, with anything special
+  escaped, and is blank when there isn't one. The page lists every value:
+  the three grades (in full, like "Very Good Plus (VG+)") and notes, Extras,
+  Pressing, Unit Type and Matrix.
+- `{if sleeve_note}...{end}` keeps what is between only when the Unit has that
+  value, and `{if a or b}...{end}` when either has one. They can be nested.
+- Line breaks and the spaces at the start of a line are ignored, so lay the
+  template out to read well and use `<p>`, `<br>` and `<li>` for the breaks
+  buyers see.
+
+**Preview** shows the template, as it is on the page and not yet saved, for any
+Unit you name, with the HTML it would send. **Save** keeps it, and refuses a
+template with a mistake, saying what it is. **Reset to built-in** throws your
+template away. Only new eBay Drafts use it; Drafts you've made keep their text.
+eBay doesn't allow scripts, forms, or links to other sites except images and
+videos, so stick to plain tags.
 
 A Unit with no notes and no Extras yet keeps what it did before: its old
 Description, alone. So fill in the notes (see below for splitting the old
