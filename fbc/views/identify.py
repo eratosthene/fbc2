@@ -205,6 +205,9 @@ class IdentifyRecordView(BaseView):
                                 instance_id=instance_id,
                                 grades=collect.grades_from(values),
                                 notes=values.get("Notes", ""),
+                                dust_jacket_note=values.get(
+                                    "Dust Jacket Condition", ""
+                                ),
                             ),
                         )
                     )

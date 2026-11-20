@@ -20,7 +20,7 @@ import re
 import json
 
 from fbc.core import localtime
-from fbc.discogs.naming import pressing_for, unit_name
+from fbc.discogs.naming import collection_field_ids, pressing_for, unit_name
 
 logger = logging.getLogger()
 
@@ -239,14 +239,21 @@ class DiscogsRelease(Model):
             return s
 
     def unit_add(self, instance_id, markup=True):
-        # Field 1 is the Media Condition, field 2 the Sleeve Condition.
+        # The collection's Media and Sleeve Condition are grades like "Very
+        # Good Plus (VG+)". Its Dust Jacket Condition is free text, so it
+        # becomes the Dust Jacket Note. The field ids are the owner's own.
+        ids = collection_field_ids()
+        values = {}
+        for d in json.loads(self.notes):
+            values[d["field_id"]] = d["value"]
         grades = {}
-        notes = json.loads(self.notes)
-        for d in notes:
-            name = {1: "record_grade", 2: "sleeve_grade"}.get(d["field_id"])
-            m = re.search(r".*\((.*)\)", d["value"])
-            if name and m:
+        for key, name in (("media", "record_grade"), ("sleeve", "sleeve_grade")):
+            m = re.search(r".*\((.*)\)", values.get(ids[key]) or "")
+            if m:
                 grades[name] = m.group(1)
+        jacket = (values.get(ids["dust_jacket"]) or "").strip()
+        if jacket:
+            grades["dust_jacket_note"] = jacket[:300]
         from fbc.models.inventory import Unit
 
         discogs_master = self.discogs_master_key()

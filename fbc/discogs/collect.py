@@ -32,13 +32,12 @@ def _grade(value):
 def grades_from(values):
     """
     The Unit's grades from the conditions chosen, as Add Unit's starting
-    values: {"record_grade": "M-", "sleeve_grade": "VG+", ...}. A grade that
+    values: {"record_grade": "M-", "sleeve_grade": "VG+"}. A grade that
     isn't chosen is left out.
     """
     grades = {
         "record_grade": _grade(values.get("Media Condition")),
         "sleeve_grade": _grade(values.get("Sleeve Condition")),
-        "dust_jacket_grade": _grade(values.get("Dust Jacket Condition")),
     }
     return {name: grade for name, grade in grades.items() if grade}
 

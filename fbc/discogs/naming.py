@@ -34,6 +34,20 @@ def pressing_for(release):
     return " ".join(str(p) for p in parts if p)
 
 
+# Discogs numbers a collection's custom fields per account, so these are the
+# ids for the owner's. COLLECTION_FIELD_IDS in DISCOGS_SETTINGS overrides them.
+DEFAULT_COLLECTION_FIELD_IDS = {"media": 1, "sleeve": 2, "dust_jacket": 4}
+
+
+def collection_field_ids():
+    """{"media": id, "sleeve": id, "dust_jacket": id} of the owner's custom fields."""
+    from flask import current_app
+
+    ids = dict(DEFAULT_COLLECTION_FIELD_IDS)
+    ids.update(current_app.config["DISCOGS_SETTINGS"].get("COLLECTION_FIELD_IDS", {}))
+    return ids
+
+
 def unit_name(release):
     """ "Artist - Title (master year)": the master's year, else the release's."""
     year = release.master_year or release.year
@@ -47,6 +61,7 @@ def unit_add_params(
     instance_id=None,
     grades=None,
     notes="",
+    dust_jacket_note="",
 ):
     """The Add Unit form's starting values for a release: like
     DiscogsRelease.unit_add, but with no collection instance, and the Purchase
@@ -65,6 +80,8 @@ def unit_add_params(
         params["discogs_instance"] = instance_id
     # The grades to start with: record_grade, sleeve_grade, dust_jacket_grade.
     params.update({name: grade for name, grade in (grades or {}).items() if grade})
+    if (dust_jacket_note or "").strip():
+        params["dust_jacket_note"] = dust_jacket_note.strip()[:300]
     if (notes or "").strip():
         params["notes"] = notes.strip()
     if purchase_lot_id:

@@ -198,8 +198,12 @@ The notes aren't used anywhere yet. Inlay Condition is the Dust Jacket Grade,
 or the Sleeve Grade when there is no dust jacket grade.
 
 Identify Record's add-to-Discogs form and the Add Unit link on a synced release
-fill in the grades from the copy's Media Condition and Sleeve Condition
-(Identify Record also fills in the Dust Jacket Condition). You write the notes.
+fill in the Record and Sleeve Grades from the copy's Media Condition and Sleeve
+Condition, and the Dust Jacket Note from its Dust Jacket Condition (free text
+there, like "Original"). You write the other notes. Discogs numbers a
+collection's custom fields per account, so `COLLECTION_FIELD_IDS` in
+`DISCOGS_SETTINGS` in `config.py` says which are yours; the defaults are 1, 2
+and 4. They are the `field_id`s in a synced release's Notes.
 
 The old Grading field (like `VG+/VG`) is no longer shown or used. Its values
 were copied into Record Grade and Sleeve Grade when fbc was updated. The old
@@ -301,9 +305,9 @@ Each result has two buttons.
   button, "Add to my Discogs collection and add the Unit", **writes to your
   Discogs account**: it adds the copy, sets the fields, saves the release in
   fbc as Sync Discogs would, and opens Add Unit with the release, Purchase Lot,
-  matrix and instance chosen, the Media, Sleeve and Dust Jacket Conditions as the
-  Record, Sleeve and Dust Jacket Grades (like "NM or M-") and the Notes. Extras
-  Included only goes to Discogs. If a field fails to set, the copy is still added and it says
+  matrix and instance chosen, the Media and Sleeve Conditions as the Record
+  and Sleeve Grades (like "NM or M-"), the Dust Jacket Condition as the Dust
+  Jacket Note, and the Notes. Extras Included only goes to Discogs. If a field fails to set, the copy is still added and it says
   which. If the copy is added but fbc can't save it, run Sync Discogs.
 - **Just add the Unit** saves the release in fbc only and adds nothing to
   Discogs, so the Unit has no collection copy (Ship This has nothing to remove

@@ -132,6 +132,40 @@ def test_unit_add_extracts_grades_from_notes(app):
     assert "sleeve_grade=VG%2B" in html
     assert "discogs_master=200" in html
     assert "999" in html
+    assert "dust_jacket_note" not in html
+
+
+def test_unit_add_reads_the_dust_jacket_condition_as_its_note(app):
+    notes = json.dumps(
+        [
+            {"field_id": 1, "value": "Very Good Plus (VG+)"},
+            {"field_id": 2, "value": "Very Good (VG)"},
+            {"field_id": 4, "value": "Original"},
+        ]
+    )
+    release = _make_release(release_id=100, notes=notes)
+    html = release.unit_add(instance_id=999, markup=False)
+    assert "dust_jacket_note=Original" in html
+    assert "record_grade=VG%2B" in html and "sleeve_grade=VG" in html
+
+
+def test_unit_add_uses_the_field_ids_in_the_settings(app):
+    notes = json.dumps(
+        [
+            {"field_id": 7, "value": "Near Mint (NM or M-)"},
+            {"field_id": 8, "value": "Very Good (VG)"},
+            {"field_id": 9, "value": "Plastic"},
+            {"field_id": 1, "value": "Mint (M)"},
+        ]
+    )
+    release = _make_release(release_id=100, notes=notes)
+    ids = {"media": 7, "sleeve": 8, "dust_jacket": 9}
+    app.config["DISCOGS_SETTINGS"] = dict(
+        app.config["DISCOGS_SETTINGS"], COLLECTION_FIELD_IDS=ids
+    )
+    html = release.unit_add(instance_id=999, markup=False)
+    assert "record_grade=NM+or+M-" in html and "sleeve_grade=VG" in html
+    assert "dust_jacket_note=Plastic" in html
 
 
 def test_unit_add_uses_r_prefixed_master_when_no_master(app):
