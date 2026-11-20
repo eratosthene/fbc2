@@ -6,8 +6,8 @@ from fbc.ebay import splitting
 from fbc.models.inventory import Unit
 
 HABIT = (
-    "Sleeve has light ring wear. Dust jacket is clean and original. "
-    "Record plays great, very little surface noise. "
+    "Cover has light ring wear. Original paper dust jacket with Capitol Records ads. "
+    "Disc plays great, very little surface noise. "
     "Includes the poster. Ultrasonically cleaned."
 )
 
@@ -16,29 +16,44 @@ def test_split_follows_the_owners_habit_and_drops_the_cleaning_line():
     notes, problem = splitting.split(HABIT)
     assert problem is None
     assert notes == {
-        "sleeve_note": "Sleeve has light ring wear.",
-        "dust_jacket_note": "Dust jacket is clean and original.",
-        "record_note": "Record plays great, very little surface noise.",
+        "sleeve_note": "Cover has light ring wear.",
+        "dust_jacket_note": "Original paper dust jacket with Capitol Records ads.",
+        "record_note": "Disc plays great, very little surface noise.",
         "extras": "Includes the poster.",
     }
 
 
-def test_split_takes_sentences_by_words_not_position():
-    notes, problem = splitting.split("Disc is quiet. Cover has a seam split.")
+def test_a_sentence_that_names_no_part_goes_on_with_the_one_before():
+    notes, problem = splitting.split(
+        "Cover is clean. Back shows some ringwear. Inside gatefold is pristine. "
+        "Disc is quiet. Looks like new."
+    )
     assert problem is None
     assert notes == {
-        "record_note": "Disc is quiet.",
-        "sleeve_note": "Cover has a seam split.",
+        "sleeve_note": "Cover is clean. Back shows some ringwear. Inside gatefold is pristine.",
+        "record_note": "Disc is quiet. Looks like new.",
     }
+
+
+def test_words_inside_a_sentence_dont_move_it():
+    # "Records" and "split" are about the jacket and the cover, not the disc.
+    notes, problem = splitting.split(
+        "Cover looks good, top is split. Clear dust jacket from 20th Century Records."
+    )
+    assert problem is None
+    assert set(notes) == {"sleeve_note", "dust_jacket_note"}
+
+
+def test_html_entities_are_turned_back_into_text():
+    notes, _ = splitting.split("Cover has a 4&quot; tear.")
+    assert notes == {"sleeve_note": 'Cover has a 4" tear.'}
 
 
 @pytest.mark.parametrize(
     "text, why",
     [
-        ("Nice copy.", "no place"),
-        ("Dust jacket is clean but the record skips.", "more than one place"),
-        ("Sleeve is fine and the record plays well.", "more than one place"),
-        ("Sleeve is fine. Cover has a crease.", "two sentences for sleeve_note"),
+        ("Nice copy.", "doesn't say which part"),
+        ("Coever is fine. Disc plays.", "doesn't say which part"),
         ("Ultrasonically cleaned.", "no sentences left"),
         ("", "no sentences left"),
     ],
@@ -69,7 +84,7 @@ def test_apply_fills_the_notes_and_keeps_the_description(db):
     unit = _unit(db, HABIT)
     splitting.split_all(apply=True, echo=lambda _: None)
     db.session.refresh(unit)
-    assert unit.sleeve_note == "Sleeve has light ring wear."
+    assert unit.sleeve_note == "Cover has light ring wear."
     assert unit.extras == "Includes the poster."
     assert unit.description == HABIT
 

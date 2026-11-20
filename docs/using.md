@@ -236,12 +236,15 @@ flask --app fbc split-descriptions
 flask --app fbc split-descriptions --apply
 ```
 
-It places each sentence by its words: dust jacket (or inner sleeve), sleeve
-(or cover, jacket), record (or disc, vinyl, plays), and extras (insert, poster,
-includes). It drops the "Ultrasonically cleaned." sentence, since that will be
-fixed text. It never guesses: a Unit with a sentence that fits no place or more
-than one, or two sentences for one place, is left alone and listed with its
-text, so you can fix it by hand. Without `--apply` it only says what it would
+It reads your usual order. A sentence that starts with Cover, Sleeve, Jacket
+or Gatefold starts the Sleeve Note; one that mentions a dust jacket (or inner
+sleeve) starts the Dust Jacket Note; one that starts with Disc, Record or Vinyl
+starts the Record Note; and one that starts with Includes starts the Extras. A
+sentence that names none of them ("Back shows some ringwear.") goes on with the
+part before it. It drops the "Ultrasonically cleaned." sentence, since that will
+be fixed text. It never guesses past that: a Unit whose first sentence names no
+part (a typo, say) is left alone and listed with its text, so you can fix it by
+hand. Without `--apply` it only says what it would
 do. It is safe to run again: a Unit that has any note is skipped. The
 Description itself is kept.
 
