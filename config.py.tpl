@@ -15,6 +15,10 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 #   FBC_CONFIG_SECRET_KEY='...'
 #   FBC_CONFIG_EBAY_SETTINGS__APP_ID='...'
 # See "Settings from the environment" in docs/production.md.
+#
+# The log level is not a setting here: it's the LOG_LEVEL environment
+# variable (debug, info, warning; INFO if unset). See "Log level" in
+# docs/production.md.
 
 # Your App secret key
 SECRET_KEY = "1234567890"

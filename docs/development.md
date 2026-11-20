@@ -522,6 +522,11 @@ it, since Compose reads `.env` from the compose file's folder.
   for everything but the database. `FBC_CONFIG_*` overrides in
   `docker/.env` work here too.
 
+- Logging is at DEBUG here: `dev-scripts/run-local.sh` and
+  `docker/compose.dev.yml` set `LOG_LEVEL=debug`. Set `LOG_LEVEL` yourself
+  (`info`, `warning`) to quiet it; live runs at INFO. The eBay library's own
+  logger (`ebaysdk`) stays at WARNING unless the level is debug.
+
 - The app runs in dev mode here, with a banner on every page saying so. It
   doesn't use the eBay and Discogs keys in `config.py` or the tokens saved
   in the database, so a copy of live data can't reach the live accounts.
