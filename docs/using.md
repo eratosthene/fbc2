@@ -194,7 +194,7 @@ A grade is the short Goldmine abbreviation (`VG+`, `NM or M-`). A note is a
 sentence for buyers, such as "Disc is in great shape, plays well." The grades
 are used for eBay's Record Grading, Sleeve Grading and Inlay Condition, for
 Discogs's Media and Sleeve Condition, and for the end of an eBay Draft's title.
-The notes aren't used anywhere yet. Inlay Condition is the Dust Jacket Grade,
+The notes and Extras go in a new eBay Draft's description (below). Inlay Condition is the Dust Jacket Grade,
 or the Sleeve Grade when there is no dust jacket grade.
 
 Identify Record's add-to-Discogs form and the Add Unit link on a synced release
@@ -208,6 +208,23 @@ and 4. They are the `field_id`s in a synced release's Notes.
 The old Grading field (like `VG+/VG`) is no longer shown or used. Its values
 were copied into Record Grade and Sleeve Grade when fbc was updated. The old
 Description is still there and still used as the Discogs listing's Comments.
+
+#### The eBay Draft's description
+
+A new eBay Draft's description is built from the Unit: a Condition list with
+the Sleeve, Dust Jacket and Record grade and note, then the Extras, then a short
+list of the Unit's Pressing, Unit Type (as Format) and Matrix, then the footer
+lines. A part with nothing to say is left out. It has plain tags only, no links
+or styles, and nothing from Discogs. You can still edit it on the Draft.
+
+The footer is the same for every listing. It is `DESCRIPTION_FOOTER` in
+`EBAY_SETTINGS['LISTING']` in `config.py`, a list of lines, one paragraph each.
+Without it, the footer is "All records are ultrasonically cleaned." An empty
+list says nothing.
+
+A Unit with no notes and no Extras yet keeps what it did before: its old
+Description, alone. So fill in the notes (see below for splitting the old
+Descriptions) to get the new layout.
 
 #### Splitting the old descriptions
 

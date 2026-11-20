@@ -227,6 +227,12 @@ EBAY_SETTINGS = {
         'POSTAL_CODE': '',
         'LOCATION': '',
         'BEST_OFFER': True,
+        # Lines said at the end of every listing's description, one paragraph
+        # each. Leave it out for the built-in line about ultrasonic cleaning;
+        # [] says nothing.
+        # 'DESCRIPTION_FOOTER': [
+        #     'All records are ultrasonically cleaned and shipped in standard LP mailers.',
+        # ],
         # Free insertions eBay gives you a month (250 without a Store
         # subscription; a Store raises it). The home page counts this
         # month's against it, and publishing warns before going over.

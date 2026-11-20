@@ -401,7 +401,9 @@ def new_draft(unit):
         title=describe.build_title(unit),
         price=unit.retail_price,
         best_offer=settings.get("BEST_OFFER", True),
-        description=describe.build_description(unit),
+        description=describe.build_description(
+            unit, settings.get("DESCRIPTION_FOOTER")
+        ),
         item_specifics=describe.format_specifics(specifics),
         weight_oz=default_weight(specifics, settings, describe.disc_count(unit)),
         status="draft",
