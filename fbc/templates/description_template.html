@@ -1,0 +1,53 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<h3>Description Template</h3>
+<p>New eBay Drafts get their description from this template, filled in from the
+Unit. Drafts you've made already keep theirs, and you can still edit any Draft's
+description by hand. A Unit with no notes or Extras yet keeps its old
+Description instead.</p>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ url_for('DescriptionTemplateView.edit') }}">
+  {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+  <div class="form-group">
+    <label for="body">Template{% if not is_saved %} (the built-in one, not saved yet){% endif %}</label>
+    <textarea class="form-control" id="body" name="body" rows="26" style="font-family: monospace">{{ body }}</textarea>
+  </div>
+  <div class="form-group form-inline">
+    <label for="unit">Preview for Unit #</label>
+    <input class="form-control" id="unit" name="unit" size="8" value="{{ unit.id if unit else '' }}">
+    <button class="btn btn-default" name="action" value="preview">Preview</button>
+    <button class="btn btn-primary" name="action" value="save">Save</button>
+    <button class="btn btn-default" name="action" value="reset"
+      onclick="return confirm('Throw away your template and go back to the built-in one?')">Reset to built-in</button>
+  </div>
+</form>
+
+{% if preview is not none %}
+<h4>Preview{% if unit %} for {{ unit.name }}{% endif %}</h4>
+<iframe sandbox srcdoc="{{ preview }}" style="width: 100%; max-width: 700px; height: 360px; border: 1px solid #ccc; background: #fff"></iframe>
+<h4>HTML sent to eBay</h4>
+<pre style="white-space: pre-wrap">{{ preview }}</pre>
+{% elif not unit %}
+<div class="alert alert-info">There are no Units to preview with yet.</div>
+{% endif %}
+
+<h4>How to write it</h4>
+<ul>
+  <li>It is HTML. eBay doesn't allow scripts or forms, or links to other sites
+    except images and videos. Plain tags such as <code>&lt;p&gt;</code>,
+    <code>&lt;h3&gt;</code> and <code>&lt;ul&gt;</code> are the safe choice.</li>
+  <li><code>{value}</code> is replaced by the Unit's value, with anything
+    special escaped. It is blank when the Unit has none.</li>
+  <li><code>{if name}...{end}</code> keeps what is between only when the Unit has
+    that value. <code>{if a or b}</code> keeps it when either has one.</li>
+  <li>Line breaks and the spaces at the start of a line are ignored.</li>
+</ul>
+<table class="table table-condensed" style="width: auto">
+  <tr><th>Value</th><th>What it is</th></tr>
+  {% for name, what in fields.items() %}
+  <tr><td><code>{{ '{' + name + '}' }}</code></td><td>{{ what }}</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

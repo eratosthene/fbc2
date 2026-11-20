@@ -177,6 +177,7 @@ def test_sales_menu_is_in_the_owners_order():
         "Discogs Orders",
         "Other Items",
         "Ended Listings",
+        "Description Template",
     ]
 
 

@@ -504,6 +504,7 @@ def _register_views():
     )
     from fbc.views.other import OtherItemModelView
     from fbc.views.listing import EbayDraftModelView, DRAFTS_TO_LIST_FILTERS
+    from fbc.views.description import DescriptionTemplateView
     from fbc.views.discogs import DISCOGS_DRAFTS_TO_LIST_FILTERS
     from fbc.views.tasks import (
         DiscogsOrdersToShipView,
@@ -516,6 +517,7 @@ def _register_views():
     )
     from fbc.models.sync import SyncRecord  # noqa: F401  (so its table exists)
     from fbc.models.pictures import UnitPicture  # noqa: F401  (likewise)
+    from fbc.models.templates import DescriptionTemplate  # noqa: F401  (likewise)
     from fbc.models.home import HomeLayout  # noqa: F401  (likewise)
     from fbc.views.connect import ConnectDiscogsView, ConnectEbayView
     from fbc.views.pictures import UnitPicturesView
@@ -581,6 +583,9 @@ def _register_views():
         appbuilder.add_view(DiscogsOrderModelView, "Discogs Orders", category="Sales")
         appbuilder.add_view(OtherItemModelView, "Other Items", category="Sales")
         appbuilder.add_view(ListingEndModelView, "Ended Listings", category="Sales")
+        appbuilder.add_view(
+            DescriptionTemplateView, "Description Template", category="Sales"
+        )
         appbuilder.add_view(OrdersToShipView, "Orders to Ship", category="Tasks")
         appbuilder.add_view(
             DiscogsOrdersToShipView, "Discogs Orders to Ship", category="Tasks"
