@@ -39,4 +39,7 @@ if ! command -v pipenv >/dev/null 2>&1; then
     exit 1
 fi
 
+# Debug logging in dev; LOG_LEVEL in the environment still wins.
+export LOG_LEVEL="${LOG_LEVEL:-debug}"
+
 exec pipenv run flask --app fbc run --debug --host "$host" --port "$port"

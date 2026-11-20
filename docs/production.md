@@ -327,6 +327,23 @@ Put each value in single quotes, so Compose leaves any `$` or `#` in it
 alone. A value that must stay a string but looks like a number needs
 double quotes inside those: `'"12345"'`.
 
+### Log level
+
+The app logs at INFO by default: the image sets `LOG_LEVEL=info`, and with
+nothing set the app uses INFO too. The eBay library logs every request and
+response at DEBUG, so it stays quiet unless you ask for debug. To change the
+level, put `LOG_LEVEL` in `docker/.env` and recreate the container
+(`docker/live-up.sh -n`):
+
+```bash
+LOG_LEVEL=debug
+```
+
+It takes a level name in any case: `debug`, `info`, `warning`, `error` or
+`critical`. An empty or unknown value means INFO. Put it back to `info` (or
+remove it) when you're done, since debug fills the logs quickly. It is not
+an `FBC_CONFIG_` setting and isn't read from `config.py`.
+
 ### Moving secrets out of config.py
 
 To move the secrets from an existing `config.py` to `docker/.env`, and

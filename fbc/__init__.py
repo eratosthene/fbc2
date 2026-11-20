@@ -14,11 +14,12 @@ from flask import send_from_directory
 from flask_appbuilder import AppBuilder, Model
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate, stamp, upgrade
-from fbc.core import devmode, localtime, settings
+from fbc.core import devmode, localtime, logs, settings
 from fbc.sales.index import MyIndexView
 
 logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s")
-logging.getLogger().setLevel(logging.DEBUG)
+# LOG_LEVEL, INFO if unset; the eBay SDK stays at WARNING unless it's debug.
+logs.init_logging()
 
 app = Flask(__name__)
 # config.py, with any FBC_CONFIG_* overrides from the environment.
