@@ -11,10 +11,16 @@ so they can be read and edited in an ordinary textarea before publishing.
 
 import json
 import re
+from html import escape as _escape
 
 
 from fbc.ebay import credits, vocab
 from fbc.ebay.credits import clean_name
+
+
+def escape(text):
+    # Text only, never an attribute, so quotes (12") can stay as they are.
+    return _escape(text, quote=False)
 
 
 def grade_name(abbrev):
@@ -299,10 +305,61 @@ def build_title(unit):
     return assemble(edition, reissue_year, styles)[: vocab.TITLE_MAX].strip()
 
 
-def build_description(unit):
-    if not unit.description:
-        return ""
-    return "<p>" + unit.description + "</p>"
+# Said under every listing unless EBAY_SETTINGS["LISTING"]["DESCRIPTION_FOOTER"]
+# in config.py says otherwise.
+DEFAULT_FOOTER = ["All records are ultrasonically cleaned."]
+
+
+def _line(label, grade, note):
+    """One condition line: "Record: Very Good Plus (VG+). Plays great."."""
+    said = " ".join(
+        part
+        for part in (
+            escape(grade_name(grade) or "") + ("." if grade else ""),
+            escape(note or ""),
+        )
+        if part
+    )
+    return "<li><b>" + label + ":</b> " + said + "</li>" if said else ""
+
+
+def build_description(unit, footer=None):
+    """
+    The eBay description: the Unit's grades and notes, its extras and details,
+    then the fixed footer lines. Only what fbc holds about the Unit goes in it;
+    nothing from Discogs. Plain tags, no links or styles, so eBay's editor
+    keeps it. Every value is escaped, and a part with nothing to say is left
+    out. A Unit with no notes or extras yet keeps its old Description, as it
+    was, so listings made before the notes were filled in are unchanged.
+    """
+    footer = DEFAULT_FOOTER if footer is None else footer
+    wording = [unit.record_note, unit.sleeve_note, unit.dust_jacket_note, unit.extras]
+    if not any(wording) and unit.description:
+        return "<p>" + unit.description + "</p>"
+    html = []
+    condition = [
+        _line("Sleeve", unit.sleeve_grade, unit.sleeve_note),
+        _line("Dust Jacket", unit.dust_jacket_grade, unit.dust_jacket_note),
+        _line("Record", unit.record_grade, unit.record_note),
+    ]
+    if any(condition):
+        html.append("<h3>Condition</h3><ul>" + "".join(condition) + "</ul>")
+    if unit.extras:
+        html.append("<p>" + escape(unit.extras) + "</p>")
+    details = [
+        ("Pressing", unit.pressing),
+        ("Format", unit.unit_type),
+        ("Matrix", unit.matrix),
+    ]
+    details = [
+        "<li><b>" + label + ":</b> " + escape(value) + "</li>"
+        for label, value in details
+        if value
+    ]
+    if details:
+        html.append("<h3>The record</h3><ul>" + "".join(details) + "</ul>")
+    html.extend("<p>" + escape(line) + "</p>" for line in footer if line)
+    return "".join(html)
 
 
 def _discs_in_text(text):
