@@ -141,6 +141,9 @@ class EbayDraftModelView(CustomModelView):
             widgets=widgets,
             related_views=self._related_views,
             draft=draft,
+            can_edit=self.appbuilder.sm.has_access(
+                "can_edit", self.class_permission_name
+            ),
             problems=check_ready(draft),
             pictures=draft.stored_pictures(),
             pictures_folder=store.folder() is not None,

@@ -50,6 +50,41 @@ def test_draft_page_shows_specifics_and_blocks_publish_without_pictures(client):
     assert "disabled>Publish to eBay" in html
 
 
+@pytest.mark.parametrize("status", ["draft", "published"])
+def test_draft_page_has_an_edit_button_whatever_the_status(client, status):
+    unit = _carnaval()
+    client.get("/ebaydraftmodelview/fromunit/" + str(unit.id))
+    draft = db.session.query(EbayDraft).one()
+    draft.status = status
+    db.session.commit()
+
+    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
+        as_text=True
+    )
+
+    link = '<a href="/ebaydraftmodelview/edit/%d" class="btn btn-default">Edit</a>'
+    assert html.count(link % draft.id) == 1
+
+
+def test_draft_page_hides_edit_from_users_who_cant_edit(client, monkeypatch):
+    unit = _carnaval()
+    client.get("/ebaydraftmodelview/fromunit/" + str(unit.id))
+    draft = db.session.query(EbayDraft).one()
+    sm = fbc.appbuilder.sm
+    has_access = sm.has_access
+    monkeypatch.setattr(
+        sm,
+        "has_access",
+        lambda permission, view: permission != "can_edit"
+        and has_access(permission, view),
+    )
+
+    page = client.get("/ebaydraftmodelview/show/" + str(draft.id))
+
+    assert page.status_code == 200
+    assert "/ebaydraftmodelview/edit/" not in page.get_data(as_text=True)
+
+
 def test_uploading_pictures_keeps_them_on_the_unit_and_never_calls_ebay(
     client, monkeypatch
 ):
