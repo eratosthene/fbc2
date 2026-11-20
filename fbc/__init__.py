@@ -57,6 +57,7 @@ SKIP_VIEWS_COMMANDS = {
     "combine-receipts",
     "backfill-earnings",
     "set-listing-skus",
+    "update-listing-descriptions",
     "archive",
     "sort-other-items",
     "pictures-import",
@@ -480,6 +481,31 @@ def set_listing_skus(apply, overwrite, item, limit, csv_path):
         say("Wrote " + str(len(result["skipped"])) + " skipped to " + csv_path + ".")
     if not apply:
         say("This was a dry run. Add --apply to change the listings.")
+
+
+@app.cli.command("update-listing-descriptions")
+@click.option(
+    "--apply", is_flag=True, help="Change the listings; without it, only show."
+)
+@click.option("--item", help="Only this eBay item ID.")
+@click.option("--limit", type=int, help="Change at most this many listings.")
+def update_listing_descriptions(apply, item, limit):
+    """Give active listings the description the Description Template makes."""
+    from fbc.ebay import redescribe
+
+    try:
+        counts = redescribe.update_all(
+            apply=apply, item=item, limit=limit, echo=click.echo
+        )["counts"]
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    click.echo("")
+    click.echo(("Set " if apply else "Would set ") + str(counts[redescribe.SET]) + ".")
+    click.echo("Already right: " + str(counts[redescribe.RIGHT]) + ".")
+    for reason in redescribe.SKIP_REASONS:
+        click.echo("Skipped, " + reason + ": " + str(counts[reason]) + ".")
+    if not apply:
+        click.echo("This was a dry run. Add --apply to change the listings.")
 
 
 def _register_views():
