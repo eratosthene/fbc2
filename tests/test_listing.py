@@ -12,7 +12,6 @@ from fbc.ebay.describe import (
     build_title,
     format_specifics,
     parse_specifics,
-    split_grading,
 )
 from fbc.ebay.drafts import build_item, check_ready, new_draft
 from fbc.ebay.publish import publish_draft
@@ -64,7 +63,8 @@ def _carnaval(**unit_kwargs):
     fields = dict(
         name="Spyro Gyra - Carnaval (1980)",
         unit_type='12" LP',
-        grading="VG+/VG+",
+        record_grade="VG+",
+        sleeve_grade="VG+",
         pressing="US Original",
         matrix="MCA-2395-MD3 MASTERDISK RL",
         description="Cover looks great, very little wear.",
@@ -141,7 +141,7 @@ def test_item_specifics_strip_discogs_disambiguation_and_skip_missing_catno(app)
 
 
 def test_item_specifics_without_discogs_release_use_unit_fields(app):
-    unit = Unit(name="Mystery", unit_type='12" LP', grading="VG", pressing="")
+    unit = Unit(name="Mystery", unit_type='12" LP', record_grade="VG", pressing="")
     specifics = build_item_specifics(unit, defaults={})
 
     assert specifics == {
@@ -152,18 +152,16 @@ def test_item_specifics_without_discogs_release_use_unit_fields(app):
     }
 
 
-@pytest.mark.parametrize(
-    "grading,expected",
-    [
-        ("VG+/VG+", ("VG+", "VG+")),
-        ("NM or M-/VG", ("NM or M-", "VG")),
-        ("VG+", ("VG+", None)),
-        ("", (None, None)),
-        (None, (None, None)),
-    ],
-)
-def test_split_grading(grading, expected):
-    assert split_grading(grading) == expected
+def test_inlay_condition_is_the_dust_jacket_grade_when_there_is_one(app):
+    unit = Unit(name="U", unit_type='12" LP', sleeve_grade="VG", pressing="")
+    specifics = build_item_specifics(unit, defaults={})
+    # No dust jacket grade: the sleeve's, as before.
+    assert specifics["Inlay Condition"] == ["Very Good (VG)"]
+
+    unit.dust_jacket_grade = "NM"
+    specifics = build_item_specifics(unit, defaults={})
+    assert specifics["Sleeve Grading"] == ["Very Good (VG)"]
+    assert specifics["Inlay Condition"] == ["Near Mint (NM or M-)"]
 
 
 def test_specifics_text_round_trips():

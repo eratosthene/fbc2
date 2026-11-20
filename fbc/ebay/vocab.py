@@ -19,7 +19,7 @@ DEFAULT_SPECIFICS = {
 }
 
 
-# Goldmine grade abbreviations, as Unit.grading stores them, to the wording
+# Goldmine grade abbreviations, as a Unit's grades store them, to the wording
 # eBay uses for the Record Grading / Sleeve Grading specifics. This is also
 # the wording Discogs uses for its Media/Sleeve Condition fields.
 GRADES = {

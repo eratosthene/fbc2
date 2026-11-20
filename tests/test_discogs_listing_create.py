@@ -13,7 +13,7 @@ from fbc.discogs import client as discogs_client, listing as discogs_listing
 from fbc.core import devmode
 from fbc.models.discogs import DiscogsInstance, DiscogsListing
 from fbc.models.ebay import EbayDraft, EbayListing
-from fbc.models.inventory import StorageBox
+from fbc.models.inventory import StorageBox, Unit
 from fake_pictures import give_pictures
 from test_discogs_listings import _item
 from test_listing import SETTINGS, _carnaval
@@ -88,8 +88,10 @@ def _url(unit):
         (None, (None, None)),
     ],
 )
-def test_grading_maps_to_discogs_conditions(grading, expected):
-    assert discogs_listing.conditions_from_grading(grading) == expected
+def test_grades_map_to_discogs_conditions(grading, expected):
+    record, _, sleeve = (grading or "").partition("/")
+    unit = Unit(record_grade=record or None, sleeve_grade=sleeve or None)
+    assert discogs_listing.conditions_for(unit) == expected
 
 
 def test_every_mapped_name_is_one_discogs_accepts():

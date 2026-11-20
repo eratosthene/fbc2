@@ -17,19 +17,6 @@ from fbc.ebay import credits, vocab
 from fbc.ebay.credits import clean_name
 
 
-def split_grading(grading):
-    """
-    Split Unit.grading ("VG+/VG+", "NM or M-/VG", "VG+") into
-    (record, sleeve) abbreviations; either may be None.
-    """
-    if not grading:
-        return None, None
-    parts = [p.strip() for p in grading.split("/", 1)]
-    record = parts[0] or None
-    sleeve = parts[1] if len(parts) > 1 and parts[1] else None
-    return record, sleeve
-
-
 def grade_name(abbrev):
     if not abbrev:
         return None
@@ -208,10 +195,9 @@ def build_item_specifics(unit, defaults=None):
 
     put("Vinyl Matrix Number", unit.matrix)
     put("Edition", *editions)
-    record, sleeve = split_grading(unit.grading)
-    put("Record Grading", grade_name(record))
-    put("Sleeve Grading", grade_name(sleeve))
-    put("Inlay Condition", grade_name(sleeve))
+    put("Record Grading", grade_name(unit.record_grade))
+    put("Sleeve Grading", grade_name(unit.sleeve_grade))
+    put("Inlay Condition", grade_name(unit.dust_jacket_grade or unit.sleeve_grade))
 
     for name, values in (
         defaults if defaults is not None else vocab.DEFAULT_SPECIFICS
@@ -291,7 +277,7 @@ def build_title(unit):
         year = ""
         styles = []
     kind = (record_types(unit) or [""])[0]
-    record, _ = split_grading(unit.grading)
+    record = unit.record_grade
 
     def assemble(edition, reissue_year, styles):
         # "Reissue" goes after the type, the way people search for it; other

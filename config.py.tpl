@@ -260,5 +260,10 @@ DISCOGS_SETTINGS = {
     # Whether List on Discogs starts with Allow offers ticked (it can be
     # changed on each listing). On if left out, as eBay's BEST_OFFER is.
     'ALLOW_OFFERS': True,
+    # The ids of your collection's custom fields (Discogs numbers them per
+    # account; they are the "field_id"s in a synced release's Notes). Add Unit
+    # reads the Media and Sleeve Condition as the Record and Sleeve Grades, and
+    # the Dust Jacket Condition as the Dust Jacket Note. These are the defaults.
+    'COLLECTION_FIELD_IDS': {'media': 1, 'sleeve': 2, 'dust_jacket': 4},
 }
 

@@ -29,7 +29,7 @@ def _box(name="Discount Bin", units=12):
                 name=name + " record " + str(n),
                 unit_type='12" LP',
                 pressing="",
-                grading="NM",
+                record_grade="NM",
                 storage_box=box,
                 discogs_master="m" + name[:2] + str(n),
             )

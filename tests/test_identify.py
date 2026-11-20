@@ -494,17 +494,17 @@ def test_collect_never_reaches_discogs_in_dev_mode(dev_mode, monkeypatch):
     assert not collect.collection_form()["ok"]
 
 
-def test_grading_comes_from_the_two_conditions():
-    assert (
-        collect.grading_from(
-            {
-                "Media Condition": "Near Mint (NM or M-)",
-                "Sleeve Condition": "Very Good Plus (VG+)",
-            }
-        )
-        == "NM or M-/VG+"
-    )
-    assert collect.grading_from({"Sleeve Condition": "Good (G)"}) == "G"
+def test_grades_come_from_the_conditions():
+    assert collect.grades_from(
+        {
+            "Media Condition": "Near Mint (NM or M-)",
+            "Sleeve Condition": "Very Good Plus (VG+)",
+            "Dust Jacket Condition": "Original",
+        }
+    ) == {"record_grade": "NM or M-", "sleeve_grade": "VG+"}
+    assert collect.grades_from({"Sleeve Condition": "Good (G)"}) == {
+        "sleeve_grade": "G"
+    }
 
 
 def test_collect_page_posts_then_goes_to_add_unit(monkeypatch, client):
@@ -524,6 +524,7 @@ def test_collect_page_posts_then_goes_to_add_unit(monkeypatch, client):
             "field_1": "Near Mint (NM or M-)",
             "field_2": "Very Good Plus (VG+)",
             "field_3": "ex-radio",
+            "field_4": "Good (G)",
         },
     )
     assert r.status_code == 302
@@ -531,7 +532,8 @@ def test_collect_page_posts_then_goes_to_add_unit(monkeypatch, client):
     assert "discogs_instance=555" in location and "discogs_release=9" in location
     assert "notes=ex-radio" in location and "matrix=A1" in location
     assert "(1977)" in location and "pressing=US+1978+Original" in location
-    assert "grading=NM+or+M-/VG%2B" in location
+    assert "dust_jacket_note=Good+(G)" in location
+    assert "record_grade=NM+or+M-" in location and "sleeve_grade=VG%2B" in location
 
 
 def _lot_with_folder(folder_id):
