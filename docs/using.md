@@ -179,6 +179,11 @@ Units, and a lot's price evenly between its Units.
 Adding a Unit without a Retail Price still saves it, but warns, with a link to
 edit the Unit and add one.
 
+A Unit's page has a **Links** row with the same links as the Links column of the
+Units list: its Discogs release and master, its eBay Listing or List on eBay, its
+Discogs listing or List on Discogs, Pictures, and its Sales Receipt with that
+receipt's orders.
+
 ### Grades and notes
 
 A Unit has a grade and a note for each of its parts, and Extras:

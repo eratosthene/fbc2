@@ -69,6 +69,36 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
         "link_column",
     ]
     label_columns = {"fmt_retail_price": "Retail Price", "link_column": "Links"}
+    # Every column the page showed before it had a list of its own, plus the
+    # Links, which are the same cell the list shows.
+    show_columns = [
+        "name",
+        "link_column",
+        "unit_type",
+        "description",
+        "discogs_release",
+        "discogs_instance",
+        "discogs_master",
+        "ebay_listing",
+        "purchase_lot",
+        "storage_box",
+        "sales_receipt",
+        "grading",
+        "record_grade",
+        "record_note",
+        "sleeve_grade",
+        "sleeve_note",
+        "dust_jacket_grade",
+        "dust_jacket_note",
+        "extras",
+        "pressing",
+        "matrix",
+        "notes",
+        "retail_price",
+        "sold",
+        "sold_price",
+        "archived",
+    ]
     search_columns = [
         "name",
         "unit_type",

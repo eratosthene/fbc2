@@ -245,9 +245,9 @@ class Unit(Model):
                 + "</a><br/>"
             )
             if self.sales_receipt.ebay_orders:
-                ret = ret + self.sales_receipt.fmt_ebay_order(False)
+                ret = ret + self.sales_receipt.fmt_ebay_order(False) + "<br/>"
             if self.sales_receipt.discogs_orders:
-                ret = ret + self.sales_receipt.fmt_discogs_order(False)
+                ret = ret + self.sales_receipt.fmt_discogs_order(False) + "<br/>"
         return Markup(ret)
 
     def _discogs_listing_link(self):
