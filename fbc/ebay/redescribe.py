@@ -14,6 +14,7 @@ Everything goes through api._call(), and so through api.trading(): in dev mode
 it refuses, and nothing reaches eBay.
 """
 
+import hashlib
 import time
 
 from fbc.core import devmode
@@ -34,6 +35,10 @@ FAILED = "eBay refused the change"
 SKIP_REASONS = (NO_UNIT, SEVERAL, NO_NOTES, MYSTERY, FAILED)
 
 
+def fingerprint(description):
+    return hashlib.sha1(description.encode("utf-8")).hexdigest()
+
+
 def decide(listing, units, draft):
     """
     (outcome, new description or None) for one listing. `units` are the Units
@@ -52,6 +57,8 @@ def decide(listing, units, draft):
     ):
         return NO_NOTES, None
     new = describe.build_description(unit)
+    if listing.description_hash == fingerprint(new):
+        return RIGHT, None
     if draft is not None and draft.description == new:
         return RIGHT, None
     return SET, new
@@ -109,8 +116,10 @@ def update_all(apply=False, item=None, limit=None, echo=None, pause=PAUSE_SECOND
                 if errors:
                     outcome = FAILED
                     echo("Failed " + listing.item_id + ": " + " ".join(errors))
-                elif draft is not None:
-                    draft.description = new
+                else:
+                    listing.description_hash = fingerprint(new)
+                    if draft is not None:
+                        draft.description = new
                     db.session.commit()
             if outcome == SET:
                 echo(

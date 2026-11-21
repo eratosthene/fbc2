@@ -266,8 +266,8 @@ one unsold Unit that has notes or Extras, it builds the description a new eBay
 Draft would get and sets it with a revise that sends only the item ID and the
 description. It leaves alone a mystery box, a listing with no Unit or several,
 and a Unit with no notes yet. A description you wrote by hand on a Draft or on
-eBay is replaced, and the listing's last eBay Draft takes the new text, so a
-second run finds it already right.
+eBay is replaced. fbc remembers what it set, so a second run skips the listings
+already done, and sets one again only if its Unit's notes change.
 
 Run it in this order. The first only shows what it would do:
 

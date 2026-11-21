@@ -66,6 +66,18 @@ def test_apply_updates_the_drafts_text_and_then_it_is_already_right(monkeypatch)
     assert counts[redescribe.RIGHT] == 1 and fake.revised == []
 
 
+def test_a_listing_with_no_draft_is_already_right_on_a_second_run(monkeypatch):
+    unit = _listing()
+    _run(monkeypatch, apply=True)
+    counts, fake, lines = _run(monkeypatch, apply=True)
+    assert counts[redescribe.RIGHT] == 1 and fake.revised == [] and lines == []
+    # Changing the Unit's notes makes it worth setting again.
+    unit.record_note = "Plays even better."
+    db.session.commit()
+    counts, fake, _ = _run(monkeypatch, apply=True)
+    assert counts[redescribe.SET] == 1 and len(fake.revised) == 1
+
+
 def test_a_failed_revise_is_counted_and_the_draft_is_kept(monkeypatch):
     unit = _listing()
     draft = EbayDraft(unit=unit, title="T", description="old", ebay_listing_id="1")
