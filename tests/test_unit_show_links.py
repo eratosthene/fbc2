@@ -73,6 +73,8 @@ def test_show_has_every_link_the_list_has(client):
         "/sell/order/D-1",
     ):
         assert link in html
+    # Each order is on its own line.
+    assert '</a><br/><a href="https://www.discogs.com/sell/order/D-1' in html
     # Sold, so neither List on link.
     assert "List&nbsp;on" not in html
 
