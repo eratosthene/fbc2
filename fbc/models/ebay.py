@@ -63,6 +63,10 @@ class EbayListing(Model):
     archived = Column(
         Boolean, nullable=False, default=False, server_default=false(), index=True
     )
+    # A hash of the description update-listing-descriptions last set on eBay,
+    # so a second run knows which listings are done. Many old listings have no
+    # eBay Draft to remember it on. See fbc/ebay/redescribe.py.
+    description_hash = Column(String(40))
 
     def __unicode__(self):
         return self.item_id + ": " + self.title + " $" + f"{self.price:.2f}"
