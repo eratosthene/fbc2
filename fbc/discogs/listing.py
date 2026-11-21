@@ -12,7 +12,9 @@ devmode.on() first, so nothing is tried).
 """
 
 import datetime
+import html
 import logging
+import re
 
 from fbc.discogs import client as discogs_client
 from fbc.core import devmode, localtime
@@ -20,6 +22,7 @@ from fbc.ebay.api import listing_settings
 from fbc.ebay.describe import build_item_specifics, disc_count
 from fbc.ebay.drafts import default_weight
 from fbc.ebay.skus import sku
+from fbc.ebay.template import CLOSING
 from fbc.models.discogs import (
     DRAFT,
     FOR_SALE,
@@ -106,6 +109,53 @@ def default_allow_offers():
     return bool(current_app.config["DISCOGS_SETTINGS"].get("ALLOW_OFFERS", True))
 
 
+_TAG = re.compile(r"<[^>]*>")
+_CODE = re.compile(r"\[/?[a-z*]+(?:=[^\]]*)?\]", re.IGNORECASE)
+_LINK = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+
+
+def plain(text):
+    """
+    `text` as one line of plain text for Discogs's Comments, which take no
+    formatting: HTML tags, forum codes like [b], links and entities like &amp; are removed or turned into their characters, and
+    runs of spaces and line breaks become one space.
+    """
+    text = _LINK.sub("", _CODE.sub("", _TAG.sub("", html.unescape(text or ""))))
+    text = re.sub(r"[<>\[\]]", "", text)
+    return " ".join(text.split())
+
+
+def _comment_line(label, grade, note):
+    """ "Sleeve (VG+): note", leaving out whatever the Unit doesn't have."""
+    grade, note = plain(grade), plain(note)
+    if not (grade or note):
+        return ""
+    head = label + (" (" + grade + ")" if grade else "")
+    return head + (": " + note if note else "")
+
+
+def build_comments(unit):
+    """
+    The Comments for `unit`, in plain text, a line each for the sleeve, dust
+    jacket and record, then Extras, then the closing line the eBay description
+    ends with. Only the Unit's own facts, nothing from Discogs. A Unit with no
+    notes or Extras yet keeps its old Description, as the eBay description
+    does. The text is short, since Discogs's limit on a comment isn't known.
+    """
+    if not any(
+        [unit.record_note, unit.sleeve_note, unit.dust_jacket_note, unit.extras]
+    ):
+        return plain(unit.description)
+    lines = [
+        _comment_line("Sleeve", unit.sleeve_grade, unit.sleeve_note),
+        _comment_line("Dust jacket", unit.dust_jacket_grade, unit.dust_jacket_note),
+        _comment_line("Record", unit.record_grade, unit.record_note),
+        plain(unit.extras),
+        CLOSING,
+    ]
+    return "\n".join(line for line in lines if line)
+
+
 def defaults(unit):
     """What the List on Discogs form starts with for `unit`."""
     media, sleeve = conditions_for(unit)
@@ -114,7 +164,7 @@ def defaults(unit):
         "condition": media,
         "sleeve_condition": sleeve,
         "price": None if unit.retail_price is None else f"{unit.retail_price:.2f}",
-        "comments": unit.description or "",
+        "comments": build_comments(unit),
         "allow_offers": default_allow_offers(),
         "weight": weight_grams(unit),
         "external_id": sku(unit.id),
