@@ -207,7 +207,8 @@ and 4. They are the `field_id`s in a synced release's Notes.
 
 The old Grading field (like `VG+/VG`) is no longer shown or used. Its values
 were copied into Record Grade and Sleeve Grade when fbc was updated. The old
-Description is still there and still used as the Discogs listing's Comments.
+Description is still there. List on Discogs uses it as the Comments only for a
+Unit with no notes or Extras yet.
 
 #### The eBay Draft's description
 
@@ -515,7 +516,15 @@ eBay. Nothing is posted until you press the button, and posting makes a
      (Very Good Plus (VG+) and so on). A grade Discogs has no word for, such
      as EX, or a Unit with no Sleeve Grade, leaves that box on "(choose)".
    - **Price** is the Unit's retail price.
-   - **Comments** are the Unit's Description, shown to buyers.
+   - **Comments** are shown to buyers, in plain text (Discogs takes no
+     formatting there). They are built from the Unit: a line each for the
+     Sleeve, Dust jacket and Record, like `Sleeve (VG+): Light ring wear.`,
+     then the Extras, then "All records are ultrasonically cleaned." Anything
+     the Unit doesn't have is left out. Tags, links and forum codes in a note
+     are removed. A Unit with no notes or Extras yet starts with its old
+     Description. Edit the text in the form if you like. fbc keeps it short,
+     as I couldn't confirm Discogs's limit on a comment. Nothing from Discogs
+     goes in it.
    - **Allow offers** starts ticked. Set `'ALLOW_OFFERS': False` in
      `DISCOGS_SETTINGS` in `config.py` to start it unticked.
    - **Weight (grams)** is eBay Drafts' package weight (by record size and

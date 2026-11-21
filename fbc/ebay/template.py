@@ -33,7 +33,13 @@ FIELDS = {
 }
 GRADES = {"record_grade", "sleeve_grade", "dust_jacket_grade"}
 
-DEFAULT = """\
+# The line every description ends with. List on Discogs ends its Comments with
+# the same words, so they live here once. (A template the owner has edited
+# keeps whatever closing line they gave it; Discogs's stays this.)
+CLOSING = "All records are ultrasonically cleaned."
+
+DEFAULT = (
+    """\
 {if sleeve_grade or sleeve_note or dust_jacket_grade or dust_jacket_note or record_grade or record_note}
 <h3>Condition</h3>
 <ul>
@@ -59,8 +65,11 @@ DEFAULT = """\
 {if matrix}<li><b>Matrix:</b> {matrix}</li>{end}
 </ul>
 {end}
-<p>All records are ultrasonically cleaned.</p>
+<p>"""
+    + CLOSING
+    + """</p>
 """
+)
 
 NAME = "ebay"
 MARK = re.compile(r"\{([^{}]*)\}")

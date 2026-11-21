@@ -130,6 +130,73 @@ def test_a_unit_without_a_description_starts_with_no_comments(app):
     assert discogs_listing.defaults(unit)["comments"] == ""
 
 
+def test_comments_are_built_from_the_grades_and_notes(app):
+    unit = _unit(
+        record_grade="VG+",
+        record_note="Plays quietly.",
+        sleeve_grade="VG",
+        sleeve_note="Light ring wear.",
+        dust_jacket_note="Original.",
+        extras="Includes the poster.",
+    )
+
+    assert discogs_listing.defaults(unit)["comments"] == (
+        "Sleeve (VG): Light ring wear.\n"
+        "Dust jacket: Original.\n"
+        "Record (VG+): Plays quietly.\n"
+        "Includes the poster.\n"
+        "All records are ultrasonically cleaned."
+    )
+
+
+def test_comments_leave_out_what_the_unit_does_not_have(app):
+    unit = _unit(record_grade="NM", record_note="Like new.", sleeve_grade=None)
+
+    assert discogs_listing.defaults(unit)["comments"] == (
+        "Record (NM): Like new.\nAll records are ultrasonically cleaned."
+    )
+
+
+def test_a_grade_with_no_note_still_shows(app):
+    unit = _unit(sleeve_grade="VG+", extras="Obi included.")
+
+    assert discogs_listing.defaults(unit)["comments"].splitlines()[0] == "Sleeve (VG+)"
+
+
+def test_comments_are_plain_text_with_no_markup_or_links(app):
+    unit = _unit(
+        record_grade=None,
+        sleeve_grade=None,
+        record_note="<b>Clean</b> disc [b]really[/b]\n\n  see https://example.com/x",
+        sleeve_note="Seam split, www.example.com for photos",
+        extras="<p>Poster &amp; insert</p>",
+    )
+
+    comments = discogs_listing.defaults(unit)["comments"]
+
+    assert comments == (
+        "Sleeve: Seam split, for photos\n"
+        "Record: Clean disc really see\n"
+        "Poster & insert\n"
+        "All records are ultrasonically cleaned."
+    )
+    for bad in ("<", ">", "[", "]", "http", "www."):
+        assert bad not in comments
+
+
+def test_a_unit_with_no_notes_keeps_its_description_as_comments(app):
+    unit = _unit(record_grade="VG+", sleeve_grade="VG+")
+
+    assert discogs_listing.defaults(unit)["comments"] == "Light ring wear"
+
+
+def test_the_closing_line_is_the_ebay_templates(app):
+    from fbc.ebay import template
+
+    assert template.CLOSING in template.DEFAULT
+    assert template.CLOSING in discogs_listing.build_comments(_unit(extras="x"))
+
+
 def test_allow_offers_follows_the_setting(app, monkeypatch):
     monkeypatch.setitem(fbc.app.config["DISCOGS_SETTINGS"], "ALLOW_OFFERS", False)
 
