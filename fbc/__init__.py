@@ -612,9 +612,9 @@ def _register_views():
         appbuilder.add_view(
             DescriptionTemplateView, "Description Template", category="Sales"
         )
-        appbuilder.add_view(OrdersToShipView, "Orders to Ship", category="Tasks")
+        appbuilder.add_view(OrdersToShipView, "Orders to Ship (eBay)", category="Tasks")
         appbuilder.add_view(
-            DiscogsOrdersToShipView, "Discogs Orders to Ship", category="Tasks"
+            DiscogsOrdersToShipView, "Orders to Ship (Discogs)", category="Tasks"
         )
         appbuilder.add_view(
             FailedEndingsView, "Listings to End by Hand", category="Tasks"
