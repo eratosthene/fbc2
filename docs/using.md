@@ -225,6 +225,13 @@ cleaned." A part with nothing to say is left out. It has plain tags only, no
 links or styles, and nothing from Discogs. You can still edit any Draft's
 description by hand.
 
+The Draft's page shows the description as buyers will see it, in a frame with no
+scripts (eBay strips them too). **Phone** and **Desktop** buttons above it set
+its width to about 375 px or the full width, since eBay shows descriptions
+narrow on phones; fbc remembers your choice in the browser. **Show HTML** under
+it has the raw text to copy. **Edit** has the same preview under the
+Description box, and it updates as you type.
+
 **Sales > Description Template** edits the template. It is HTML with a few marks
 in braces:
 

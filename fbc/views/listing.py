@@ -27,6 +27,7 @@ DRAFTS_TO_LIST_FILTERS = {"_flt_3_status": "draft"}
 class EbayDraftModelView(CustomModelView):
     datamodel = SQLAInterface(EbayDraft)
     show_template = "ebay_draft/show.html"
+    edit_template = "ebay_draft/edit.html"
     list_widget = EbayDraftListWidget
     base_order = ("id", "desc")
     base_permissions = [
@@ -63,7 +64,6 @@ class EbayDraftModelView(CustomModelView):
         "best_offer",
         "status",
         "weight_oz",
-        "description",
         "item_specifics",
         "ebay_listing",
     ]

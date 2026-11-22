@@ -1,0 +1,7 @@
+{% extends "crud/edit.html" %}
+{# Edit Draft, with a live preview of the description under its box. #}
+{% block edit_form %}
+{{ super() }}
+{% set preview_live = true %}
+{% include "ebay_draft/_preview.html" %}
+{% endblock %}
