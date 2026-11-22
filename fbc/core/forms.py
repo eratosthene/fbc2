@@ -1,6 +1,6 @@
 import logging
 
-from flask import request
+from flask import redirect, request, session, url_for
 from flask_wtf import FlaskForm
 from flask_appbuilder import ModelView
 from flask_appbuilder.models.filters import BaseFilter
@@ -34,6 +34,33 @@ class CustomModelView(ModelView):
     edit_template = "crud/edit.html"
     add_template = "crud/add.html"
     show_template = "crud/show.html"
+
+    def list_url_came_from(self):
+        """
+        The list this view was last opened at in this session, with its
+        filters and page, as a relative URL; the plain list if there is none.
+
+        Flask-AppBuilder pushes every list and Show page it renders onto a
+        short per-session history. get_redirect() isn't used because it
+        returns the entry below the newest, which is the list only for one
+        Show page: with Show open in two tabs it is the other Show. So this
+        looks back through the history for this view's own list. Only the
+        path and query are kept, so it can never leave the site.
+        """
+        from urllib.parse import urlsplit
+
+        plain = url_for(self.endpoint + ".list")
+        for url in reversed(session.get("page_history") or []):
+            if not isinstance(url, str):
+                continue
+            parts = urlsplit(url)
+            if parts.path == plain:
+                return plain + ("?" + parts.query if parts.query else "")
+        return plain
+
+    def back_to_list(self):
+        """Redirect to the list the owner came from: for the last step on an item."""
+        return redirect(self.list_url_came_from())
 
     def _init_properties(self):
         """

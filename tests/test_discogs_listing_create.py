@@ -659,3 +659,26 @@ def test_the_write_functions_refuse_in_dev_mode_even_if_called_directly(
     with pytest.raises(discogs_client.DiscogsAuthError):
         discogs_listing.make_for_sale(row)
     assert devmode.on()
+
+
+def test_make_for_sale_goes_back_to_the_list_it_came_from(client, fake):
+    _draft_on_discogs(fake, _unit())
+    list_url = "/discogslistingmodelview/list/?_flt_0_status=Draft"
+    client.get(list_url)
+    client.get("/discogslistingmodelview/show/7001")
+
+    response = client.post("/discogslistingmodelview/makeforsale/7001")
+
+    assert response.headers["Location"].endswith(list_url)
+
+
+def test_make_for_sale_that_discogs_refuses_stays_on_the_listing(client, fake):
+    _draft_on_discogs(fake, _unit())
+    fake.account.fail = failing(
+        "update_listing", api_error(422, "You must add a picture.")
+    )
+    client.get("/discogslistingmodelview/list/")
+
+    response = client.post("/discogslistingmodelview/makeforsale/7001")
+
+    assert response.headers["Location"].endswith("/show/7001")

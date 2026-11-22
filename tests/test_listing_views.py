@@ -696,3 +696,112 @@ def test_edit_draft_page_has_a_live_preview_of_the_description(client):
     assert '<iframe sandbox=""' in html
     assert "allow-scripts" not in html
     assert 'id="description"' in html
+
+
+LIST = "/ebaydraftmodelview/list/?_flt_3_status=draft&page_EbayDraftModelView=1"
+
+
+def _open_draft(client):
+    unit = _carnaval()
+    client.get("/ebaydraftmodelview/fromunit/" + str(unit.id))
+    draft = db.session.query(EbayDraft).one()
+    give_pictures(draft, ["https://i.ebayimg.com/a.jpg"])
+    return draft
+
+
+def _ebay_accepts(monkeypatch):
+    def fake_call(verb, data):
+        resp = {"ItemID": "123", "StartTime": "2026-10-29T16:00:00.000Z"}
+        return resp, api.summarize_response(resp)
+
+    monkeypatch.setattr(api, "_call", fake_call)
+
+
+def test_publishing_goes_back_to_the_list_it_was_opened_from(client, monkeypatch):
+    _ebay_accepts(monkeypatch)
+    draft = _open_draft(client)
+    show = "/ebaydraftmodelview/show/" + str(draft.id)
+    client.get(LIST)
+    client.get(show)
+    # Check with eBay stays on the Draft, and doesn't lose the way back.
+    client.get(show)
+
+    response = client.post("/ebaydraftmodelview/publish/" + str(draft.id))
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(LIST)
+
+
+def test_publishing_with_the_draft_open_in_two_tabs_still_finds_the_list(
+    client, monkeypatch
+):
+    _ebay_accepts(monkeypatch)
+    draft = _open_draft(client)
+    client.get(LIST)
+    client.get("/ebaydraftmodelview/show/" + str(draft.id))
+    client.get("/ebaydraftmodelview/show/" + str(draft.id + 1000))  # another tab
+
+    response = client.post("/ebaydraftmodelview/publish/" + str(draft.id))
+
+    assert response.headers["Location"].endswith(LIST)
+
+
+def test_publishing_with_no_list_history_goes_to_the_plain_list(client, monkeypatch):
+    _ebay_accepts(monkeypatch)
+    draft = _open_draft(client)
+
+    response = client.post("/ebaydraftmodelview/publish/" + str(draft.id))
+
+    assert response.headers["Location"].endswith("/ebaydraftmodelview/list/")
+
+
+def test_a_next_value_in_the_request_is_ignored(client, monkeypatch):
+    _ebay_accepts(monkeypatch)
+    draft = _open_draft(client)
+    client.get(LIST)
+
+    response = client.post(
+        "/ebaydraftmodelview/publish/" + str(draft.id) + "?next=https://evil.example/",
+        data={"next": "//evil.example/"},
+    )
+
+    assert response.headers["Location"].endswith(LIST)
+
+
+def test_a_publish_that_fails_stays_on_the_draft(client, monkeypatch):
+    def fake_call(verb, data):
+        return None, {"errors": ["eBay said no."], "warnings": [], "fees": []}
+
+    monkeypatch.setattr(api, "_call", fake_call)
+    draft = _open_draft(client)
+    client.get(LIST)
+    client.get("/ebaydraftmodelview/show/" + str(draft.id))
+
+    response = client.post("/ebaydraftmodelview/publish/" + str(draft.id))
+
+    assert draft.status == "draft"
+    assert response.headers["Location"].endswith("/show/" + str(draft.id))
+
+
+def test_a_publish_that_needs_publish_anyway_stays_on_the_draft(client, monkeypatch):
+    from fbc.ebay import insertions
+
+    monkeypatch.setattr(insertions, "publish_warning", lambda summary: "Fees!")
+    draft = _open_draft(client)
+    client.get(LIST)
+
+    response = client.post("/ebaydraftmodelview/publish/" + str(draft.id))
+
+    assert response.headers["Location"].endswith("/show/" + str(draft.id))
+
+
+def test_a_publish_in_dev_mode_stays_on_the_draft(client, monkeypatch):
+    from fbc.core import devmode
+
+    monkeypatch.setattr(devmode, "on", lambda: True)
+    draft = _open_draft(client)
+    client.get(LIST)
+
+    response = client.post("/ebaydraftmodelview/publish/" + str(draft.id))
+
+    assert response.headers["Location"].endswith("/show/" + str(draft.id))

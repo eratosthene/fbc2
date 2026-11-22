@@ -348,9 +348,10 @@ class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
             discogs_listing.make_for_sale(row)
         except discogs_listing.ListingError as e:
             flash(str(e), "danger")
-        else:
-            flash("This listing is now For Sale on Discogs.", "success")
-        return back
+            return back
+        flash("This listing is now For Sale on Discogs.", "success")
+        # For Sale is the last step: the Drafts to List queue is next.
+        return self.back_to_list()
 
 
 class DiscogsOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
@@ -443,7 +444,7 @@ class DiscogsOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelVie
         happen; POST does it.
         """
         order = self._order(pk)
-        back = redirect(url_for("DiscogsOrderModelView.list"))
+        back = self.back_to_list()
         if order.sales_receipts:
             flash("This order already has a Sales Receipt.", "warning")
             return back

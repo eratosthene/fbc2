@@ -222,7 +222,7 @@ class ArchivableViewMixin:
         return self._set_archived(items, False)
 
     def _set_archived(self, items, value):
-        from flask import flash, redirect
+        from flask import flash
 
         from fbc import db
 
@@ -235,7 +235,9 @@ class ArchivableViewMixin:
             ("Archived " if value else "Unarchived ") + str(len(items)) + " records.",
             "success",
         )
-        return redirect(self.get_redirect())
+        # Not get_redirect(): the newest history entry is this list, so it
+        # goes to the page before it.
+        return self.back_to_list()
 
     def _hides_archived(self, filters):
         """Whether this request is this view's own list, with no say on Archived."""

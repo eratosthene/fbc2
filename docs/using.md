@@ -97,6 +97,14 @@ The To do banner on the home page counts each kind and links to its list, and
 the Tasks menu has the same lists. A task leaves its list as soon as the
 work is done, so there is nothing to tick off:
 
+Finishing the last step on an item you opened from a list takes you back to
+that list, with its filters and page kept, so the next one is there: Publish on
+an eBay Draft, Make it For Sale on a Discogs Draft, Ship This (eBay or Discogs),
+Re-list, and Archive. Check with eBay and the other steps stay on the item,
+since you need their result. If a step fails, or needs a second go (Publish
+anyway), you stay on the item. Opened without a list first, you land on the
+plain list.
+
 - **Orders to Ship (eBay)**: eBay Orders that have no Sales Receipt yet. Use Ship This
   on each. Archived orders are left out.
 
