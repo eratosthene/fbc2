@@ -251,3 +251,18 @@ def test_list_pages_open_syncs_in_the_modal(app, path, widget):
     assert 'id="fbc-sync-modal"' in page
     assert 'id="fbc-sync-close"' in page
     assert 'id="fbc-sync-refresh"' in page
+
+
+def test_a_sync_page_is_not_left_in_the_page_history(app, monkeypatch, inline_sync):
+    # /syncdiscogs starts a sync when it is opened, so a "go back" that landed
+    # on it would start one again.
+    from fbc.sync import jobs
+
+    monkeypatch.setattr(jobs, "sync_discogs", lambda: None)
+    client = signed_in_client(app)
+
+    client.get("/syncdiscogs", headers={"Accept": "text/html"})
+
+    with client.session_transaction() as session:
+        history = session.get("page_history") or []
+    assert not any("/syncdiscogs" in url for url in history)
