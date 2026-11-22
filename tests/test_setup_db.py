@@ -31,7 +31,7 @@ def _tables(db):
 def test_empty_database_is_built_from_the_models_and_stamped_at_head(
     db, run_setup_db, mocker
 ):
-    upgrade = mocker.patch("fbc.upgrade")
+    upgrade = mocker.patch("fbc.commands.data.upgrade")
     db.drop_all()
 
     result = run_setup_db()
@@ -46,8 +46,8 @@ def test_empty_database_is_built_from_the_models_and_stamped_at_head(
 
 
 def test_migrated_database_is_upgraded(db, run_setup_db, mocker):
-    upgrade = mocker.patch("fbc.upgrade")
-    stamp = mocker.patch("fbc.stamp")
+    upgrade = mocker.patch("fbc.commands.data.upgrade")
+    stamp = mocker.patch("fbc.commands.data.stamp")
     with db.engine.begin() as conn:
         conn.execute(sa.text("CREATE TABLE alembic_version (version_num VARCHAR(32))"))
 
@@ -60,8 +60,8 @@ def test_migrated_database_is_upgraded(db, run_setup_db, mocker):
 def test_database_from_before_migrations_is_upgraded(db, run_setup_db, mocker):
     # It has the app's tables (the shared fixture creates them) but has never
     # been stamped, so it needs every migration rather than a stamp.
-    upgrade = mocker.patch("fbc.upgrade")
-    stamp = mocker.patch("fbc.stamp")
+    upgrade = mocker.patch("fbc.commands.data.upgrade")
+    stamp = mocker.patch("fbc.commands.data.stamp")
     create_all = mocker.patch.object(db, "create_all")
     assert "alembic_version" not in _tables(db)
 

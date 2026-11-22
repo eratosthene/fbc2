@@ -7,7 +7,8 @@ a copy of live data. For the live server, see
 ## How `fbc/` is laid out
 
 `fbc/__init__.py` builds the app, `models/` and `views/` hold one module per
-area, and everything else is in a package by area (#157):
+area, and everything else is in a package by area (#157). The `flask` commands
+are in `commands/`, and the menu is built by `views/menu.py`:
 
 - `fbc/core/`: what every area uses and that knows nothing about eBay or
   Discogs. `settings.py`, `devmode.py`, `localtime.py`, `formatting.py` (price
@@ -39,6 +40,14 @@ area, and everything else is in a package by area (#157):
   keeps each try as a `ListingEnd`, and only logs in dev mode), `scheduler.py`
   is `flask scheduler`, and `notes.py` is the "last synced" note on a list. A sync's state module is imported as
   `state` (`from fbc.sync import state`).
+- `fbc/commands/`: the `flask` commands, the top layer. `data.py` is
+  `setup-db` and the data fixes and backfills, `syncing.py` is the `sync` group
+  (with `_run_sync`) and `scheduler`, and `listings.py` changes live eBay
+  listings. `register.py`'s `register(app)` attaches every command to
+  `app.cli`; `fbc/__init__.py` calls it. A new command goes in one of these
+  modules and in that list, and `tests/test_commands.py` has the names. A
+  command that needs no views is also added to `SKIP_VIEWS_COMMANDS` in
+  `fbc/__init__.py`.
 - `fbc/pictures/`: a Unit's pictures, kept for every marketplace (#140). The
   Unit's Pictures page is `views/pictures.py`; it and the eBay Draft page share
   `templates/pictures/upload_form.html` and `store.add_files`.
@@ -57,9 +66,12 @@ area, and everything else is in a package by area (#157):
   the Supply List, `combine.py` combines receipts, `archive.py`, `finance.py`
   (Purchase Lot money), `pricing.py` (what to ask), `tasks.py`, `index.py`
   and `cards.py` (the home page), and `widgets.py` (the Supplies Used field).
+- `fbc/views/`: one module per area, and `menu.py`, whose
+  `register_views(app, appbuilder)` adds every view and menu entry, in menu
+  order. `fbc/__init__.py` calls it unless views are skipped.
 
 The packages sit in layers, lowest first: `core`, `models`, `ebay`,
-`discogs` and `pictures`, `sync`, `sales`, then `views`. A module only imports from its own
+`discogs` and `pictures`, `sync`, `sales`, `views`, then `commands`. A module only imports from its own
 layer or lower, and within a layer the modules don't import each other in a
 circle. Package `__init__.py` files are empty, so importing one module never
 imports its neighbours. `models/` may import `core/` and modules that import
