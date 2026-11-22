@@ -305,6 +305,9 @@ class EbayDraftModelView(CustomModelView):
                 ),
                 "success",
             )
+            # Published, so it has left the Drafts to List queue: the list is
+            # where the next one is.
+            return self.back_to_list()
         return self._back(draft)
 
     @expose("/endandpark/<int:pk>/<item_id>", methods=["POST"])

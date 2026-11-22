@@ -672,3 +672,18 @@ def test_an_old_order_that_knows_no_listing_gets_one_made_for_it(client, finance
     client.post(url, data={"net_sold": "16.50"})
     assert db.session.query(OtherItem).one().sold is True
     assert db.session.query(SalesReceipt).one().net_sold == 16.5
+
+
+def test_ship_this_goes_back_to_the_orders_to_ship_list_it_came_from(client, finances):
+    _other()
+    order = _order()
+    list_url = "/orderstoshipview/list/?psize_OrdersToShipView=50"
+    client.get(list_url)
+
+    response = client.post(
+        "/orderstoshipview/ship/" + order.order_id, data={"net_sold": "16.50"}
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(list_url)
+    assert db.session.query(SalesReceipt).count() == 1

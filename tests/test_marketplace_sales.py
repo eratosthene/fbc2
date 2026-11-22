@@ -502,3 +502,29 @@ def test_the_home_page_shows_discogs_sales_and_failed_endings(client, discogs):
     assert client.get("/listingendmodelview/list/").status_code == 200
     assert client.get("/failedendingsview/list/").status_code == 200
     assert client.get("/discogsorderstoshipview/list/").status_code == 200
+
+
+def test_shipping_a_discogs_order_goes_back_to_the_list_it_came_from(client, discogs):
+    _discogs_order(_unit())
+    list_url = (
+        "/discogsordersToshipview/list/".lower() + "?psize_DiscogsOrdersToShipView=50"
+    )
+    client.get(list_url)
+
+    response = client.post(
+        "/discogsordersToshipview/ship/1-100".lower(), data={"net_sold": "20.50"}
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(list_url)
+    assert db.session.query(SalesReceipt).count() == 1
+
+
+def test_a_problem_shipping_a_discogs_order_stays_on_its_page(client, discogs):
+    _discogs_order(_unit())
+
+    response = client.post(
+        "/discogsordermodelview/ship/1-100", data={"net_sold": "lots"}
+    )
+
+    assert response.status_code == 200

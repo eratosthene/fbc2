@@ -268,3 +268,16 @@ def test_the_home_page_does_not_suggest_before_the_first_listings_sync(client):
     _parked("100", days_ago=9)
 
     assert "Nothing better to list" not in client.get("/").get_data(as_text=True)
+
+
+def test_a_relist_goes_back_to_the_filtered_list_it_was_on(client, monkeypatch):
+    _ebay(monkeypatch)
+    _parked("100", days_ago=3)
+    unit = db.session.query(type(_unit())).filter_by(ebay_listing_id="100").one()
+    _old_draft(unit, ebay_listing_id="100")
+    list_url = "/parkedlistingsview/list/?psize_ParkedListingsView=50"
+    client.get(list_url)
+
+    response = _post(client, "100")
+
+    assert response.headers["Location"].endswith(list_url)

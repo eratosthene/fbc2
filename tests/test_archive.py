@@ -319,3 +319,19 @@ def test_discogs_orders_can_be_archived_by_hand_and_hidden(client):
     )
     fbc.db.session.expire_all()
     assert shown.archived is False
+
+
+def test_archiving_from_a_list_stays_on_that_list_with_its_filters(client):
+    from test_listing import _carnaval
+
+    unit = _carnaval()
+    client.get("/")
+    list_url = "/unitmodelview/list/?psize_UnitModelView=50"
+    client.get(list_url)
+
+    response = client.post(
+        "/unitmodelview/action_post",
+        data={"action": "archive", "rowid": [str(unit.id)]},
+    )
+
+    assert response.headers["Location"].endswith(list_url)

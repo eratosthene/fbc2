@@ -448,7 +448,7 @@ class ParkedListingsBaseView(CustomModelView):
             flash(text, "warning")
         if outcome == relisting.DRAFTED:
             return redirect(url_for("EbayDraftModelView.show", pk=result["draft"].id))
-        return redirect(url_for(self.__class__.__name__ + ".list"))
+        return self.back_to_list()
 
 
 class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
@@ -526,7 +526,7 @@ class EbayOrderModelView(SyncedViewMixin, ArchivableViewMixin, CustomModelView):
         Discogs. GET shows what will happen; POST does it.
         """
         order = self._order(pk)
-        back = redirect(url_for("EbayOrderModelView.list"))
+        back = self.back_to_list()
         if order_receipt(order):
             flash("This order already has a Sales Receipt.", "warning")
             return back
