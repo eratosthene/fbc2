@@ -5,7 +5,10 @@ from flask_appbuilder import expose
 from flask_appbuilder.security.decorators import has_access
 from fbc.sales import pricing
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
+from flask_appbuilder.models.filters import BaseFilter
 from flask_appbuilder.models.sqla.interface import SQLAInterface
+from sqlalchemy import exists
+from wtforms import SelectField
 
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.models.supplies import ADDING_UNIT
@@ -49,12 +52,43 @@ UNIT_ADD_FORM_EXTRA_FIELDS = dict(
 )
 
 
+class FilterHasPictures(BaseFilter):
+    """
+    Units with (Yes) or without (No) a stored picture. Pictures have no
+    relationship on Unit (see fbc/models/pictures.py), so this tests for a
+    UnitPicture row. It sits on the Unit's id, and its value is "y" or "n".
+    """
+
+    name = "Has Pictures"
+    arg_name = "has_pictures"
+
+    def apply(self, query, value):
+        from fbc.models.pictures import UnitPicture
+
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else ""
+        has = exists().where(UnitPicture.unit_id == Unit.id).correlate(Unit)
+        return query.filter(~has if str(value).lower() in ("n", "no", "false") else has)
+
+
+class UnitInterface(SQLAInterface):
+    """Loads the Pictures counts of a page of Units in one query."""
+
+    def query(self, *args, **kwargs):
+        count, lst = super().query(*args, **kwargs)
+        # Flask-AppBuilder makes the interfaces of related models from this
+        # class too, so only Units get the counts.
+        if self.obj is Unit:
+            Unit.prime_picture_counts(lst)
+        return count, lst
+
+
 # The Units views share everything but the columns they list. They subclass
 # this rather than UnitModelView because Flask-AppBuilder attaches related
 # views by isinstance, so a subclass of UnitModelView would also show up on
 # every page that lists UnitModelView as related.
 class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
-    datamodel = SQLAInterface(Unit)
+    datamodel = UnitInterface(Unit)
     list_columns = [
         "name",
         "unit_type",
@@ -66,9 +100,18 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
         "sold",
         "purchase_lot",
         "storage_box",
+        "picture_count",
         "link_column",
     ]
-    label_columns = {"fmt_retail_price": "Retail Price", "link_column": "Links"}
+    label_columns = {
+        "fmt_retail_price": "Retail Price",
+        "link_column": "Links",
+        "picture_count": "Pictures",
+        "has_pictures": "Has Pictures",
+    }
+    search_form_extra_fields = {
+        "has_pictures": SelectField("Has Pictures", choices=[("y", "Yes"), ("n", "No")])
+    }
     # Every column the page showed before it had a list of its own, plus the
     # Links, which are the same cell the list shows.
     show_columns = [
@@ -121,6 +164,7 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
         "retail_price",
         "sold",
         "archived",
+        "has_pictures",
     ]
     edit_columns = [
         "name",
@@ -180,6 +224,9 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
 
     def _init_properties(self):
         super()._init_properties()
+        # Not a column, so Flask-AppBuilder made no filters for it.
+        for table in (self._filters._search_filters, self._filters._all_filters):
+            table["has_pictures"] = [FilterHasPictures("id", self.datamodel)]
         self.add_columns = self.add_columns + ["supplies_used"]
 
     def _init_forms(self):
