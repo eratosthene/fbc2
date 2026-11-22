@@ -31,6 +31,7 @@ LAYERS = {
     "sync": 3,
     "sales": 4,
     "views": 5,
+    "commands": 6,
 }
 
 # Modules that import nothing from fbc but core when they load, so models can

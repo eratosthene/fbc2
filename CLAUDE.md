@@ -22,12 +22,14 @@ file is what they don't say.
 
 ## Layout
 
-- `fbc/__init__.py` builds the app, the database and every view and menu
-  entry **at import time**, from the top-level `config` module.
+- `fbc/__init__.py` builds the app and the database, attaches the `flask`
+  commands and adds every view and menu entry **at import time**, from the
+  top-level `config` module. The commands are in `fbc/commands/`
+  (`register.py` attaches them), the menu in `fbc/views/menu.py`.
 - `fbc/core/`: settings, `devmode`, `localtime`, price formatting, the base
   form and view classes and the widgets. It imports nothing from the other
   areas. The areas are packages, lowest layer first: `core`, `models`, `ebay`
-  and `discogs`, `sync`, `sales`, then `views`; a module imports only from its
+  and `discogs`, `sync`, `sales`, `views`, then `commands`; a module imports only from its
   own layer or lower (`docs/development.md` has the detail).
 - `fbc/models/`: one module per area (inventory, discogs, ebay, sales,
   supplies, other). Other Items (`other.py`) are non-record eBay sales and must
