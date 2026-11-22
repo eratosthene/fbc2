@@ -161,7 +161,8 @@ class MyIndexView(IndexView):
         best = request.accept_mimetypes.best_match(["text/html", "application/json"])
         if best == "application/json":
             return jsonify(id=job_id, url=job_url)
-        self.update_redirect()
+        # No update_redirect() here: this URL starts a sync, so it must never
+        # be where a later "go back" lands.
         return self.render_template(
             "sync_job.html", appbuilder=self.appbuilder, job_url=job_url
         )
