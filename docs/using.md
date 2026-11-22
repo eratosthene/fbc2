@@ -97,10 +97,10 @@ The To do banner on the home page counts each kind and links to its list, and
 the Tasks menu has the same lists. A task leaves its list as soon as the
 work is done, so there is nothing to tick off:
 
-- **Orders to Ship**: eBay Orders that have no Sales Receipt yet. Use Ship This
+- **Orders to Ship (eBay)**: eBay Orders that have no Sales Receipt yet. Use Ship This
   on each. Archived orders are left out.
 
-- **Discogs Orders to Ship**: Discogs Orders that aren't cancelled and have no
+- **Orders to Ship (Discogs)**: Discogs Orders that aren't cancelled and have no
   Sales Receipt yet. Use Ship This on each.
 
 - **Listings to End by Hand**: a listing fbc tried to end and couldn't, after its
@@ -859,8 +859,8 @@ earnings.
 
 ### Ship This for a Discogs order
 
-The Ship This link on a Discogs Order (the Discogs Orders list, or Discogs
-Orders to Ship) does for it what Ship This does for an eBay order, in one
+The Ship This link on a Discogs Order (the Discogs Orders list, or Orders to
+Ship (Discogs)) does for it what Ship This does for an eBay order, in one
 Sales Receipt for the order:
 
 - It finds the Units from the order's items. Every item must link to a Unit
@@ -982,7 +982,7 @@ category makes an **Other Item** (Sales > Other Items), with the listing's
 title as its name. Other Items are kept apart from records:
 
 - Their listings and orders leave the eBay Listings and eBay Orders lists. An
-  order for one still shows on Orders to Ship, until it's shipped.
+  order for one still shows on Orders to Ship (eBay), until it's shipped.
 - They are never in record stock, cost or profit, or in the Sales by
   marketplace table on the home page. The Other items line has what they sold:
   how many, the Sold Price and Net Sold of their Sales Receipts, and a profit.
