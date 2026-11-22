@@ -671,6 +671,13 @@ shows on the draft and what you add there shows here. The page has the same
 add, Make main, Remove and Rotate left and right as the draft page; see
 [Pictures on an eBay Draft](#pictures-on-an-ebay-draft) for what each does.
 
+**Finding Units with pictures.** Every Units list, including the Units to
+Draft lists, has a **Pictures** column before Links that counts each Unit's
+pictures; a Unit with none shows a bold 0. The column can't be sorted. In the
+list's Search, **Has Pictures** set to Yes shows only Units with pictures, and
+No only those without. It adds to the list's own filters, so on Units to Draft
+(Discogs) it narrows that list to the Units that are ready to draft.
+
 **Taking them to Discogs.** fbc can't send pictures to Discogs, because its API
 has no photo upload, so they go in by hand, on the Discogs listing: Edit Details,
 then Add Photos. The Pictures page helps two ways:

@@ -205,6 +205,33 @@ class Unit(Model):
         else:
             return s
 
+    @classmethod
+    def prime_picture_counts(cls, units):
+        """Counts the pictures of all these Units in one query, for picture_count."""
+        from sqlalchemy import func
+        from fbc import db
+        from fbc.models.pictures import UnitPicture
+
+        ids = [u.id for u in units if u.id]
+        counts = (
+            dict(
+                db.session.query(UnitPicture.unit_id, func.count(UnitPicture.id))
+                .filter(UnitPicture.unit_id.in_(ids))
+                .group_by(UnitPicture.unit_id)
+                .all()
+            )
+            if ids
+            else {}
+        )
+        for u in units:
+            u._picture_count = counts.get(u.id, 0)
+
+    def picture_count(self):
+        """How many pictures the Unit has; 0 stands out so it's easy to spot."""
+        if getattr(self, "_picture_count", None) is None:
+            self.prime_picture_counts([self])
+        return self._picture_count or Markup("<b>0</b>")
+
     def link_column(self):
         ret = ""
         if self.discogs_release:
