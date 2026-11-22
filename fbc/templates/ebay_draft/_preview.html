@@ -1,0 +1,63 @@
+{# A rendered preview of a Draft's description, as eBay shows it: no scripts run
+   (sandbox has no allow-scripts and no allow-same-origin). Needs `preview_html`,
+   the description text; the Edit page also sets `preview_live` to keep it in step
+   with the Description box. The text goes in srcdoc escaped with |e, never |safe. #}
+{% set base_style = "<style>body{margin:0;padding:16px;background:#fff;color:#333;font:15px/1.5 Arial,Helvetica,sans-serif;max-width:800px}img{max-width:100%;height:auto}</style>" %}
+<div class="draft-preview" data-base="{{ base_style|e }}"{% if preview_live %} data-live="1"{% endif %}>
+  <div class="btn-group btn-group-xs" style="margin-bottom: 6px">
+    <button type="button" class="btn btn-default" data-width="375">Phone</button>
+    <button type="button" class="btn btn-default" data-width="">Desktop</button>
+  </div>
+  <iframe sandbox="" srcdoc="{{ (base_style ~ (preview_html or ''))|e }}" style="display: block; width: 100%; height: 480px; min-height: 120px; resize: vertical; overflow: auto; border: 1px solid #ccc; background: #fff"></iframe>
+</div>
+<script>
+(function () {
+  var box = document.currentScript.previousElementSibling;
+  var frame = box.querySelector("iframe");
+  var buttons = box.querySelectorAll("button[data-width]");
+  var KEY = "fbc.descriptionPreviewWidth";
+  function setWidth(w) {
+    frame.style.width = w ? w + "px" : "100%";
+    frame.style.maxWidth = "100%";
+    buttons.forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-width") === w);
+    });
+  }
+  var saved = "";
+  try { saved = localStorage.getItem(KEY) || ""; } catch (e) {}
+  setWidth(saved === "375" ? "375" : "");
+  buttons.forEach(function (b) {
+    b.addEventListener("click", function () {
+      var w = b.getAttribute("data-width");
+      setWidth(w);
+      try { localStorage.setItem(KEY, w); } catch (e) {}
+    });
+  });
+  if (box.getAttribute("data-live")) {
+    var box_ta = document.getElementById("description");
+    var timer = null;
+    if (box_ta) {
+      // Under the Description box, not at the foot of a long form.
+      var row = box_ta.closest("tr") || box_ta.closest(".form-group");
+      if (row && row.parentNode) {
+        var holder = document.createElement(row.tagName === "TR" ? "tr" : "div");
+        var cell = holder;
+        if (row.tagName === "TR") {
+          holder.appendChild(document.createElement("td"));
+          cell = document.createElement("td");
+          holder.appendChild(cell);
+        }
+        cell.appendChild(box);
+        row.parentNode.insertBefore(holder, row.nextSibling);
+      }
+      box_ta.addEventListener("input", function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+          frame.srcdoc = box.getAttribute("data-base") + box_ta.value;
+        }, 300);
+      });
+      frame.srcdoc = box.getAttribute("data-base") + box_ta.value;
+    }
+  }
+})();
+</script>

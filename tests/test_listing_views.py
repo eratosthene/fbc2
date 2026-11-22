@@ -642,3 +642,57 @@ def test_draft_page_has_the_rotate_before_upload_preview(client):
 
     assert 'id="picture-previews"' in html
     assert "Rotate left" in html
+
+
+NASTY = 'He said "hi" & <script>alert(1)</script> <b>bold</b>'
+
+
+def _draft_with(description):
+    unit = _carnaval()
+    draft = drafts.new_draft(unit)
+    draft.description = description
+    db.session.add(draft)
+    db.session.commit()
+    return draft
+
+
+def test_draft_page_previews_the_description_in_a_sandboxed_frame(client):
+    draft = _draft_with(NASTY)
+
+    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
+        as_text=True
+    )
+
+    assert '<iframe sandbox=""' in html
+    assert "allow-scripts" not in html
+    assert "allow-same-origin" not in html
+    srcdoc = html.split('srcdoc="', 1)[1].split('"', 1)[0]
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in srcdoc
+    assert "&#34;hi&#34; &amp; " in srcdoc
+    assert "<script>alert(1)" not in html
+
+
+def test_draft_page_keeps_the_raw_html_under_a_toggle(client):
+    draft = _draft_with(NASTY)
+
+    html = client.get("/ebaydraftmodelview/show/" + str(draft.id)).get_data(
+        as_text=True
+    )
+
+    details = html.split("<details", 1)[1].split("</details>", 1)[0]
+    assert "Show HTML" in details
+    assert "&lt;b&gt;bold&lt;/b&gt;" in details
+    assert "Phone" in html and "Desktop" in html
+
+
+def test_edit_draft_page_has_a_live_preview_of_the_description(client):
+    draft = _draft_with(NASTY)
+
+    page = client.get("/ebaydraftmodelview/edit/" + str(draft.id))
+    html = page.get_data(as_text=True)
+
+    assert page.status_code == 200
+    assert 'data-live="1"' in html
+    assert '<iframe sandbox=""' in html
+    assert "allow-scripts" not in html
+    assert 'id="description"' in html

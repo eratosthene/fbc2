@@ -2,6 +2,14 @@
 {% block show_form %}
 {{ super() }}
 <hr>
+<h4>Description <small>How buyers see it. The frame has no scripts, as on eBay. Drag its corner to make it taller.</small></h4>
+{% set preview_html = draft.description %}
+{% include "ebay_draft/_preview.html" %}
+<details style="margin-top: 8px">
+  <summary>Show HTML</summary>
+  <pre style="white-space: pre-wrap">{{ draft.description or "" }}</pre>
+</details>
+<hr>
 <p><a href="{{ url_for('UnitPicturesView.show', pk=draft.unit_id) }}">Pictures page</a>, to add them from a Unit and to take them to Discogs.</p>
 <h4>Pictures <small>{{ pictures|length }} of 24. The first one is the main picture. They are kept on the Unit, so other marketplaces can use them too.</small></h4>
 <div class="row">
