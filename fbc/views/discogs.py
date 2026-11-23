@@ -66,6 +66,13 @@ class DiscogsReleaseModelBaseView(SyncedViewMixin, CustomModelView):
         "link_column",
     ]
     label_columns = {"link_column": "Links"}
+    # Each of these lists several things, so it sorts by the first one
+    # alphabetically. Purchase Lot is a method, sorted through @renders.
+    sort_by = {
+        "artists": "first_artist",
+        "genres": "first_genre",
+        "styles": "first_style",
+    }
     add_columns = [
         "release_id",
         "title",

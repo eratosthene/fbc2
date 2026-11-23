@@ -16,11 +16,13 @@ from sqlalchemy import (
     Float,
     false,
 )
+from sqlalchemy import func, select
 from sqlalchemy.orm import relationship
 import re
 import json
 
 from fbc.core import localtime
+from fbc.models.inventory import PurchaseLot, Unit
 from fbc.discogs.naming import collection_field_ids, pressing_for, unit_name
 
 logger = logging.getLogger()
@@ -291,8 +293,8 @@ class DiscogsRelease(Model):
             ret += self.unit_add(discogs_instance.instance_id, False) + "<br>"
         return Markup(ret)
 
+    @renders("purchase_lot_date")
     def purchase_lot(self):
-        from fbc.models.inventory import Unit
         from fbc import db
 
         ret = ""
@@ -569,3 +571,67 @@ class DiscogsOrderItem(Model):
 
     def __repr__(self):
         return self.title or str(self.listing_id or "")
+
+
+# What the lists sort their Artists, Genres, Styles and Purchase Lot columns by
+# (see DiscogsReleaseModelBaseView.sort_by). Each is worked out in SQL, from
+# the row's release. They are plain expressions on the class, not mapped
+# columns, so loading a Release doesn't run them and Flask-AppBuilder doesn't
+# take them for fields. The first name alphabetically stands for a list of
+# several. An Artist is judged by the name the list shows: the sort name when
+# there is one.
+def _first_of(name, target_id, link, link_key, owner, release_id):
+    """The first `name` alphabetically of what `link` ties to a release."""
+    return (
+        select(func.min(name))
+        .where(target_id == link.c[link_key])
+        .where(link.c.release_id == release_id)
+        .correlate(owner)
+        .scalar_subquery()
+    )
+
+
+_artist_name = func.coalesce(func.nullif(Artist.sort_name, ""), Artist.name)
+_artists = DiscogsRelease.assoc_artist_discogs_release
+_genres = DiscogsRelease.assoc_genre_discogs_release
+_styles = DiscogsRelease.assoc_style_discogs_release
+
+for _owner, _release_id, _prefix in (
+    (DiscogsRelease, DiscogsRelease.release_id, "first_"),
+    # The Units list shows its release's Genres and Styles.
+    (Unit, Unit.discogs_release_id, "release_first_"),
+):
+    setattr(
+        _owner,
+        _prefix + "artist",
+        _first_of(
+            _artist_name, Artist.artist_id, _artists, "artist_id", _owner, _release_id
+        ),
+    )
+    setattr(
+        _owner,
+        _prefix + "genre",
+        _first_of(Genre.name, Genre.id, _genres, "genre_id", _owner, _release_id),
+    )
+    setattr(
+        _owner,
+        _prefix + "style",
+        _first_of(Style.name, Style.id, _styles, "style_id", _owner, _release_id),
+    )
+
+# The date of the Purchase Lot of the release's first Unit, as the Purchase Lot
+# column shows it.
+DiscogsRelease.purchase_lot_date = (
+    select(PurchaseLot.date)
+    .where(
+        PurchaseLot.id
+        == select(Unit.purchase_lot_id)
+        .where(Unit.discogs_release_id == DiscogsRelease.release_id)
+        .order_by(Unit.id)
+        .limit(1)
+        .correlate(DiscogsRelease)
+        .scalar_subquery()
+    )
+    .correlate(DiscogsRelease)
+    .scalar_subquery()
+)

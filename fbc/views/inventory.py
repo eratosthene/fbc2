@@ -273,6 +273,12 @@ class UnitModelReboxView(UnitModelBaseView):
         "discogs_genre_column": "Genres",
         "discogs_style_column": "Styles",
     }
+    # What the Releases list sorts these by: the first one alphabetically.
+    sort_by = dict(
+        UnitModelBaseView.sort_by,
+        discogs_genre_column="release_first_genre",
+        discogs_style_column="release_first_style",
+    )
 
 
 class PurchaseLotModelView(CustomModelView):

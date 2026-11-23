@@ -6,7 +6,8 @@ from flask_wtf import FlaskForm
 from flask_appbuilder import ModelView
 from flask_appbuilder.models.filters import BaseFilter
 from flask_appbuilder.models.sqla.filters import get_field_setup_query
-from sqlalchemy import case, or_
+from sqlalchemy import asc, case, desc, or_
+from sqlalchemy.sql.elements import ColumnElement
 
 logger = logging.getLogger()
 
@@ -36,9 +37,21 @@ class NullsLastMixin:
     """
 
     def apply_order_by(self, query, order_column, order_direction, *args, **kwargs):
-        query = super().apply_order_by(
-            query, order_column, order_direction, *args, **kwargs
-        )
+        # Look through @renders to the column it names, as Flask-AppBuilder does.
+        shown = getattr(self.obj, order_column, None) if order_column else None
+        order_column = getattr(shown, "_col_name", order_column)
+        worked_out = getattr(self.obj, order_column, None) if order_column else None
+        if isinstance(worked_out, ColumnElement):
+            # A value worked out in SQL, set on the model as a plain
+            # expression. Flask-AppBuilder tests it for truth, which SQLAlchemy
+            # refuses, so it is ordered by here.
+            query = query.order_by(
+                (asc if order_direction == "asc" else desc)(worked_out)
+            )
+        else:
+            query = super().apply_order_by(
+                query, order_column, order_direction, *args, **kwargs
+            )
         clauses = tuple(getattr(query, "_order_by_clauses", ()))
         element = getattr(clauses[0], "element", None) if clauses else None
         if element is None:

@@ -13,13 +13,24 @@ import pytest
 
 import fbc
 from fbc.models.ebay import EbayListing, EbayOrder
-from fbc.models.discogs import DiscogsListing, Folder
+from fbc.models.discogs import (
+    Artist,
+    DiscogsListing,
+    DiscogsRelease,
+    Folder,
+    Genre,
+    Style,
+)
 from fbc.models.inventory import PurchaseLot, StorageBox, Unit
 from fbc.models.sales import ListingEnd
 from fbc.models.supplies import Supply, SupplyUse
 from fbc.models.sales import SalesReceipt
-from fbc.views.discogs import DiscogsListingModelView
-from fbc.views.inventory import PurchaseLotModelView, UnitModelView
+from fbc.views.discogs import DiscogsListingModelView, DiscogsReleaseModelView
+from fbc.views.inventory import (
+    PurchaseLotModelView,
+    UnitModelReboxView,
+    UnitModelView,
+)
 from fbc.views.sales import (
     EbayListingModelView,
     EbayOrderModelView,
@@ -288,4 +299,129 @@ def test_supply_uses_sort_by_supply_name_and_unit(client):
     )
     check_order(
         client, SupplyUseModelView, "unit", ["Unit-a", "Unit-b"], empty=["Supply-c"]
+    )
+
+
+# Kind 3: a list of items, or a value worked out in SQL.
+
+
+def release(release_id, title, **fields):
+    return DiscogsRelease(release_id=release_id, title=title, **fields)
+
+
+def test_releases_sort_by_their_first_artist_alphabetically(client):
+    # Each release's artists are given out of order: the first one
+    # alphabetically is the one that counts. The sort name wins over the name.
+    zed = Artist(artist_id=1, name="Zed")
+    amy = Artist(artist_id=2, name="Amy")
+    mid = Artist(artist_id=3, name="The Middle", sort_name="Middle, The")
+    bob = Artist(artist_id=4, name="Bob")
+    add(
+        zed,
+        amy,
+        mid,
+        bob,
+        release(1, "Rel-with-zed-and-bob", artists=[zed, bob]),
+        release(2, "Rel-with-middle", artists=[mid]),
+        release(3, "Rel-with-amy", artists=[amy]),
+        release(4, "Rel-no-artist"),
+    )
+
+    check_order(
+        client,
+        DiscogsReleaseModelView,
+        "artists",
+        ["Rel-with-amy", "Rel-with-zed-and-bob", "Rel-with-middle"],
+        empty=["Rel-no-artist"],
+    )
+
+
+def test_releases_sort_by_their_first_genre_and_style(client):
+    rock, jazz, soul = Genre(name="Rock"), Genre(name="Jazz"), Genre(name="Soul")
+    fuzz, bop = Style(name="Fuzz"), Style(name="Bop")
+    add(
+        rock,
+        jazz,
+        soul,
+        fuzz,
+        bop,
+        release(1, "Rel-rock-jazz", genres=[rock, jazz], styles=[fuzz]),
+        release(2, "Rel-soul", genres=[soul], styles=[bop]),
+        release(3, "Rel-bare"),
+    )
+
+    check_order(
+        client,
+        DiscogsReleaseModelView,
+        "genres",
+        ["Rel-rock-jazz", "Rel-soul"],
+        empty=["Rel-bare"],
+    )
+    check_order(
+        client,
+        DiscogsReleaseModelView,
+        "styles",
+        ["Rel-soul", "Rel-rock-jazz"],
+        empty=["Rel-bare"],
+    )
+
+
+def test_releases_sort_by_the_purchase_lot_of_their_first_unit(client):
+    early = PurchaseLot(name="Zed lot", date=datetime.date(2023, 1, 1), price=1)
+    late = PurchaseLot(name="Alpha lot", date=datetime.date(2024, 6, 1), price=1)
+    rel_early, rel_late = release(1, "Rel-early"), release(2, "Rel-late")
+    rel_nolot, rel_nounit = release(3, "Rel-nolot"), release(4, "Rel-nounit")
+    add(
+        early,
+        late,
+        rel_early,
+        rel_late,
+        rel_nolot,
+        rel_nounit,
+        unit("Unit-1", discogs_release=rel_late, purchase_lot=late),
+        unit("Unit-2", discogs_release=rel_early, purchase_lot=early),
+        # A second Unit with a lot doesn't count: the first has none.
+        unit("Unit-3", discogs_release=rel_nolot),
+        unit("Unit-4", discogs_release=rel_nolot, purchase_lot=early),
+    )
+
+    check_order(
+        client,
+        DiscogsReleaseModelView,
+        "purchase_lot",
+        ["Rel-early", "Rel-late"],
+        empty=["Rel-nolot", "Rel-nounit"],
+    )
+
+
+def test_rebox_units_sort_by_the_first_genre_and_style_of_their_release(client):
+    rock, soul = Genre(name="Rock"), Genre(name="Soul")
+    fuzz, bop = Style(name="Fuzz"), Style(name="Bop")
+    rel_rock = release(1, "R1", genres=[rock], styles=[fuzz])
+    rel_soul = release(2, "R2", genres=[soul], styles=[bop])
+    add(
+        rock,
+        soul,
+        fuzz,
+        bop,
+        rel_rock,
+        rel_soul,
+        unit("Unit-rock", discogs_release=rel_rock),
+        unit("Unit-soul", discogs_release=rel_soul),
+        unit("Unit-no-release"),
+    )
+
+    check_order(
+        client,
+        UnitModelReboxView,
+        "discogs_genre_column",
+        ["Unit-rock", "Unit-soul"],
+        empty=["Unit-no-release"],
+    )
+    check_order(
+        client,
+        UnitModelReboxView,
+        "discogs_style_column",
+        ["Unit-soul", "Unit-rock"],
+        empty=["Unit-no-release"],
     )
