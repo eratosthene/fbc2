@@ -118,25 +118,36 @@ def _title_with(unit, length):
     return build_title(unit)
 
 
-def test_the_title_is_cut_styles_first(app):
+def test_the_edition_is_abbreviated_before_styles_are_cut(app):
     unit = _unit(styles=("Hard Rock", "Blues Rock"))
     full = "Band - Album 1960 Vinyl LP Reissue 1975 Hard-Rock Blues-Rock VG"
     assert build_title(unit) == full
-    # Room for the second year but not for all the styles.
+    # Room for "RE 1975" and one style, but not for "Reissue" or both styles.
     bare = "Band - Album 1960 Vinyl LP Reissue 1975 VG"
-    unit.discogs_release.title = "T" * (80 - len(bare) + len("Album"))
+    room = 80 - (len(bare) - len("Reissue") + len("RE") + len(" Hard-Rock"))
+    unit.discogs_release.title = "T" * (len("Album") + room)
     title = build_title(unit)
     assert len(title) == 80
-    assert title.endswith("Vinyl LP Reissue 1975 VG")
+    assert title.endswith("Vinyl LP RE 1975 Hard-Rock VG")
+
+
+def test_then_the_styles_are_cut(app):
+    unit = _unit(styles=("Hard Rock", "Blues Rock"))
+    # Room for "RE 1975" but no style.
+    bare_re = "Band - Album 1960 Vinyl LP RE 1975 VG"
+    unit.discogs_release.title = "T" * (len("Album") + 80 - len(bare_re))
+    title = build_title(unit)
+    assert len(title) == 80
+    assert title.endswith("Vinyl LP RE 1975 VG")
+    assert "Rock" not in title
 
 
 def test_then_the_year_after_reissue_goes(app):
     unit = _unit(styles=("Prog",))
     # One character too long with the second year, and no styles.
-    without_year = "Band -  1960 Vinyl LP Reissue VG"
-    title = _title_with(unit, 80 - len(without_year))
-    assert title == "Band - " + "T" * 48 + " 1960 Vinyl LP Reissue VG"
-    assert len(title) == 80
+    with_year = "Band -  1960 Vinyl LP RE 1975 VG"
+    title = _title_with(unit, 81 - len(with_year))
+    assert title == "Band - " + "T" * 49 + " 1960 Vinyl LP RE VG"
     assert "1975" not in title and "Prog" not in title
 
 
