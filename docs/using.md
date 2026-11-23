@@ -109,6 +109,18 @@ A Sales Receipt made by Ship This takes its date from the order's UTC date, so
 an order placed at 8 PM Central on the 13th gets the 14th. It is left that way
 because the monthly reports count by that date.
 
+### Reordering columns
+
+Every list has a **Columns** button above it. It opens a small panel with each
+column and an up and a down arrow; press them to move a column. **Reset** puts
+the columns back in the order the app gives. The checkbox and the Show, Edit
+and Delete buttons always stay at the left, and clicking a heading still sorts.
+
+The order is saved in the browser, for each list, so your phone and your
+computer keep their own. It is not saved on the server and doesn't follow you
+to another browser. A column added in a later version shows at the end. If the
+browser blocks its storage, the order holds only until the page reloads.
+
 ### Tasks
 
 The shop keeps the Discogs and eBay syncs up to date by itself, every few
