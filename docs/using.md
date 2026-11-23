@@ -403,6 +403,10 @@ the page's address, so they're gone when you start Identify Record again, and
 never carry over to another record (a release that's wrong for one copy can be
 right for another). Up to 100 can be marked. The Dev Mode sample obeys them too.
 
+To rule out several at once, tick **Not it** on each result you want gone (or
+**Tick all**) and press **Mark ticked as Not it** above the results. The search
+runs again with all of them left out, and they count toward the same limit.
+
 Results are kept for five minutes. If Discogs isn't connected, says no or
 asks for fewer requests, the page says so; when the rate limit hits part way,
 the releases not yet checked are listed unchecked. In Dev Mode it says "Not
