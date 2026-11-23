@@ -160,6 +160,7 @@ class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
         "can_make_for_sale",
     ]
     base_order = ("posted", "desc")
+    sort_by = {"unit": "unit.name"}
     formatters_columns = localtime.formatters("posted", "last_seen")
     list_widget = DiscogsListingListWidget
     list_columns = [

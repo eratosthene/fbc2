@@ -109,6 +109,8 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
         "picture_count": "Pictures",
         "has_pictures": "Has Pictures",
     }
+    # A Purchase Lot sorts by its date, a Storage Box by its name.
+    sort_by = {"purchase_lot": "purchase_lot.date", "storage_box": "storage_box.name"}
     search_form_extra_fields = {
         "has_pictures": SelectField("Has Pictures", choices=[("y", "Yes"), ("n", "No")])
     }
@@ -291,6 +293,7 @@ class PurchaseLotModelView(CustomModelView):
         "notes",
     ]
     label_columns = {"folder": "Discogs Folder"}
+    sort_by = {"folder": "folder.name"}
     show_template = "crud/purchase_lot_show.html"
 
 

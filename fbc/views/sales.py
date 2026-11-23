@@ -760,6 +760,7 @@ class ListingEndModelView(CustomModelView):
     datamodel = SQLAInterface(ListingEnd)
     base_permissions = ["can_list", "can_show"]
     base_order = ("updated", "desc")
+    sort_by = {"unit": "unit.name"}
     formatters_columns = localtime.formatters("created", "updated")
     list_columns = [
         "updated",
