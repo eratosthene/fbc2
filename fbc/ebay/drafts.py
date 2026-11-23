@@ -339,6 +339,11 @@ def check_ready(draft):
         problems.append("Add at least one picture before publishing.")
     if draft.price is None:
         problems.append("Set a price.")
+    too_long = describe.long_specifics_message(
+        describe.parse_specifics(draft.item_specifics)
+    )
+    if too_long:
+        problems.append(too_long)
     settings = api.listing_settings()
     if not uses_policies(settings) and not settings.get("TEMPLATE_ITEM_ID"):
         problems.append(
