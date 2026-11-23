@@ -194,6 +194,54 @@ def test_title_drops_styles_to_fit_80_characters(app):
     assert "Fusion" not in title
 
 
+@pytest.mark.parametrize(
+    "title_length,edition,styles",
+    [
+        (18, "First Edition", " Fusion Jazz-Funk"),
+        (19, "1st Edition", " Fusion Jazz-Funk"),
+        (22, "1st Ed.", " Fusion Jazz-Funk"),
+        (25, "1stEd", " Fusion Jazz-Funk"),
+        # Only when even 1stEd doesn't fit do the styles go, last one first.
+        (27, "1stEd", " Fusion"),
+        (37, "1stEd", ""),
+        (44, "", ""),
+    ],
+)
+def test_title_shortens_first_edition_before_dropping_styles(
+    app, title_length, edition, styles
+):
+    unit = _carnaval()
+    unit.discogs_release.title = "T" * title_length
+    title = build_title(unit)
+
+    assert len(title) <= 80
+    assert title == "Spyro Gyra - {} 1980 {}Vinyl LP{} VG+".format(
+        "T" * title_length, edition + " " if edition else "", styles
+    )
+
+
+@pytest.mark.parametrize(
+    "title_length,reissue,styles",
+    [
+        (24, "Reissue", " Fusion Jazz-Funk"),
+        (25, "RE", " Fusion Jazz-Funk"),
+        (30, "RE", " Fusion"),
+        (47, "", ""),
+    ],
+)
+def test_title_shortens_reissue_to_re_before_dropping_styles(
+    app, title_length, reissue, styles
+):
+    unit = _carnaval(pressing="US Reissue")
+    unit.discogs_release.title = "T" * title_length
+    title = build_title(unit)
+
+    assert len(title) <= 80
+    assert title == "Spyro Gyra - {} 1980 Vinyl LP{}{} VG+".format(
+        "T" * title_length, " " + reissue if reissue else "", styles
+    )
+
+
 def test_new_draft_is_filled_in_from_the_unit(app):
     unit = _carnaval()
     draft = new_draft(unit)

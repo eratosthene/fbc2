@@ -154,6 +154,13 @@ COLORS = [
 
 TITLE_MAX = 80
 
+# What a title tries in place of the edition's wording, longest first, before
+# it drops anything else.
+EDITION_ABBREVIATIONS = {
+    "First Edition": ("1st Edition", "1st Ed.", "1stEd"),
+    "Reissue": ("RE",),
+}
+
 # The longest value eBay takes for an item specific (Release Title, Artist...).
 SPECIFIC_VALUE_MAX = 65
 

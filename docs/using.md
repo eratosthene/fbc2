@@ -736,8 +736,10 @@ styles and the record's grade, cut to eBay's 80 characters:
 - A Reissue (the Unit's Pressing says Reissue) shows the master's year, when
   Discogs has one that differs, and then the release's own year after the word
   Reissue: "Artist - Title 1960 Vinyl LP Reissue 1975 VG".
-- Over 80 characters, fbc drops the styles first, then the year after Reissue,
-  then the edition, and cuts what is left.
+- Over 80 characters, fbc shortens the edition first: "First Edition" becomes
+  "1st Edition", "1st Ed." and then "1stEd", and "Reissue" becomes "RE". Then
+  it drops the styles, then the year after Reissue, then the edition, and cuts
+  what is left.
 - Release Year is the release's year, or the master's when the release has none.
 - eBay takes at most 65 characters in an item specific's value (Release Title
   is the usual one to go over). fbc cuts a longer value at a word when it

@@ -294,7 +294,8 @@ def build_title(unit):
     shows its master's year, then the word Reissue and the release's year:
     "Artist - Album 1960 Vinyl LP Reissue 1975 VG". A classical or opera
     record starts with the composer and conductor instead (classical_head).
-    Over 80 characters, it drops the styles, then the release year after
+    Over 80 characters, it shortens "First Edition" ("1st Edition",
+    "1st Ed.", "1stEd") or "Reissue" ("RE"), then drops the styles, then the release year after
     Reissue, then the edition, then cuts what is left.
     """
     release = unit.discogs_release
@@ -319,22 +320,34 @@ def build_title(unit):
     kind = (record_types(unit) or [""])[0]
     record = unit.record_grade
 
+    # The edition's wording can be shortened below; `reissue` stays true.
+    reissue = edition == "Reissue"
+
     def assemble(edition, reissue_year, styles):
-        # "Reissue" goes after the type, the way people search for it; other
+        # A reissue goes after the type, the way people search for it; other
         # editions go in front of Vinyl.
         before = after = ""
-        if edition == "Reissue":
+        if reissue and edition:
             after = (edition + " " + reissue_year).strip()
         else:
             before = edition
         parts = [head, year, before, "Vinyl", kind, after] + styles + [record or ""]
         return " ".join(p for p in parts if p)
 
-    while styles and len(assemble(edition, reissue_year, styles)) > vocab.TITLE_MAX:
+    def too_long():
+        return len(assemble(edition, reissue_year, styles)) > vocab.TITLE_MAX
+
+    # Shorter wordings come before dropping anything: the edition is worth
+    # more in a title than the styles are.
+    for short in vocab.EDITION_ABBREVIATIONS.get(edition, ()):
+        if not too_long():
+            break
+        edition = short
+    while styles and too_long():
         styles = styles[:-1]
-    if len(assemble(edition, reissue_year, styles)) > vocab.TITLE_MAX:
+    if too_long():
         reissue_year = ""
-    if len(assemble(edition, reissue_year, styles)) > vocab.TITLE_MAX:
+    if too_long():
         edition = ""
     return assemble(edition, reissue_year, styles)[: vocab.TITLE_MAX].strip()
 
