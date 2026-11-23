@@ -697,6 +697,12 @@ list's Search, **Has Pictures** set to Yes shows only Units with pictures, and
 No only those without. It adds to the list's own filters, so on Units to Draft
 (Discogs) it narrows that list to the Units that are ready to draft.
 
+**Finding Units by artist.** Every Units list, including the Units to Draft and
+Rebox lists, has a **Discogs Artist** filter in its Search. Pick an artist from
+the dropdown to see only the Units whose Discogs Release has that artist; a
+release with several artists shows under each of them. A Unit with no Discogs
+Release is never matched, so it drops out of the list while the filter is set.
+
 **Taking them to Discogs.** fbc can't send pictures to Discogs, because its API
 has no photo upload, so they go in by hand, on the Discogs listing: Edit Details,
 then Add Photos. The Pictures page helps two ways:

@@ -4,7 +4,7 @@ from flask import flash, render_template, request, url_for
 from flask_appbuilder import expose
 from flask_appbuilder.security.decorators import has_access
 from fbc.sales import pricing
-from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
+from flask_appbuilder.fieldwidgets import BS3TextFieldWidget, Select2Widget
 from flask_appbuilder.models.filters import BaseFilter
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from sqlalchemy import exists
@@ -71,6 +71,40 @@ class FilterHasPictures(BaseFilter):
         return query.filter(~has if str(value).lower() in ("n", "no", "false") else has)
 
 
+def _artist_choices():
+    """Every Artist, by sort name, for the Artist dropdown (read per request)."""
+    from fbc import db
+    from fbc.models.discogs import Artist
+
+    rows = db.session.query(Artist.artist_id, Artist.name, Artist.sort_name).all()
+    rows.sort(key=lambda r: (r.sort_name or r.name or "").lower())
+    return [(str(r.artist_id), r.sort_name or r.name) for r in rows]
+
+
+class FilterDiscogsArtist(BaseFilter):
+    """Units whose Discogs Release has the chosen Artist.
+
+    A Unit with no Release never matches. A Release can have several Artists;
+    any one of them picks it.
+    """
+
+    name = "Discogs Artist"
+    arg_name = "discogs_artist"
+
+    def apply(self, query, value):
+        from fbc.models.discogs import Artist, DiscogsRelease
+
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else ""
+        if not str(value).isdigit():
+            return query
+        return query.filter(
+            Unit.discogs_release.has(
+                DiscogsRelease.artists.any(Artist.artist_id == int(value))
+            )
+        )
+
+
 class UnitInterface(SQLAInterface):
     """Loads the Pictures counts of a page of Units in one query."""
 
@@ -108,9 +142,15 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
         "link_column": "Links",
         "picture_count": "Pictures",
         "has_pictures": "Has Pictures",
+        "discogs_artist": "Discogs Artist",
     }
     search_form_extra_fields = {
-        "has_pictures": SelectField("Has Pictures", choices=[("y", "Yes"), ("n", "No")])
+        "has_pictures": SelectField(
+            "Has Pictures", choices=[("y", "Yes"), ("n", "No")]
+        ),
+        "discogs_artist": SelectField(
+            "Discogs Artist", choices=_artist_choices, widget=Select2Widget()
+        ),
     }
     # Every column the page showed before it had a list of its own, plus the
     # Links, which are the same cell the list shows.
@@ -165,6 +205,7 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
         "sold",
         "archived",
         "has_pictures",
+        "discogs_artist",
     ]
     edit_columns = [
         "name",
@@ -227,6 +268,7 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
         # Not a column, so Flask-AppBuilder made no filters for it.
         for table in (self._filters._search_filters, self._filters._all_filters):
             table["has_pictures"] = [FilterHasPictures("id", self.datamodel)]
+            table["discogs_artist"] = [FilterDiscogsArtist("id", self.datamodel)]
         self.add_columns = self.add_columns + ["supplies_used"]
 
     def _init_forms(self):
