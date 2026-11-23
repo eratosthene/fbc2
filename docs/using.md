@@ -38,7 +38,7 @@ Some columns sort by something other than what they show:
 - A price or amount sorts as a number, so $9.00 comes before $10.00. An
   Expense's Category and a Supply Use's For sort by the stored name, not the
   label.
-- Out For on Parked listings, Pictures on the Units and eBay Drafts lists,
+- Out For and Unit on Parked listings, Pictures on the Units and eBay Drafts lists,
   and the Title on Discogs Orders (an order's items have the titles) don't
   sort. Neither do link and button columns.
 
