@@ -295,7 +295,8 @@ def build_title(unit):
     "Artist - Album 1960 Vinyl LP Reissue 1975 VG". A classical or opera
     record starts with the composer and conductor instead (classical_head).
     Over 80 characters, it drops the styles, then the release year after
-    Reissue, then the edition, then cuts what is left.
+    Reissue, then shortens "First Edition" ("1st Edition", "1st Ed.",
+    "1stEd"), then drops the edition, then cuts what is left.
     """
     release = unit.discogs_release
     # "First Edition" or "Reissue", as parsed for the Edition specific.
@@ -334,6 +335,12 @@ def build_title(unit):
         styles = styles[:-1]
     if len(assemble(edition, reissue_year, styles)) > vocab.TITLE_MAX:
         reissue_year = ""
+    if edition == "First Edition":
+        # Shorter wordings are tried before the edition is dropped.
+        for short in vocab.FIRST_EDITION_ABBREVIATIONS:
+            if len(assemble(edition, reissue_year, styles)) <= vocab.TITLE_MAX:
+                break
+            edition = short
     if len(assemble(edition, reissue_year, styles)) > vocab.TITLE_MAX:
         edition = ""
     return assemble(edition, reissue_year, styles)[: vocab.TITLE_MAX].strip()

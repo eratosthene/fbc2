@@ -194,6 +194,36 @@ def test_title_drops_styles_to_fit_80_characters(app):
     assert "Fusion" not in title
 
 
+@pytest.mark.parametrize(
+    "title_length,edition",
+    [
+        (35, "First Edition"),
+        (36, "1st Edition"),
+        (38, "1st Ed."),
+        (42, "1stEd"),
+        (44, ""),
+    ],
+)
+def test_title_shortens_first_edition_before_dropping_it(app, title_length, edition):
+    unit = _carnaval()
+    unit.discogs_release.title = "T" * title_length
+    title = build_title(unit)
+
+    assert len(title) <= 80
+    assert "Fusion" not in title  # the styles go first
+    assert title == "Spyro Gyra - {} 1980 {}Vinyl LP VG+".format(
+        "T" * title_length, edition + " " if edition else ""
+    )
+
+
+def test_title_never_abbreviates_reissue(app):
+    unit = _carnaval(pressing="US Reissue")
+    unit.discogs_release.title = "T" * 60
+    title = build_title(unit)
+
+    assert "1st" not in title and "First" not in title
+
+
 def test_new_draft_is_filled_in_from_the_unit(app):
     unit = _carnaval()
     draft = new_draft(unit)
