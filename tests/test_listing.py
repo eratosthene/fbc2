@@ -265,6 +265,51 @@ def test_check_ready_accepts_a_template_listing_instead_of_policies(app, monkeyp
     assert check_ready(draft) == []
 
 
+def test_fit_value_cuts_at_a_word_and_leaves_short_values_alone():
+    from fbc.ebay.describe import fit_value
+
+    assert fit_value("Carnaval") == "Carnaval"
+    assert fit_value("a" * 65) == "a" * 65
+    long = "Symphony No. 5 in C Minor, Op. 67 - Symphony No. 7 in A Major, Op. 92"
+    fitted = fit_value(long)
+    assert len(fitted) <= 65
+    assert fitted == "Symphony No. 5 in C Minor, Op. 67 - Symphony No. 7 in A Major"
+    # No space to cut at: a hard cut.
+    assert fit_value("x" * 80) == "x" * 65
+
+
+def test_item_specifics_keep_every_value_within_ebays_limit(app):
+    unit = _carnaval()
+    unit.discogs_release.title = "Word " * 20
+    specifics = build_item_specifics(unit)
+
+    assert len(specifics["Release Title"][0]) <= 65
+    assert all(len(v) <= 65 for values in specifics.values() for v in values)
+
+
+def test_check_ready_names_an_item_specific_that_is_too_long(app):
+    draft = _draft(pictures=["https://i.ebayimg.com/a.jpg"])
+    draft.item_specifics = "Release Title: " + "x" * 70 + "\nArtist: Band"
+
+    problems = check_ready(draft)
+
+    assert len(problems) == 1
+    assert "Release Title (70 long)" in problems[0] and "65" in problems[0]
+
+
+def test_the_draft_form_refuses_a_specific_that_is_too_long():
+    from types import SimpleNamespace
+
+    import pytest
+    from wtforms import ValidationError
+
+    from fbc.views.listing import _specifics_fit
+
+    _specifics_fit(None, SimpleNamespace(data="Release Title: Carnaval"))
+    with pytest.raises(ValidationError, match=r"Release Title \(66 long\)"):
+        _specifics_fit(None, SimpleNamespace(data="Release Title: " + "x" * 66))
+
+
 def test_summarize_response_splits_errors_warnings_and_fees():
     resp = {
         "Errors": [

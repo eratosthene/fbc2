@@ -154,6 +154,9 @@ COLORS = [
 
 TITLE_MAX = 80
 
+# The longest value eBay takes for an item specific (Release Title, Artist...).
+SPECIFIC_VALUE_MAX = 65
+
 
 # A draft's starting package weight in ounces per disc, by record size,
 # packing included: a 12" double LP starts at 32 oz. eBay needs a weight for

@@ -739,6 +739,12 @@ styles and the record's grade, cut to eBay's 80 characters:
 - Over 80 characters, fbc drops the styles first, then the year after Reissue,
   then the edition, and cuts what is left.
 - Release Year is the release's year, or the master's when the release has none.
+- eBay takes at most 65 characters in an item specific's value (Release Title
+  is the usual one to go over). fbc cuts a longer value at a word when it
+  builds the specifics, so a long Release Title is shortened, not refused. The
+  Edit form won't save a value over 65 characters, and Check with eBay and
+  Publish name the specific that is too long, so a Draft made earlier can be
+  shortened by hand.
 
 Releases Discogs files under the Classical genre (or the Opera style) also get
 Composer, Conductor and Performer Orchestra item specifics, and a title that

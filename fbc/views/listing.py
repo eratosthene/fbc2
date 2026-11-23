@@ -5,9 +5,9 @@ from flask import abort, flash, redirect, request, send_file, url_for
 from flask_appbuilder import expose, has_access
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from markupsafe import Markup
-from wtforms import TextAreaField
+from wtforms import TextAreaField, ValidationError
 
-from fbc.ebay import insertions, traffic
+from fbc.ebay import describe, insertions, traffic
 from fbc.core import devmode, localtime
 from fbc.ebay.api import listing_settings, seller_profiles
 from fbc.ebay.drafts import check_ready, describe_template, listing_details, new_draft
@@ -22,6 +22,13 @@ logger = logging.getLogger()
 # Filter preset on the eBay Drafts list by the Tasks menu link: status Equal to
 # draft (string filter 3), as fbc.sales.tasks.DRAFT_STATUS.
 DRAFTS_TO_LIST_FILTERS = {"_flt_3_status": "draft"}
+
+
+def _specifics_fit(form, field):
+    """Refuse item specific values eBay would, saying which."""
+    message = describe.long_specifics_message(describe.parse_specifics(field.data))
+    if message:
+        raise ValidationError(message)
 
 
 class EbayDraftModelView(CustomModelView):
@@ -85,6 +92,7 @@ class EbayDraftModelView(CustomModelView):
             "Item Specifics",
             description="One per line, as Name: value. Separate multiple values with |.",
             widget=TallTextAreaWidget(rows=26),
+            validators=[_specifics_fit],
         ),
     }
 

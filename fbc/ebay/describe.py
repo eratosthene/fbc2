@@ -137,7 +137,7 @@ def build_item_specifics(unit, defaults=None):
     specifics = {}
 
     def put(name, *values):
-        values = [v for v in values if v]
+        values = [fit_value(v) for v in values if v]
         if values and name not in specifics:
             specifics[name] = list(dict.fromkeys(values))
 
@@ -210,6 +210,40 @@ def build_item_specifics(unit, defaults=None):
     ).items():
         put(name, *values)
     return specifics
+
+
+def fit_value(value, limit=vocab.SPECIFIC_VALUE_MAX):
+    """
+    `value` cut to `limit` characters, at a word boundary when there is one
+    (no dangling " -" or comma), for an item specific eBay would refuse.
+    """
+    value = str(value)
+    if len(value) <= limit:
+        return value
+    cut = value[:limit]
+    if value[limit] != " " and " " in cut:
+        cut = cut[: cut.rindex(" ")]
+    return cut.rstrip(" ,;:-/&") or value[:limit]
+
+
+def long_specifics(specifics, limit=vocab.SPECIFIC_VALUE_MAX):
+    """(name, value) for each value in `specifics` longer than eBay takes."""
+    return [
+        (name, value)
+        for name, values in specifics.items()
+        for value in values
+        if len(value) > limit
+    ]
+
+
+def long_specifics_message(specifics, limit=vocab.SPECIFIC_VALUE_MAX):
+    """What to tell the owner about values over the limit, or None."""
+    long = long_specifics(specifics, limit)
+    if not long:
+        return None
+    return "eBay allows {} characters in an item specific. Shorten: {}.".format(
+        limit, "; ".join("{} ({} long)".format(n, len(v)) for n, v in long)
+    )
 
 
 def format_specifics(specifics):
