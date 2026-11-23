@@ -21,6 +21,27 @@ or order id; for Discogs Releases, the release id). Where the id is a plain
 number, "Matches id" is the first choice, and it takes a single id (`42`), a
 range (`100-200`) or a mix (`5, 100-200`).
 
+## Sorting a list
+
+Click a column heading to sort by it, and again to reverse. A row with
+nothing in that column, such as a Unit with no Retail Price or no Purchase
+Lot, comes last, whichever way you sort.
+
+Some columns sort by something other than what they show:
+
+- A Purchase Lot sorts by its date, and a Release's Purchase Lot by the date of
+  the lot its first Unit is in. A Storage Box, a Discogs Folder, a Supply and
+  a Unit sort by name.
+- Artists, Genres and Styles list several names, so they sort by the first one
+  alphabetically. An Artist counts as its sort name when it has one, as the
+  list shows it. On the Units Rebox list, Genres and Styles are the Release's.
+- A price or amount sorts as a number, so $9.00 comes before $10.00. An
+  Expense's Category and a Supply Use's For sort by the stored name, not the
+  label.
+- Out For on Parked listings, Pictures on the Units and eBay Drafts lists,
+  and the Title on Discogs Orders (an order's items have the titles) don't
+  sort. Neither do link and button columns.
+
 ## The home page
 
 It has the alerts first (supplies to reorder, a To do banner, and free
