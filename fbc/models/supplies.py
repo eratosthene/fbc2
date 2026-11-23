@@ -181,6 +181,7 @@ class Supply(Model):
     def __repr__(self):
         return self.name + ": " + str(self.quantity)
 
+    @renders("quantity")
     def fmt_quantity(self):
         return fmt_stock(self.quantity, self.pack_size, self.pack_used)
 
@@ -387,6 +388,7 @@ class SupplyUse(Model):
     unit_id = Column(Integer, ForeignKey("unit.id", ondelete="SET NULL"), index=True)
     unit = relationship("Unit")
 
+    @renders("kind")
     def fmt_kind(self):
         return KIND_LABELS.get(self.kind, self.kind)
 

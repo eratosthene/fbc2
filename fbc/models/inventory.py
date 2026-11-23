@@ -122,6 +122,7 @@ class Unit(Model):
     def __repr__(self):
         return self.__unicode__()
 
+    @renders("retail_price")
     def fmt_retail_price(self):
         if self.retail_price:
             return "$" + f"{self.retail_price:.2f}"

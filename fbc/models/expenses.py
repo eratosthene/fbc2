@@ -119,6 +119,7 @@ class Expense(Model):
             self.mileage_rate = rate
         self.amount = round(self.miles * self.mileage_rate, 2)
 
+    @renders("category")
     def fmt_category(self):
         return category_label(self.category)
 

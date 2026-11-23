@@ -1,5 +1,6 @@
 import logging
 from flask_appbuilder import Model
+from flask_appbuilder.models.decorators import renders
 from markupsafe import Markup
 from flask import url_for
 from sqlalchemy import (
@@ -397,6 +398,7 @@ class DiscogsListing(Model):
         """Live on the Marketplace now, as of the last sync."""
         return not self.ended and self.status == "For Sale"
 
+    @renders("price")
     def fmt_price(self):
         if self.price is None:
             return ""
@@ -474,9 +476,11 @@ class DiscogsOrder(Model):
             f"{amount:.2f}"
         )
 
+    @renders("total")
     def fmt_total(self):
         return self._money(self.total)
 
+    @renders("fee")
     def fmt_fee(self):
         return self._money(self.fee)
 
