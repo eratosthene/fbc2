@@ -999,6 +999,25 @@ def test_the_page_hides_a_release_and_says_which_and_show_them_brings_it_back(
     assert _ids(client.get(show).get_data(as_text=True)) == [1, 2, 3]
 
 
+def test_ticked_releases_are_marked_not_it_together(monkeypatch, client):
+    three(monkeypatch)
+    html = client.get("/identifyrecord/?go=1&artist=Band").get_data(as_text=True)
+    # One tick per result, joined to the form that holds the search.
+    assert html.count('form="notit-form" name="mark"') == 3
+    assert 'name="artist" value="Band"' in html
+
+    response = client.get("/identifyrecord/?go=1&artist=Band&mark=1&mark=3")
+    assert response.status_code == 302
+    html = client.get(response.headers["Location"]).get_data(as_text=True)
+    assert "mark=" not in response.headers["Location"]
+    assert _ids(html) == [2] and "Discogs 1, 3" in html
+
+    # A mark joins what was already ruled out, without repeating it.
+    response = client.get("/identifyrecord/?go=1&artist=Band&not_it=1&mark=1,2")
+    html = client.get(response.headers["Location"]).get_data(as_text=True)
+    assert _ids(html) == [3] and "Discogs 1, 2" in html
+
+
 def test_not_it_survives_a_second_mark_and_a_changed_field(monkeypatch, client):
     three(monkeypatch)
     html = client.get("/identifyrecord/?go=1&artist=Band&not_it=2").get_data(

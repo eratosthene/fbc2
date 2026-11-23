@@ -55,6 +55,25 @@ class IdentifyRecordView(BaseView):
         found = None
         sampling = bool(request.args.get("sample") and devmode.on())
         offset = request.args.get("offset", 0)
+        # The same search again, as a link: the page has no POST for it.
+        again = {"sample": 1} if sampling else {"go": 1}
+        if not sampling and str(offset).isdigit() and int(offset):
+            again["offset"] = int(offset)
+        # The checkboxes' button: add the ticked releases to not_it and go
+        # back to this search, so the address never keeps `mark`.
+        marked = identify.parse_not_it(",".join(request.args.getlist("mark")))
+        if marked:
+            merged = [*not_it, *(i for i in marked if i not in not_it)]
+            return redirect(
+                url_for(
+                    "IdentifyRecordView.search",
+                    **dict(
+                        keep,
+                        **again,
+                        not_it=",".join(map(str, merged[-identify.MAX_NOT_IT :])),
+                    ),
+                )
+            )
         if sampling:
             found = samples.sample(
                 form["country"], form["matrix"], form["color"], not_it=not_it
@@ -75,10 +94,6 @@ class IdentifyRecordView(BaseView):
         masters = None
         if request.args.get("find_master"):
             masters = identify.find_masters(form["artist"], form["title"])
-        # The same search again, as a link: the page has no POST for it.
-        again = {"sample": 1} if sampling else {"go": 1}
-        if not sampling and str(offset).isdigit() and int(offset):
-            again["offset"] = int(offset)
         not_it_links = {
             c["id"]: url_for(
                 "IdentifyRecordView.search",
@@ -111,6 +126,8 @@ class IdentifyRecordView(BaseView):
             found=found,
             not_it=not_it,
             not_it_links=not_it_links,
+            # What the "Mark ticked as Not it" form sends along with the ticks.
+            mark_fields={**keep, **again},
             show_url=show_url,
             masters=masters,
             master_links={

@@ -86,9 +86,18 @@ Discogs can't search on it.</p>
 {% if not found.candidates and found.hidden %}<div class="alert alert-warning">Every release found is marked "Not it", so none is shown.
   <a href="{{ show_url }}">Show them.</a></div>
 {% elif not found.candidates %}<p>Discogs found nothing. Try fewer fields, or a blank country.</p>{% endif %}
+{% if found.candidates %}
+{# The ticks sit in each result, outside this form, and join it by its id. #}
+<form method="get" id="notit-form" action="{{ url_for('IdentifyRecordView.search') }}" class="identify-notit-bar" style="margin-bottom:1em">
+  {% for name, value in mark_fields.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+  <label style="font-weight:normal;margin-right:1em"><input type="checkbox" id="notit-all"> Tick all</label>
+  <button class="btn btn-default btn-sm" title="This is definitely NOT any of the ticked releases: leave them out of later searches for this record">Mark ticked as Not it</button>
+</form>
+{% endif %}
 {% for c in found.candidates %}
 <div class="panel panel-default"><div class="panel-body"><div class="row">
   <div class="col-sm-3">
+    {% if not_it_links[c.id] %}<label style="font-weight:normal"><input type="checkbox" form="notit-form" name="mark" value="{{ c.id }}" class="notit-tick"> Not it</label><br>{% endif %}
     {% if c.images %}
       {% for img in c.images %}<a href="{{ img.full }}" class="identify-image" data-group="{{ c.id }}" data-index="{{ loop.index0 }}"><img src="{{ img.thumb }}" alt="Picture {{ loop.index }}" style="width:30%;max-width:100px;margin:0 2px 2px 0"></a>{% endfor %}
     {% elif c.thumb %}<img src="{{ c.thumb }}" alt="" style="max-width:150px">
@@ -154,6 +163,13 @@ Discogs can't search on it.</p>
   }
   sync("lot");
   sync("matrix");
+  var all = document.getElementById("notit-all");
+  if (all) {
+    all.addEventListener("change", function () {
+      var ticks = document.querySelectorAll(".notit-tick");
+      for (var i = 0; i < ticks.length; i++) { ticks[i].checked = all.checked; }
+    });
+  }
 })();
 </script>
 {# One viewer for every picture: click a thumbnail, then use the arrow buttons or keys. #}
