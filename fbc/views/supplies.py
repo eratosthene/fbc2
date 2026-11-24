@@ -83,6 +83,11 @@ class SupplyUseModelView(CustomModelView):
     show_title = "Supply Use"
     base_permissions = ["can_list", "can_show"]
     base_order = ("date", "desc")
+    sort_by = {
+        "fmt_supply": "supply.name",
+        "sales_receipt": "sales_receipt.date",
+        "unit": "unit.name",
+    }
     formatters_columns = localtime.formatters("date")
     list_columns = [
         "date",

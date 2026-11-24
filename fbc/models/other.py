@@ -7,6 +7,7 @@ cost and profit. Their sales are shown on their own.
 
 from flask import url_for
 from flask_appbuilder import Model
+from flask_appbuilder.models.decorators import renders
 from markupsafe import Markup
 from sqlalchemy import (
     Boolean,
@@ -48,6 +49,7 @@ class OtherItem(Model):
     def __repr__(self):
         return self.name
 
+    @renders("cost")
     def fmt_cost(self):
         return "" if self.cost is None else "$" + f"{self.cost:.2f}"
 

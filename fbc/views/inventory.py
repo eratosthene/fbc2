@@ -144,6 +144,8 @@ class UnitModelBaseView(ArchivableViewMixin, CustomModelView):
         "has_pictures": "Has Pictures",
         "discogs_artist": "Discogs Artist",
     }
+    # A Purchase Lot sorts by its date, a Storage Box by its name.
+    sort_by = {"purchase_lot": "purchase_lot.date", "storage_box": "storage_box.name"}
     search_form_extra_fields = {
         "has_pictures": SelectField(
             "Has Pictures", choices=[("y", "Yes"), ("n", "No")]
@@ -313,6 +315,12 @@ class UnitModelReboxView(UnitModelBaseView):
         "discogs_genre_column": "Genres",
         "discogs_style_column": "Styles",
     }
+    # What the Releases list sorts these by: the first one alphabetically.
+    sort_by = dict(
+        UnitModelBaseView.sort_by,
+        discogs_genre_column="release_first_genre",
+        discogs_style_column="release_first_style",
+    )
 
 
 class PurchaseLotModelView(CustomModelView):
@@ -333,6 +341,7 @@ class PurchaseLotModelView(CustomModelView):
         "notes",
     ]
     label_columns = {"folder": "Discogs Folder"}
+    sort_by = {"folder": "folder.name"}
     show_template = "crud/purchase_lot_show.html"
 
 

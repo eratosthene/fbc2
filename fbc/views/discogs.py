@@ -66,6 +66,13 @@ class DiscogsReleaseModelBaseView(SyncedViewMixin, CustomModelView):
         "link_column",
     ]
     label_columns = {"link_column": "Links"}
+    # Each of these lists several things, so it sorts by the first one
+    # alphabetically. Purchase Lot is a method, sorted through @renders.
+    sort_by = {
+        "artists": "first_artist",
+        "genres": "first_genre",
+        "styles": "first_style",
+    }
     add_columns = [
         "release_id",
         "title",
@@ -160,6 +167,7 @@ class DiscogsListingModelView(SyncedViewMixin, CustomModelView):
         "can_make_for_sale",
     ]
     base_order = ("posted", "desc")
+    sort_by = {"unit": "unit.name"}
     formatters_columns = localtime.formatters("posted", "last_seen")
     list_widget = DiscogsListingListWidget
     list_columns = [

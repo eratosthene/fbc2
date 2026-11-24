@@ -1,4 +1,5 @@
 from flask_appbuilder import Model
+from flask_appbuilder.models.decorators import renders
 from markupsafe import Markup
 from sqlalchemy import (
     Boolean,
@@ -298,9 +299,11 @@ class SalesReceipt(Model):
         ret = ret + " $" + f"{self.sold_price:.2f}" + "/$" + f"{self.net_sold:.2f}"
         return ret
 
+    @renders("sold_price")
     def fmt_sold_price(self):
         return "$" + f"{self.sold_price:.2f}"
 
+    @renders("net_sold")
     def fmt_net_sold(self):
         return "$" + f"{self.net_sold:.2f}"
 

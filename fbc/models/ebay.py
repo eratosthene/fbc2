@@ -1,6 +1,7 @@
 import logging
 
 from flask_appbuilder import Model
+from flask_appbuilder.models.decorators import renders
 from fbc.core import localtime, relist
 from markupsafe import Markup
 from flask import url_for
@@ -74,6 +75,7 @@ class EbayListing(Model):
     def __repr__(self):
         return self.item_id + ": " + self.title + " $" + f"{self.price:.2f}"
 
+    @renders("price")
     def fmt_price(self):
         return "$" + f"{self.price:.2f}"
 
@@ -84,6 +86,7 @@ class EbayListing(Model):
         return bool(self.pick_from_box_id and self.pick_count)
 
     # The Parked listings Task's columns (see fbc/sales/tasks.py).
+    @renders("parked_at")
     def fmt_parked_at(self):
         return localtime.fmt_datetime(self.parked_at)
 
@@ -93,6 +96,7 @@ class EbayListing(Model):
             return ""
         return "%d day%s" % (days, "" if days == 1 else "s")
 
+    @renders("parked_at")
     def fmt_relist_by(self):
         by = relist.relist_by(self.parked_at)
         if by is None:
@@ -193,6 +197,7 @@ class EbayOrder(Model):
             ret = ret + " [" + self.title[:45] + "]"
         return ret + ": " + self.buyer + " $" + f"{self.price:.2f}"
 
+    @renders("price")
     def fmt_price(self):
         return "$" + f"{self.price:.2f}"
 
@@ -240,6 +245,7 @@ class EbayOrder(Model):
             return {self.ebay_listing_id: 1}
         return {}
 
+    @renders("title")
     def fmt_title(self):
         """The title, or for an order of several items, all of them."""
         from markupsafe import escape
@@ -359,6 +365,7 @@ class EbayDraft(Model):
         """The eBay addresses of the stored pictures that have been uploaded."""
         return [p.ebay_url for p in self.stored_pictures() if p.ebay_url]
 
+    @renders("price")
     def fmt_price(self):
         if self.price is None:
             return None

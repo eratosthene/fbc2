@@ -131,6 +131,11 @@ def _units(**units):
     fbc.db.session.commit()
 
 
+def _has_header(html, label):
+    """A list's column header, whether or not it is a sort link."""
+    return re.search(r"<th>(?:<a [^>]*>)?\s*" + re.escape(label) + r"\b", html)
+
+
 def _menu_list(client, name):
     url = fbc.appbuilder.menu.find(name).get_url()
     response = client.get(url)
@@ -492,11 +497,11 @@ def test_rebox_units_lists_the_columns_for_choosing_a_box(client):
     rebox = _menu_list(client, "Rebox Units")
 
     assert "SomeUnit" in units and "SomeUnit" in rebox
-    assert "<th>Retail Price</th>" in units
-    assert "<th>Retail Price</th>" not in rebox
-    for column in ("<th>Genres</th>", "<th>Styles</th>"):
-        assert column in rebox
-        assert column not in units
+    assert _has_header(units, "Retail Price")
+    assert not _has_header(rebox, "Retail Price")
+    for column in ("Genres", "Styles"):
+        assert _has_header(rebox, column)
+        assert not _has_header(units, column)
 
 
 def test_rebox_units_menu_lists_unsold_units_over_2(client):
