@@ -5,6 +5,8 @@ static/js/list-columns.js) uses it to move a column in the header and every
 row. Cells with no data-col, the checkbox and the show/edit/delete buttons, stay
 at the left. widgets/d_l_list.html repeats the row loop, so keep the two alike.
 Every fbc list widget extends this one by its old name.
+A widget puts its own buttons (the syncs) in list_buttons, so they sit on the
+row with the Actions and + buttons and the Columns button goes under them.
 #}
 {% import 'appbuilder/general/lib.html' as lib %}
 {% import 'appbuilder/baselib.html' as baselib %}
@@ -12,6 +14,7 @@ Every fbc list widget extends this one by its old name.
 
     {% block list_header %}
         {{ super() }}
+        {% block list_buttons %}{% endblock %}
         <div class="fbc-columns" data-key="{{ modelview_name }}">
             <button type="button" class="btn btn-sm btn-default fbc-columns-toggle">Columns</button>
         </div>

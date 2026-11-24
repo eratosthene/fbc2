@@ -86,5 +86,22 @@ def test_discogs_listings_widget_cells_carry_their_column_name(client):
     assert heads and cells == heads
 
 
+@pytest.mark.parametrize(
+    "view, button",
+    [
+        ("ebayordermodelview", "/syncebayordersdeep"),
+        ("ebaylistingmodelview", "/syncebayviews"),
+        ("discogsordermodelview", "/syncdiscogsordersdeep"),
+        ("discogslistingmodelview", "/syncdiscogslistings"),
+        ("discogsreleasemodelview", "/syncdiscogs"),
+        ("ebaydraftmodelview", "policies"),
+    ],
+)
+def test_a_lists_own_buttons_come_before_the_columns_button(client, view, button):
+    # So they sit on the row with Actions and +, and Columns goes underneath.
+    html = _page(client, view)
+    assert html.index(button) < html.index('class="fbc-columns"')
+
+
 def test_an_empty_list_has_no_table(client):
     assert '<table class="table table-bordered' not in _page(client, "unitmodelview")
