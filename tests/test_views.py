@@ -133,7 +133,7 @@ def _units(**units):
 
 def _has_header(html, label):
     """A list's column header, whether or not it is a sort link."""
-    return re.search(r"<th>(?:<a [^>]*>)?\s*" + re.escape(label) + r"\b", html)
+    return re.search(r"<th[^>]*>(?:<a [^>]*>)?\s*" + re.escape(label) + r"\b", html)
 
 
 def _menu_list(client, name):
@@ -482,7 +482,7 @@ def test_supply_page_and_supply_use_list_show_its_uses(client):
         assert "Shipping an order" in html
         assert "<td>3</td>" in html or ">3<" in html
     # The name alone: "Name: quantity" would be today's quantity.
-    assert re.search(r"<td>\s*Shipping Label Roll\s*</td>", uses)
+    assert re.search(r"<td[^>]*>\s*Shipping Label Roll\s*</td>", uses)
 
 
 def test_supply_use_cant_be_added_or_changed(client):
