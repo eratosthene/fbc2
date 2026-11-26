@@ -154,6 +154,10 @@ COLORS = [
 
 TITLE_MAX = 80
 
+# Grades that read shorter in a title than they are stored. The item
+# specifics keep the full wording (see GRADES).
+TITLE_GRADES = {"NM or M-": "NM"}
+
 # What a title tries in place of the edition's wording, longest first, before
 # it drops anything else.
 EDITION_ABBREVIATIONS = {

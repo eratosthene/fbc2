@@ -318,7 +318,7 @@ def build_title(unit):
         year = ""
         styles = []
     kind = (record_types(unit) or [""])[0]
-    record = unit.record_grade
+    record = vocab.TITLE_GRADES.get(unit.record_grade, unit.record_grade)
 
     # The edition's wording can be shortened below; `reissue` stays true.
     reissue = edition == "Reissue"
