@@ -184,6 +184,14 @@ def test_title_in_house_style(app):
     )
 
 
+def test_title_shortens_nm_or_m_minus_to_nm(app):
+    unit = _carnaval()
+    unit.record_grade = "NM or M-"
+    assert build_title(unit).endswith("Fusion Jazz-Funk NM")
+    # Only the title: the item specific keeps the full wording.
+    assert build_item_specifics(unit)["Record Grading"] == ["Near Mint (NM or M-)"]
+
+
 def test_title_drops_styles_to_fit_80_characters(app):
     unit = _carnaval()
     unit.discogs_release.title = "A Considerably Longer Album Title Than Usual"

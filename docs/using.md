@@ -779,6 +779,8 @@ styles and the record's grade, cut to eBay's 80 characters:
   "1st Edition", "1st Ed." and then "1stEd", and "Reissue" becomes "RE". Then
   it drops the styles, then the year after Reissue, then the edition, and cuts
   what is left.
+- A grade of "NM or M-" is "NM" in the title. The Record Grading item specific
+  keeps the full wording.
 - Release Year is the release's year, or the master's when the release has none.
 - eBay takes at most 65 characters in an item specific's value (Release Title
   is the usual one to go over). fbc cuts a longer value at a word when it
